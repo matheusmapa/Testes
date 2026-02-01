@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Stethoscope, Scissors, Baby, HeartPulse, Activity, BookOpen, BarChart2, 
   Settings, LogOut, Search, CheckCircle, Clock, Menu, X, Lock, Mail, 
@@ -8,7 +8,8 @@ import {
   Database, User, Bell, Shield, Target, TrendingUp, Award, Info, XCircle, 
   TrendingDown, HelpCircle, RefreshCw, Repeat, Trash2, AlertTriangle, Zap, 
   CloudUpload, Key, Users, UserPlus, Calendar, PlusCircle, FilePlus, Map, Brain,
-  Flag, Copy, MessageSquarePlus
+  Flag, Copy, MessageSquarePlus, ChevronLeft, PanelLeftClose, PanelLeftOpen,
+  CreditCard, Smartphone
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -169,63 +170,98 @@ const checkIsYesterday = (lastDateStr) => {
     return lastDate.getDate() === yesterday.getDate() && lastDate.getMonth() === yesterday.getMonth() && lastDate.getFullYear() === yesterday.getFullYear();
 };
 
+// --- COMPONENTES UI HELPERS ---
+
+function CopyButton({ text, className }) {
+    const [isCopied, setIsCopied] = useState(false);
+
+    const handleCopy = (e) => {
+        e.stopPropagation();
+        const fallbackCopy = (txt) => {
+            const textArea = document.createElement("textarea");
+            textArea.value = txt;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-9999px";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                setIsCopied(true);
+                setTimeout(() => setIsCopied(false), 2000);
+            } catch (err) {
+                console.error('Fallback copy failed', err);
+            }
+            document.body.removeChild(textArea);
+        };
+
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text)
+                .then(() => {
+                    setIsCopied(true);
+                    setTimeout(() => setIsCopied(false), 2000);
+                })
+                .catch(() => fallbackCopy(text));
+        } else {
+            fallbackCopy(text);
+        }
+    };
+
+    return (
+        <button 
+            onClick={handleCopy} 
+            className={`hover:text-blue-600 transition-colors flex items-center gap-1 ${className}`} 
+            title="Copiar ID"
+        >
+            {isCopied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+        </button>
+    );
+}
+
 // --- MODAIS GLOBAIS ---
-function ReportModal({ isOpen, onClose, questionId, type, category: initialCategory, userId }) {
-    // Para sugestão, usamos suggestionType para controlar a aba ativa (institution ou year)
-    const [suggestionType, setSuggestionType] = useState(initialCategory || 'institution');
+function ReportModal({ isOpen, onClose, questionId, type, userId }) {
+    const [suggestedInstitution, setSuggestedInstitution] = useState('');
+    const [suggestedYear, setSuggestedYear] = useState('');
     const [errorCategory, setErrorCategory] = useState('');
-    const [details, setDetails] = useState('');
+    const [details, setDetails] = useState(''); 
     const [isSending, setIsSending] = useState(false);
+
+    const isValid = type === 'error' 
+        ? !!errorCategory 
+        : (!!suggestedInstitution.trim() || !!suggestedYear.trim());
 
     useEffect(() => {
         if(isOpen) {
-            setSuggestionType(initialCategory || 'institution');
+            setSuggestedInstitution('');
+            setSuggestedYear('');
             setErrorCategory('');
             setDetails('');
             setIsSending(false);
         }
-    }, [isOpen, initialCategory]);
+    }, [isOpen]);
 
     if (!isOpen) return null;
 
-    const errorOptions = [
-        "Enunciado incorreto/confuso",
-        "Alternativas com erro",
-        "Gabarito errado",
-        "Área errada",
-        "Tema errado",
-        "Instituição errada",
-        "Ano errado",
-        "Questão repetida",
-        "Outro"
-    ];
+    const errorOptions = ["Enunciado incorreto/confuso", "Alternativas com erro", "Gabarito errado", "Área errada", "Tema errado", "Instituição errada", "Ano errado", "Questão repetida", "Outro"];
 
     const handleSubmit = async () => {
-        if (type === 'error' && !errorCategory) return alert("Selecione um motivo.");
-        if (type === 'suggestion' && !details) return alert("Digite sua sugestão.");
-
+        if (!isValid) return;
         setIsSending(true);
         try {
-            // Se for sugestão, o category vem do state suggestionType
-            const finalCategory = type === 'suggestion' ? suggestionType : errorCategory;
-            
-            await addDoc(collection(db, "reports"), {
-                questionId,
-                userId: userId || 'anonymous',
-                type,
-                category: finalCategory,
-                details,
-                status: 'pending',
-                createdAt: new Date().toISOString()
-            });
+            const reportData = { questionId, userId: userId || 'anonymous', type, status: 'pending', createdAt: new Date().toISOString() };
+            if (type === 'suggestion') {
+                reportData.category = 'suggestion_update';
+                reportData.suggestedInstitution = suggestedInstitution;
+                reportData.suggestedYear = suggestedYear;
+                reportData.details = `Sugestão: Banca [${suggestedInstitution}] | Ano [${suggestedYear}]`;
+            } else {
+                reportData.category = errorCategory;
+                reportData.details = details;
+            }
+            await addDoc(collection(db, "reports"), reportData);
             alert("Obrigado! Sua colaboração foi enviada para análise.");
             onClose();
-        } catch (error) {
-            console.error(error);
-            alert("Erro ao enviar reporte.");
-        } finally {
-            setIsSending(false);
-        }
+        } catch (error) { console.error(error); alert("Erro ao enviar reporte."); } finally { setIsSending(false); }
     };
 
     return (
@@ -237,62 +273,39 @@ function ReportModal({ isOpen, onClose, questionId, type, category: initialCateg
                     </h3>
                     <button onClick={onClose}><X size={20} className="text-gray-400 hover:text-gray-600"/></button>
                 </div>
-
-                {type === 'suggestion' && (
-                    <div className="flex bg-gray-100 p-1 rounded-xl mb-4">
-                        <button 
-                            onClick={() => setSuggestionType('institution')}
-                            className={`flex-1 py-1.5 text-sm font-bold rounded-lg transition-all ${suggestionType === 'institution' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            Prova/Banca
-                        </button>
-                        <button 
-                            onClick={() => setSuggestionType('year')}
-                            className={`flex-1 py-1.5 text-sm font-bold rounded-lg transition-all ${suggestionType === 'year' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            Ano
-                        </button>
-                    </div>
-                )}
-
-                {type === 'error' ? (
-                    <div className="space-y-3 mb-4">
-                        <p className="text-sm text-gray-500">Qual o problema com esta questão?</p>
-                        <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-2">
-                            {errorOptions.map(opt => (
-                                <label key={opt} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${errorCategory === opt ? 'bg-red-50 border-red-200 text-red-700' : 'bg-gray-50 border-gray-100 hover:bg-gray-100'}`}>
-                                    <input type="radio" name="reportCategory" value={opt} checked={errorCategory === opt} onChange={e => setErrorCategory(e.target.value)} className="text-red-600 focus:ring-red-500" />
-                                    <span className="text-sm font-medium">{opt}</span>
-                                </label>
-                            ))}
-                        </div>
+                {type === 'suggestion' ? (
+                    <div className="space-y-4 mb-6">
+                        <div className="bg-blue-50 border border-blue-100 rounded-lg p-3"><p className="text-sm text-blue-800">Preencha a Banca <strong>E/OU</strong> o Ano desta questão.</p></div>
+                        <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Banca / Prova</label><input type="text" value={suggestedInstitution} onChange={e => setSuggestedInstitution(e.target.value)} placeholder="Ex: USP, ENARE, SURCE..." className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" /></div>
+                        <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Ano</label><input type="text" value={suggestedYear} onChange={e => setSuggestedYear(e.target.value)} placeholder="Ex: 2023, 2024, 2023/1..." className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" /></div>
                     </div>
                 ) : (
-                    <div className="mb-4">
-                        <p className="text-sm text-gray-500 mb-2">
-                            {suggestionType === 'year' ? "Qual o ano correto desta questão?" : "Qual a Banca/Prova desta questão?"}
-                        </p>
-                    </div>
+                    <>
+                        <div className="space-y-3 mb-4">
+                            <p className="text-sm text-gray-500">Qual o problema com esta questão?</p>
+                            <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-2">{errorOptions.map(opt => (<label key={opt} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${errorCategory === opt ? 'bg-red-50 border-red-200 text-red-700' : 'bg-gray-50 border-gray-100 hover:bg-gray-100'}`}><input type="radio" name="reportCategory" value={opt} checked={errorCategory === opt} onChange={e => setErrorCategory(e.target.value)} className="text-red-600 focus:ring-red-500" /><span className="text-sm font-medium">{opt}</span></label>))}</div>
+                        </div>
+                        <div className="mb-6"><label className="block text-sm font-bold text-slate-700 mb-2">Detalhes (Opcional)</label><textarea value={details} onChange={e => setDetails(e.target.value)} placeholder="Descreva melhor o erro encontrado..." className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none" rows={3} /></div>
+                    </>
                 )}
-
-                <div className="mb-6">
-                    <label className="block text-sm font-bold text-slate-700 mb-2">
-                        {type === 'error' ? "Detalhes (Opcional)" : "Sua Sugestão"}
-                    </label>
-                    <textarea 
-                        value={details} 
-                        onChange={e => setDetails(e.target.value)}
-                        placeholder={type === 'error' ? "Descreva melhor o erro..." : (suggestionType === 'year' ? "Ex: 2023" : "Ex: SURCE, ENARE...")}
-                        className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none"
-                        rows={3}
-                    />
-                </div>
-
                 <div className="flex gap-3">
                     <button onClick={onClose} className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-50">Cancelar</button>
-                    <button onClick={handleSubmit} disabled={isSending} className={`flex-1 py-3 rounded-xl font-bold text-white shadow-lg transition-colors flex items-center justify-center gap-2 ${type === 'error' ? 'bg-red-600 hover:bg-red-700 shadow-red-200' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-200'}`}>
-                        {isSending ? 'Enviando...' : 'Enviar'}
-                    </button>
+                    <button onClick={handleSubmit} disabled={isSending || !isValid} className={`flex-1 py-3 rounded-xl font-bold text-white shadow-lg transition-colors flex items-center justify-center gap-2 ${type === 'error' ? 'bg-red-600 hover:bg-red-700 shadow-red-200' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-200'} disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none`}>{isSending ? 'Enviando...' : 'Enviar'}</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function ExitConfirmationModal({ onClose, onConfirmExit, onSaveAndExit }) {
+    return (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl scale-100 animate-in zoom-in-95 duration-200 m-4">
+                <div className="text-center mb-6"><div className="bg-orange-100 p-4 rounded-full text-orange-600 inline-flex mb-4"><AlertCircle size={36} /></div><h3 className="text-xl font-bold text-slate-900 mb-2">Simulado em Andamento!</h3><p className="text-slate-500 text-sm leading-relaxed">Se você sair agora sem salvar, <strong>seu progresso será perdido</strong>. O que deseja fazer?</p></div>
+                <div className="flex flex-col gap-3">
+                    <button onClick={onSaveAndExit} className="w-full py-3.5 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-colors flex items-center justify-center gap-2"><Save size={18} /> Salvar e Sair</button>
+                    <button onClick={onConfirmExit} className="w-full py-3.5 rounded-xl border border-red-200 text-red-600 font-bold hover:bg-red-50 transition-colors">Sair sem Salvar</button>
+                    <button onClick={onClose} className="w-full py-3.5 rounded-xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-50 transition-colors">Continuar no Simulado</button>
                 </div>
             </div>
         </div>
@@ -304,19 +317,12 @@ function NotificationModal({ title, message, onClose, onConfirm, type = 'info', 
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl scale-100 animate-in zoom-in-95 duration-200 m-4">
         <div className="flex flex-col items-center text-center">
-          <div className={`p-3 rounded-full mb-4 ${type === 'error' || isDangerous ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
-             {type === 'error' || isDangerous ? <AlertTriangle size={32} /> : <Info size={32} />}
-          </div>
+          <div className={`p-3 rounded-full mb-4 ${type === 'error' || isDangerous ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>{type === 'error' || isDangerous ? <AlertTriangle size={32} /> : <Info size={32} />}</div>
           <h3 className="text-xl font-bold text-slate-900 mb-2">{title}</h3>
           <p className="text-slate-500 mb-6 text-sm leading-relaxed">{message}</p>
           {onConfirm ? (
-             <div className="flex gap-3 w-full">
-                <button onClick={onClose} className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-50 transition-colors">{cancelText}</button>
-                <button onClick={() => { onConfirm(); onClose(); }} className={`flex-1 py-3 rounded-xl font-bold text-white shadow-lg transition-colors ${isDangerous ? 'bg-red-600 hover:bg-red-700 shadow-red-200' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-200'}`}>{confirmText}</button>
-             </div>
-          ) : (
-            <button onClick={onClose} className="w-full py-3 rounded-xl bg-slate-900 text-white font-bold hover:bg-slate-800 transition-colors">{confirmText}</button>
-          )}
+             <div className="flex gap-3 w-full"><button onClick={onClose} className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-50 transition-colors">{cancelText}</button><button onClick={() => { onConfirm(); onClose(); }} className={`flex-1 py-3 rounded-xl font-bold text-white shadow-lg transition-colors ${isDangerous ? 'bg-red-600 hover:bg-red-700 shadow-red-200' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-200'}`}>{confirmText}</button></div>
+          ) : (<button onClick={onClose} className="w-full py-3 rounded-xl bg-slate-900 text-white font-bold hover:bg-slate-800 transition-colors">{confirmText}</button>)}
         </div>
       </div>
     </div>
@@ -328,21 +334,9 @@ function GoalModal({ currentGoal, onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl scale-100 animate-in zoom-in-95 duration-200 m-4">
-        <div className="text-center mb-6">
-          <div className="bg-blue-100 p-3 rounded-full text-blue-600 inline-flex mb-4"><Target size={32} /></div>
-          <h3 className="text-xl font-bold text-slate-900 mb-2">Meta Diária</h3>
-          <p className="text-slate-500 text-sm">Quantas questões você quer resolver hoje?</p>
-        </div>
-        <div className="flex justify-center mb-8">
-            <div className="relative">
-                <input type="number" min="1" max="200" value={goal} onChange={(e) => setGoal(Number(e.target.value))} className="w-32 px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-3xl font-bold text-center focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800" />
-                <span className="absolute -right-8 top-1/2 -translate-y-1/2 text-gray-400 font-medium">/dia</span>
-            </div>
-        </div>
-        <div className="flex gap-3 w-full">
-            <button onClick={onClose} className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-50 transition-colors">Cancelar</button>
-            <button onClick={() => onSave(goal)} className="flex-1 py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-colors">Salvar Meta</button>
-        </div>
+        <div className="text-center mb-6"><div className="bg-blue-100 p-3 rounded-full text-blue-600 inline-flex mb-4"><Target size={32} /></div><h3 className="text-xl font-bold text-slate-900 mb-2">Meta Diária</h3><p className="text-slate-500 text-sm">Quantas questões você quer resolver hoje?</p></div>
+        <div className="flex justify-center mb-8"><div className="relative"><input type="number" min="1" max="200" value={goal} onChange={(e) => setGoal(Number(e.target.value))} className="w-32 px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-3xl font-bold text-center focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800" /><span className="absolute -right-8 top-1/2 -translate-y-1/2 text-gray-400 font-medium">/dia</span></div></div>
+        <div className="flex gap-3 w-full"><button onClick={onClose} className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-50 transition-colors">Cancelar</button><button onClick={() => onSave(goal)} className="flex-1 py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-colors">Salvar Meta</button></div>
       </div>
     </div>
   );
@@ -520,10 +514,17 @@ function Dashboard({ user, onLogout }) {
   const [activeExamData, setActiveExamData] = useState(null);
   const [selectedSimulationId, setSelectedSimulationId] = useState(null); 
   const [notification, setNotification] = useState(null);
-
   const [dailyGoal, setDailyGoal] = useState(user.dailyGoal || 50);
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
   
+  // States para Sidebar e Navegação Segura
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isExitModalOpen, setIsExitModalOpen] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState(null);
+  
+  // Ref para guardar o estado atual do simulado em tempo real (para salvar se o user quiser sair)
+  const examStateRef = useRef(null);
+
   const [allQuestions, setAllQuestions] = useState([]);
   const [mySimulations, setMySimulations] = useState([]);
   const [lastExamResults, setLastExamResults] = useState(null);
@@ -573,6 +574,44 @@ function Dashboard({ user, onLogout }) {
     });
   }, [allQuestions, excludedIds]);
 
+  const handleViewSwitch = (newView) => {
+      if (currentView === 'question_mode' && newView !== 'question_mode') {
+          setPendingNavigation(newView);
+          setIsExitModalOpen(true);
+      } else {
+          setCurrentView(newView);
+          if (newView !== 'question_mode') {
+             examStateRef.current = null;
+          }
+      }
+  };
+
+  const confirmExitWithoutSaving = () => {
+      setIsExitModalOpen(false);
+      if (pendingNavigation) {
+          setCurrentView(pendingNavigation);
+          setPendingNavigation(null);
+          examStateRef.current = null;
+      }
+  };
+
+  const handleSaveAndExitFromModal = async () => {
+      setIsExitModalOpen(false);
+      if (examStateRef.current && pendingNavigation) {
+          const { questions, answers, index, id } = examStateRef.current;
+          await handleExamPause(questions, answers, index, id);
+          setCurrentView(pendingNavigation);
+          setPendingNavigation(null);
+          examStateRef.current = null;
+      } else {
+          confirmExitWithoutSaving();
+      }
+  };
+
+  const handleUpdateProgress = (questions, answers, index, id) => {
+      examStateRef.current = { questions, answers, index, id };
+  };
+
   const handleSaveGoal = async (newGoal) => {
     setDailyGoal(newGoal);
     setIsGoalModalOpen(false);
@@ -604,7 +643,7 @@ function Dashboard({ user, onLogout }) {
     const shuffled = [...availableQuestions].sort(() => 0.5 - Math.random()).slice(0, count);
 
     setActiveExamData({ questionsData: shuffled, answersData: {}, currentIndex: 0, id: Date.now() });
-    setCurrentView('question_mode');
+    handleViewSwitch('question_mode');
   };
 
   const handleExamPause = async (questions, answers, currentIndex, originId = null) => {
@@ -627,7 +666,8 @@ function Dashboard({ user, onLogout }) {
         };
         await setDoc(doc(db, `users/${user.uid}/simulations`, simId), simData);
         setNotification({ title: "Salvo!", message: "Seu progresso foi salvo. Você pode continuar depois em 'Meus Simulados'.", type: "success" });
-        setCurrentView('home');
+        setCurrentView('home'); 
+        examStateRef.current = null;
     }
   };
 
@@ -675,6 +715,7 @@ function Dashboard({ user, onLogout }) {
         await setDoc(doc(db, "users", user.uid, "stats", "main"), newStats, { merge: true });
     }
     setCurrentView('simulation_summary');
+    examStateRef.current = null;
   };
 
   const handleDeleteSimulation = async (simId) => {
@@ -702,7 +743,7 @@ function Dashboard({ user, onLogout }) {
         return;
     }
     setActiveExamData({ questionsData: questions, answersData: sim.answersData || {}, currentIndex: sim.lastIndex || 0, id: sim.id });
-    setCurrentView('question_mode');
+    handleViewSwitch('question_mode');
   };
 
   const handleResetQuestions = async () => {
@@ -736,18 +777,18 @@ function Dashboard({ user, onLogout }) {
 
   const renderContent = () => {
     switch (currentView) {
-      case 'home': return <HomeView user={user} userStats={userStats} dailyGoal={dailyGoal} accuracy={accuracy} streak={streak} dynamicAreas={dynamicAreas} setIsGoalModalOpen={setIsGoalModalOpen} setSelectedArea={setSelectedArea} setCurrentView={setCurrentView} realStats={realStats} />;
-      case 'my_simulations': return <MySimulationsView simulations={mySimulations} onCreateNew={() => setCurrentView('general_exam_setup')} onResume={handleResumeExam} onViewResults={(id) => { setSelectedSimulationId(id); setCurrentView('review_mode'); }} onDelete={handleDeleteSimulation} />;
-      case 'review_mode': return <ReviewExamView simulation={getSimulationForReview()} onBack={() => setCurrentView('my_simulations')} />;
-      case 'general_exam_setup': return <GeneralExamSetupView onBack={() => setCurrentView('my_simulations')} onLaunchExam={(topics, count, allowRepeats) => handleLaunchExam({ topics: topics }, count, allowRepeats)} areasBase={areasBase} excludedIds={excludedIds} allQuestions={allQuestions} />;
-      case 'area_hub': return <AreaHubView area={selectedArea} stats={realStats.byArea[selectedArea.title] || { total: 0, correct: 0 }} worstTopics={calculateTopicPerformance(mySimulations, selectedArea.title, allQuestions)} onBack={() => setCurrentView('home')} onStartTraining={() => setCurrentView('topic_selection')} />;
-      case 'topic_selection': return <TopicSelectionView area={selectedArea} onBack={() => setCurrentView('area_hub')} onLaunchExam={(topics, count, allowRepeats) => handleLaunchExam({ areaId: selectedArea.id, topics: topics }, count, allowRepeats)} excludedIds={excludedIds} allQuestions={allQuestions} />;
-      case 'question_mode': return <QuestionView area={selectedArea} initialData={activeExamData} user={user} onExit={() => setCurrentView('home')} onFinish={handleExamFinish} onPause={handleExamPause} />;
-      case 'simulation_summary': return <SimulationSummaryView results={lastExamResults} onHome={() => setCurrentView('home')} onNewExam={() => setCurrentView('general_exam_setup')} onReview={() => { setSelectedSimulationId(lastExamResults?.id); setCurrentView('review_mode'); }} />;
-      case 'settings': return <SettingsView user={user} onBack={() => setCurrentView('home')} onResetQuestions={handleResetQuestions} onResetHistory={handleResetHistory} />;
-      case 'performance': return <PerformanceView detailedStats={realStats} onBack={() => setCurrentView('home')} />;
-      case 'students_list': return <StudentsView onBack={() => setCurrentView('home')} />;
-      case 'add_question': return <AddQuestionView onBack={() => setCurrentView('home')} />;
+      case 'home': return <HomeView user={user} userStats={userStats} dailyGoal={dailyGoal} accuracy={accuracy} streak={streak} dynamicAreas={dynamicAreas} setIsGoalModalOpen={setIsGoalModalOpen} setSelectedArea={setSelectedArea} setCurrentView={handleViewSwitch} realStats={realStats} />;
+      case 'my_simulations': return <MySimulationsView simulations={mySimulations} onCreateNew={() => handleViewSwitch('general_exam_setup')} onResume={handleResumeExam} onViewResults={(id) => { setSelectedSimulationId(id); handleViewSwitch('review_mode'); }} onDelete={handleDeleteSimulation} />;
+      case 'review_mode': return <ReviewExamView simulation={getSimulationForReview()} onBack={() => handleViewSwitch('my_simulations')} user={user} />;
+      case 'general_exam_setup': return <GeneralExamSetupView onBack={() => handleViewSwitch('my_simulations')} onLaunchExam={(topics, count, allowRepeats) => handleLaunchExam({ topics: topics }, count, allowRepeats)} areasBase={areasBase} excludedIds={excludedIds} allQuestions={allQuestions} />;
+      case 'area_hub': return <AreaHubView area={selectedArea} stats={realStats.byArea[selectedArea.title] || { total: 0, correct: 0 }} worstTopics={calculateTopicPerformance(mySimulations, selectedArea.title, allQuestions)} onBack={() => handleViewSwitch('home')} onStartTraining={() => handleViewSwitch('topic_selection')} />;
+      case 'topic_selection': return <TopicSelectionView area={selectedArea} onBack={() => handleViewSwitch('area_hub')} onLaunchExam={(topics, count, allowRepeats) => handleLaunchExam({ areaId: selectedArea.id, topics: topics }, count, allowRepeats)} excludedIds={excludedIds} allQuestions={allQuestions} />;
+      case 'question_mode': return <QuestionView area={selectedArea} initialData={activeExamData} user={user} onExit={() => handleViewSwitch('home')} onFinish={handleExamFinish} onPause={handleExamPause} onUpdateProgress={handleUpdateProgress} />;
+      case 'simulation_summary': return <SimulationSummaryView results={lastExamResults} onHome={() => handleViewSwitch('home')} onNewExam={() => handleViewSwitch('general_exam_setup')} onReview={() => { setSelectedSimulationId(lastExamResults?.id); handleViewSwitch('review_mode'); }} />;
+      case 'settings': return <SettingsView user={user} onBack={() => handleViewSwitch('home')} onResetQuestions={handleResetQuestions} onResetHistory={handleResetHistory} />;
+      case 'performance': return <PerformanceView detailedStats={realStats} onBack={() => handleViewSwitch('home')} />;
+      case 'students_list': return <StudentsView onBack={() => handleViewSwitch('home')} />;
+      case 'add_question': return <AddQuestionView onBack={() => handleViewSwitch('home')} />;
       default: return <div>Erro: View não encontrada</div>;
     }
   };
@@ -756,40 +797,106 @@ function Dashboard({ user, onLogout }) {
     <div className="min-h-screen bg-gray-50 flex font-sans text-slate-800 relative">
       {isGoalModalOpen && <GoalModal currentGoal={dailyGoal} onSave={handleSaveGoal} onClose={() => setIsGoalModalOpen(false)} />}
       {notification && <NotificationModal title={notification.title} message={notification.message} type={notification.type} onClose={() => setNotification(null)} />}
-      <Sidebar currentView={currentView} setCurrentView={setCurrentView} onLogout={onLogout} user={user} />
+      
+      {/* MODAL DE SAÍDA SEGURA */}
+      {isExitModalOpen && (
+          <ExitConfirmationModal 
+              onClose={() => setIsExitModalOpen(false)} 
+              onConfirmExit={confirmExitWithoutSaving}
+              onSaveAndExit={handleSaveAndExitFromModal}
+          />
+      )}
+
+      <Sidebar 
+          currentView={currentView} 
+          setCurrentView={handleViewSwitch} 
+          onLogout={onLogout} 
+          user={user} 
+          collapsed={isSidebarCollapsed}
+          toggleCollapsed={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+      />
       <MobileHeader isMobileMenuOpen={isMobileMenuOpen} setIsMobileMenuOpen={setIsMobileMenuOpen} />
-      {isMobileMenuOpen && <MobileMenu currentView={currentView} setCurrentView={setCurrentView} onLogout={onLogout} user={user} setIsMobileMenuOpen={setIsMobileMenuOpen} />}
-      <main className="flex-1 md:ml-64 p-6 pt-24 md:pt-6">{renderContent()}</main>
+      {isMobileMenuOpen && <MobileMenu currentView={currentView} setCurrentView={handleViewSwitch} onLogout={onLogout} user={user} setIsMobileMenuOpen={setIsMobileMenuOpen} />}
+      
+      <main className={`flex-1 p-6 pt-24 md:pt-6 transition-all duration-300 ${isSidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
+        {renderContent()}
+      </main>
     </div>
   );
 }
 
 // --- SUB-COMPONENTES UI (Sidebar, etc) ---
-function Sidebar({ currentView, setCurrentView, onLogout, user }) {
+function Sidebar({ currentView, setCurrentView, onLogout, user, collapsed, toggleCollapsed }) {
     return (
-        <aside className="hidden md:flex flex-col w-64 bg-white border-r border-gray-200 h-screen fixed z-20">
-            <div className="p-6 border-b border-gray-100"><h1 className="text-2xl font-bold text-blue-700 flex items-center gap-2"><Map className="w-8 h-8" />MedMaps</h1></div>
+        <aside className={`hidden md:flex flex-col bg-white border-r border-gray-200 h-screen fixed z-20 transition-all duration-300 ${collapsed ? 'w-20' : 'w-64'}`}>
+            <div className={`p-6 border-b border-gray-100 flex items-center ${collapsed ? 'justify-center' : 'justify-between'}`}>
+                {!collapsed && (
+                    <h1 className="text-2xl font-bold text-blue-700 flex items-center gap-2 overflow-hidden whitespace-nowrap">
+                        <Map className="w-8 h-8" /> MedMaps
+                    </h1>
+                )}
+                {collapsed && <Map className="w-8 h-8 text-blue-700" />}
+            </div>
+
             <nav className="flex-1 p-4 space-y-2">
-                <SidebarItem icon={BookOpen} label="Banco de Questões" active={['home', 'area_hub', 'topic_selection'].includes(currentView)} onClick={() => setCurrentView('home')} />
-                <SidebarItem icon={CheckCircle} label="Meus Simulados" active={['my_simulations', 'general_exam_setup', 'review_mode'].includes(currentView)} onClick={() => setCurrentView('my_simulations')} />
-                <SidebarItem icon={BarChart2} label="Desempenho" active={currentView === 'performance'} onClick={() => setCurrentView('performance')} />
+                <SidebarItem icon={BookOpen} label="Banco de Questões" active={['home', 'area_hub', 'topic_selection'].includes(currentView)} onClick={() => setCurrentView('home')} collapsed={collapsed} />
+                <SidebarItem icon={CheckCircle} label="Meus Simulados" active={['my_simulations', 'general_exam_setup', 'review_mode'].includes(currentView)} onClick={() => setCurrentView('my_simulations')} collapsed={collapsed} />
+                <SidebarItem icon={BarChart2} label="Desempenho" active={currentView === 'performance'} onClick={() => setCurrentView('performance')} collapsed={collapsed} />
                 {user.role === 'admin' && (
                     <>
-                        <div className="mt-4 mb-2 px-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Administração</div>
-                        <SidebarItem icon={Users} label="Gerenciar Alunos" active={currentView === 'students_list'} onClick={() => setCurrentView('students_list')} />
-                        <SidebarItem icon={PlusCircle} label="Adicionar Questões" active={currentView === 'add_question'} onClick={() => setCurrentView('add_question')} />
-                        <SidebarItem icon={Brain} label="MedImport AI" onClick={() => window.location.href = '/import.html'} />
+                        <div className={`mt-4 mb-2 px-4 text-xs font-bold text-gray-400 uppercase tracking-wider ${collapsed ? 'text-center' : ''}`}>
+                            {collapsed ? 'ADM' : 'Administração'}
+                        </div>
+                        <SidebarItem icon={Users} label="Gerenciar Alunos" active={currentView === 'students_list'} onClick={() => setCurrentView('students_list')} collapsed={collapsed} />
+                        <SidebarItem icon={PlusCircle} label="Adicionar Questões" active={currentView === 'add_question'} onClick={() => setCurrentView('add_question')} collapsed={collapsed} />
+                        <SidebarItem icon={Brain} label="MedImport AI" onClick={() => window.location.href = '/import.html'} collapsed={collapsed} />
+                        <SidebarItem icon={Database} label="MedManager" onClick={() => { if(window) window.location.href = '/manager.html'; }} collapsed={collapsed} />
                     </>
                 )}
             </nav>
-            <div className="p-4 border-t border-gray-100"><SidebarItem icon={Settings} label="Configurações" active={currentView === 'settings'} onClick={() => setCurrentView('settings')} /><button onClick={onLogout} className="flex items-center gap-3 px-4 py-3 w-full text-left text-gray-600 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors mt-2"><LogOut size={20} /> <span className="font-medium">Sair</span></button></div>
+
+            <div className="p-4 border-t border-gray-100 space-y-2">
+                 <button 
+                    onClick={toggleCollapsed}
+                    className={`flex items-center gap-3 px-4 py-3 w-full text-left text-gray-500 hover:bg-gray-100 rounded-lg transition-colors ${collapsed ? 'justify-center' : ''}`}
+                    title={collapsed ? "Expandir Menu" : "Recolher Menu"}
+                >
+                    {collapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+                    {!collapsed && <span className="font-medium">Recolher</span>}
+                </button>
+
+                <SidebarItem icon={Settings} label="Configurações" active={currentView === 'settings'} onClick={() => setCurrentView('settings')} collapsed={collapsed} />
+                <button 
+                    onClick={onLogout} 
+                    className={`flex items-center gap-3 px-4 py-3 w-full text-left text-gray-600 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors mt-2 ${collapsed ? 'justify-center' : ''}`}
+                    title="Sair"
+                >
+                    <LogOut size={20} /> 
+                    {!collapsed && <span className="font-medium">Sair</span>}
+                </button>
+            </div>
         </aside>
     )
 }
 
 function MobileHeader({ isMobileMenuOpen, setIsMobileMenuOpen }) { return (<div className="md:hidden fixed top-0 w-full bg-white z-50 border-b border-gray-200 p-4 flex justify-between items-center shadow-sm"><h1 className="text-xl font-bold text-blue-700 flex items-center gap-2"><Map className="w-6 h-6" />MedMaps</h1><button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 hover:bg-gray-100 rounded-lg">{isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}</button></div>); }
-function MobileMenu({ currentView, setCurrentView, onLogout, user, setIsMobileMenuOpen }) { return (<div className="md:hidden fixed inset-0 z-40 bg-white pt-24 px-6 overflow-y-auto animate-in slide-in-from-top-10 duration-200"><nav className="flex flex-col space-y-2"><SidebarItem icon={BookOpen} label="Banco de Questões" active={['home', 'area_hub', 'topic_selection'].includes(currentView)} onClick={() => { setCurrentView('home'); setIsMobileMenuOpen(false); }} /><SidebarItem icon={CheckCircle} label="Meus Simulados" active={['my_simulations', 'general_exam_setup', 'review_mode'].includes(currentView)} onClick={() => { setCurrentView('my_simulations'); setIsMobileMenuOpen(false); }} /><SidebarItem icon={BarChart2} label="Desempenho" active={currentView === 'performance'} onClick={() => { setCurrentView('performance'); setIsMobileMenuOpen(false); }} />{user.role === 'admin' && (<><SidebarItem icon={Users} label="Gerenciar Alunos" active={currentView === 'students_list'} onClick={() => { setCurrentView('students_list'); setIsMobileMenuOpen(false); }} /><SidebarItem icon={PlusCircle} label="Adicionar Questões" active={currentView === 'add_question'} onClick={() => { setCurrentView('add_question'); setIsMobileMenuOpen(false); }} /><SidebarItem icon={Brain} label="MedImport AI" onClick={() => window.location.href = '/import.html'} /></>)}<div className="h-px bg-gray-100 my-4"></div><SidebarItem icon={Settings} label="Configurações" active={currentView === 'settings'} onClick={() => { setCurrentView('settings'); setIsMobileMenuOpen(false); }} /><button onClick={onLogout} className="flex items-center gap-3 px-4 py-3 w-full text-left text-gray-600 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"><LogOut size={20} /> <span className="font-medium">Sair</span></button></nav></div>); }
-function SidebarItem({ icon: Icon, label, active = false, onClick }) { return (<button onClick={onClick} className={`flex items-center gap-3 px-4 py-3 w-full text-left rounded-lg transition-all ${active ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-600 hover:bg-gray-50'}`}><Icon size={20} className={active ? 'text-blue-700' : 'text-gray-400'} /><span>{label}</span></button>); }
+function MobileMenu({ currentView, setCurrentView, onLogout, user, setIsMobileMenuOpen }) { return (<div className="md:hidden fixed inset-0 z-40 bg-white pt-24 px-6 overflow-y-auto animate-in slide-in-from-top-10 duration-200"><nav className="flex flex-col space-y-2"><SidebarItem icon={BookOpen} label="Banco de Questões" active={['home', 'area_hub', 'topic_selection'].includes(currentView)} onClick={() => { setCurrentView('home'); setIsMobileMenuOpen(false); }} /><SidebarItem icon={CheckCircle} label="Meus Simulados" active={['my_simulations', 'general_exam_setup', 'review_mode'].includes(currentView)} onClick={() => { setCurrentView('my_simulations'); setIsMobileMenuOpen(false); }} /><SidebarItem icon={BarChart2} label="Desempenho" active={currentView === 'performance'} onClick={() => { setCurrentView('performance'); setIsMobileMenuOpen(false); }} />{user.role === 'admin' && (<><SidebarItem icon={Users} label="Gerenciar Alunos" active={currentView === 'students_list'} onClick={() => { setCurrentView('students_list'); setIsMobileMenuOpen(false); }} /><SidebarItem icon={PlusCircle} label="Adicionar Questões" active={currentView === 'add_question'} onClick={() => { setCurrentView('add_question'); setIsMobileMenuOpen(false); }} /><SidebarItem icon={Brain} label="MedImport AI" onClick={() => window.location.href = '/import.html'} /><SidebarItem icon={Database} label="MedManager" onClick={() => { if(window) window.location.href = '/manager.html'; }} /></>)}<div className="h-px bg-gray-100 my-4"></div><SidebarItem icon={Settings} label="Configurações" active={currentView === 'settings'} onClick={() => { setCurrentView('settings'); setIsMobileMenuOpen(false); }} /><button onClick={onLogout} className="flex items-center gap-3 px-4 py-3 w-full text-left text-gray-600 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"><LogOut size={20} /> <span className="font-medium">Sair</span></button></nav></div>); }
+
+function SidebarItem({ icon: Icon, label, active = false, onClick, collapsed = false }) { 
+    return (
+        <button 
+            onClick={onClick} 
+            className={`flex items-center gap-3 px-4 py-3 w-full text-left rounded-lg transition-all 
+                ${active ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-600 hover:bg-gray-50'}
+                ${collapsed ? 'justify-center' : ''}
+            `}
+            title={collapsed ? label : undefined}
+        >
+            <Icon size={20} className={active ? 'text-blue-700' : 'text-gray-400'} />
+            {!collapsed && <span className="whitespace-nowrap">{label}</span>}
+        </button>
+    ); 
+}
 function StatCard({ title, value, target, sub, color, bg, icon, onClick, editable }) { return (<div onClick={onClick} className={`bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between hover:shadow-md transition-all ${onClick ? 'cursor-pointer hover:border-blue-300 group' : ''}`}><div><p className="text-sm font-medium text-gray-500 mb-1 flex items-center gap-2">{title}{editable && <Edit2 size={12} className="opacity-0 group-hover:opacity-100 transition-opacity text-blue-400" />}</p><div className="flex items-baseline gap-2"><h3 className="text-2xl font-bold text-slate-900">{value}</h3>{target && <span className="text-sm text-gray-400 font-medium">{target}</span>}</div>{sub && <p className={`text-xs font-medium mt-1 ${color}`}>{sub}</p>}</div><div className={`p-3 rounded-xl ${bg} ${color}`}>{icon}</div></div>); }
 function AreaCard({ area, onClick }) { return (<div onClick={onClick} className={`group bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer relative overflow-hidden hover:border-blue-300`}><div className={`absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110`}><area.icon size={100} className={area.color.split(' ')[1]} /></div><div className={`w-14 h-14 rounded-xl flex items-center justify-center mb-4 ${area.color}`}><area.icon size={28} /></div><h4 className="text-lg font-bold text-slate-900 mb-1 group-hover:text-blue-700 transition-colors">{area.title}</h4><p className="text-sm text-slate-500 mb-4">{area.count}</p><div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden"><div className={`h-1.5 rounded-full ${area.color.split(' ')[0].replace('bg-', 'bg-')}`} style={{ width: `${area.progress}%` }} ></div></div><p className="text-xs text-slate-400 mt-2 text-right">{area.progress}% Concluído</p></div>); }
 
@@ -865,15 +972,45 @@ function TopicSelectionView({ area, onBack, onLaunchExam, excludedIds, allQuesti
 }
 function TopicItem({ theme, isSelected, onToggle, count }) { return (<div onClick={onToggle} className={`p-4 flex items-center justify-between cursor-pointer transition-colors ${isSelected ? 'bg-blue-50/50' : 'hover:bg-gray-50'}`}><div className="flex items-center gap-4"><div className={`transition-colors ${isSelected ? 'text-blue-600' : 'text-gray-300'}`}>{isSelected ? <CheckSquare size={24} fill="currentColor" className="text-blue-200" /> : <Square size={24} />}</div><div className="flex flex-col"><span className={`text-sm font-semibold ${isSelected ? 'text-blue-900' : 'text-slate-700'}`}>{theme.name}</span><span className="text-xs text-gray-400">{count} questões disponíveis</span></div></div></div>); }
 
-function ReviewExamView({ simulation, onBack, allQuestions }) { 
+function ReviewExamView({ simulation, onBack, allQuestions, user }) { 
     if (!simulation) return <div>Carregando...</div>;
     const questions = simulation.questionsData || (simulation.questionIds ? simulation.questionIds.map(id => allQuestions.find(q => q.id === id)).filter(Boolean) : []);
     const userAnswers = simulation.answersData || {};
+
+    const [reportModalConfig, setReportModalConfig] = useState({ isOpen: false, type: 'error', questionId: null });
+
+    const openReportModal = (questionId, type) => {
+        setReportModalConfig({ isOpen: true, type, questionId });
+    };
+
     return (
         <div className="animate-in fade-in slide-in-from-right-8 duration-500 max-w-5xl mx-auto">
+          {reportModalConfig.isOpen && (
+              <ReportModal isOpen={true} onClose={() => setReportModalConfig({ ...reportModalConfig, isOpen: false })} questionId={reportModalConfig.questionId} userId={user?.uid} type={reportModalConfig.type} />
+          )}
           <div className="flex items-center justify-between mb-8"><button onClick={onBack} className="flex items-center text-gray-500 hover:text-blue-600 transition-colors font-medium"><ArrowLeft size={20} className="mr-2" /> Voltar para Meus Simulados</button><div className="text-right"><span className="text-sm font-bold text-slate-500 bg-gray-100 px-3 py-1 rounded-full">Revisão: {simulation.title}</span></div></div>
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 mb-8 flex justify-between items-center"><div><h2 className="text-2xl font-bold text-slate-900">Resumo do Desempenho</h2><p className="text-slate-500">Data: {simulation.date}</p></div><div className="text-right"><div className="text-3xl font-bold text-blue-600">{simulation.correct}/{simulation.total}</div><div className="text-sm font-medium text-gray-400">Acertos</div></div></div>
-          <div className="space-y-6">{questions.map((q, index) => { const userAnswer = userAnswers[index]; const isCorrect = userAnswer === q.correctOptionId; return (<div key={q.id} className={`bg-white rounded-2xl border overflow-hidden ${isCorrect ? 'border-emerald-200' : 'border-red-200'}`}><div className={`p-4 flex items-center justify-between ${isCorrect ? 'bg-emerald-50' : 'bg-red-50'}`}><h3 className={`font-bold flex items-center gap-2 ${isCorrect ? 'text-emerald-800' : 'text-red-800'}`}>{isCorrect ? <CheckCircle size={20} /> : <XCircle size={20} />} Questão {index + 1}</h3><span className="text-sm font-medium opacity-70">{q.topic}</span></div><div className="p-6"><p className="text-slate-800 mb-4">{q.text}</p><div className="space-y-2 mb-4">{q.options.map(opt => { let optClass = "p-3 rounded-lg border border-gray-100 text-gray-600"; if (opt.id === q.correctOptionId) optClass = "p-3 rounded-lg border border-emerald-500 bg-emerald-50 text-emerald-800 font-bold"; else if (opt.id === userAnswer && !isCorrect) optClass = "p-3 rounded-lg border border-red-500 bg-red-50 text-red-800 font-bold"; return (<div key={opt.id} className={optClass}><span className="uppercase mr-2">{opt.id})</span> {opt.text}</div>); })}</div><div className="bg-gray-50 p-4 rounded-xl text-sm text-slate-600"><span className="font-bold block mb-1">Comentário:</span>{q.explanation}</div></div></div>); })}</div>
+          <div className="space-y-6">{questions.map((q, index) => { 
+              const userAnswer = userAnswers[index]; 
+              const isCorrect = userAnswer === q.correctOptionId; 
+              return (
+                <div key={q.id} className={`bg-white rounded-2xl border overflow-hidden ${isCorrect ? 'border-emerald-200' : 'border-red-200'}`}>
+                    <div className={`p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 ${isCorrect ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                        <div className="flex items-center gap-2"><h3 className={`font-bold flex items-center gap-2 ${isCorrect ? 'text-emerald-800' : 'text-red-800'}`}>{isCorrect ? <CheckCircle size={20} /> : <XCircle size={20} />} Questão {index + 1}</h3><span className="text-sm font-medium opacity-70">{q.topic}</span></div>
+                        <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 text-[10px] md:text-xs text-gray-500 bg-white/50 px-2 py-1 rounded-lg border border-black/5 font-bold uppercase tracking-wider"><span>ID</span><CopyButton text={q.id} className="text-gray-400 hover:text-blue-600" /></div>
+                             <button onClick={() => openReportModal(q.id, 'suggestion')} className="p-1.5 text-blue-500 hover:text-blue-700 hover:bg-blue-100 rounded-lg transition-colors" title="Sugerir Edição"><Edit2 size={16} /></button>
+                            <button onClick={() => openReportModal(q.id, 'error')} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-100 rounded-lg transition-colors" title="Reportar Erro"><AlertTriangle size={16} /></button>
+                        </div>
+                    </div>
+                    <div className="p-6">
+                        <p className="text-slate-800 mb-4">{q.text}</p>
+                        <div className="space-y-2 mb-4">{q.options.map(opt => { let optClass = "p-3 rounded-lg border border-gray-100 text-gray-600"; if (opt.id === q.correctOptionId) optClass = "p-3 rounded-lg border border-emerald-500 bg-emerald-50 text-emerald-800 font-bold"; else if (opt.id === userAnswer && !isCorrect) optClass = "p-3 rounded-lg border border-red-500 bg-red-50 text-red-800 font-bold"; return (<div key={opt.id} className={optClass}><span className="uppercase mr-2">{opt.id})</span> {opt.text}</div>); })}</div>
+                        <div className="bg-gray-50 p-4 rounded-xl text-sm text-slate-600"><span className="font-bold block mb-1">Comentário:</span>{q.explanation}</div>
+                    </div>
+                </div>
+              ); 
+          })}</div>
         </div>
     );
 }
@@ -894,18 +1031,6 @@ function MySimulationsView({ simulations, onCreateNew, onResume, onViewResults, 
           </div>
         </div>
     );
-}
-
-function PerformanceView({ detailedStats, onBack }) {
-    const { totalQuestions, totalCorrect, byArea } = detailedStats;
-    const globalPercentage = totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 0;
-    return (
-        <div className="animate-in fade-in slide-in-from-right-8 duration-500 max-w-4xl mx-auto">
-             <div className="flex items-center justify-between mb-8"><button onClick={onBack} className="flex items-center text-gray-500 hover:text-blue-600 transition-colors font-medium"><ArrowLeft size={20} className="mr-2" /> Voltar</button><h1 className="text-2xl font-bold text-slate-900">Desempenho Detalhado</h1></div>
-             <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 mb-8 text-center"><h2 className="text-lg font-semibold text-slate-600 mb-2">Aproveitamento Geral</h2><div className="text-5xl font-bold text-blue-600 mb-2">{globalPercentage}%</div><p className="text-gray-400">{totalCorrect} acertos de {totalQuestions} questões</p></div>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{areasBase.map(area => { const stats = byArea[area.title]; const percentage = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0; return (<div key={area.id} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm"><div className="flex items-center gap-3 mb-3"><div className={`p-2 rounded-lg ${area.color} bg-opacity-10`}><area.icon size={20} /></div><h3 className="font-bold text-slate-800">{area.title}</h3></div><div className="flex items-center justify-between mb-2"><span className="text-2xl font-bold text-slate-700">{percentage}%</span><span className="text-xs text-gray-400">{stats.correct}/{stats.total}</span></div><div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden"><div className={`h-2 rounded-full ${area.color.split(' ')[0].replace('bg-', 'bg-')}`} style={{ width: `${percentage}%` }} ></div></div></div>) })}</div>
-        </div>
-    )
 }
 
 function SimulationSummaryView({ results, onHome, onNewExam, onReview }) {
@@ -945,22 +1070,40 @@ function SimulationSummaryView({ results, onHome, onNewExam, onReview }) {
   );
 }
 
+function PerformanceView({ detailedStats, onBack }) {
+    const { totalQuestions, totalCorrect, byArea } = detailedStats;
+    const globalPercentage = totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 0;
+    return (
+        <div className="animate-in fade-in slide-in-from-right-8 duration-500 max-w-4xl mx-auto">
+             <div className="flex items-center justify-between mb-8"><button onClick={onBack} className="flex items-center text-gray-500 hover:text-blue-600 transition-colors font-medium"><ArrowLeft size={20} className="mr-2" /> Voltar</button><h1 className="text-2xl font-bold text-slate-900">Desempenho Detalhado</h1></div>
+             <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 mb-8 text-center"><h2 className="text-lg font-semibold text-slate-600 mb-2">Aproveitamento Geral</h2><div className="text-5xl font-bold text-blue-600 mb-2">{globalPercentage}%</div><p className="text-gray-400">{totalCorrect} acertos de {totalQuestions} questões</p></div>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{areasBase.map(area => { const stats = byArea[area.title] || { total: 0, correct: 0 }; const percentage = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0; return (<div key={area.id} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm"><div className="flex items-center gap-3 mb-3"><div className={`p-2 rounded-lg ${area.color} bg-opacity-10`}><area.icon size={20} /></div><h3 className="font-bold text-slate-800">{area.title}</h3></div><div className="flex items-center justify-between mb-2"><span className="text-2xl font-bold text-slate-700">{percentage}%</span><span className="text-xs text-gray-400">{stats.correct}/{stats.total}</span></div><div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden"><div className={`h-2 rounded-full ${area.color.split(' ')[0].replace('bg-', 'bg-')}`} style={{ width: `${percentage}%` }} ></div></div></div>) })}</div>
+        </div>
+    )
+}
+
 function SettingsView({ user, onBack, onResetQuestions, onResetHistory }) {
   const [modalConfig, setModalConfig] = useState({ isOpen: false, type: null });
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const openModal = (type) => setModalConfig({ isOpen: true, type });
   const handleConfirm = () => { if (modalConfig.type === 'questions') onResetQuestions(); else if (modalConfig.type === 'history') onResetHistory(); setModalConfig({ ...modalConfig, isOpen: false }); };
   const [name, setName] = useState(user.name || '');
+  const [whatsapp, setWhatsapp] = useState(user.whatsapp || ''); 
   const [isSaving, setIsSaving] = useState(false);
   const [msg, setMsg] = useState(null); 
+
+  const subDate = user.subscriptionUntil ? new Date(user.subscriptionUntil) : null;
+  const daysLeft = subDate ? Math.ceil((subDate - new Date()) / (1000 * 60 * 60 * 24)) : 0;
+  const formattedDate = subDate ? subDate.toLocaleDateString('pt-BR') : 'N/A';
+  const isExpired = subDate && new Date() > subDate;
 
   const handleSaveProfile = async () => {
     setIsSaving(true); setMsg(null);
     try {
         if(auth.currentUser) {
             await updateProfile(auth.currentUser, { displayName: name });
-            await setDoc(doc(db, "users", user.uid), { name: name }, { merge: true });
-            setMsg({ type: 'success', text: 'Nome atualizado com sucesso!' });
+            await setDoc(doc(db, "users", user.uid), { name: name, whatsapp: whatsapp }, { merge: true });
+            setMsg({ type: 'success', text: 'Perfil atualizado com sucesso!' });
         }
     } catch (error) { console.error(error); setMsg({ type: 'error', text: 'Erro ao atualizar perfil.' }); } finally { setIsSaving(false); }
   };
@@ -984,7 +1127,24 @@ function SettingsView({ user, onBack, onResetQuestions, onResetHistory }) {
       {isPasswordModalOpen && (<ChangePasswordModal onClose={() => setIsPasswordModalOpen(false)} onSave={handleSavePassword} isLoading={isSaving} />)}
       {msg && (<div className={`mb-6 p-4 rounded-xl border flex items-center gap-3 ${msg.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>{msg.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}<span className="font-medium">{msg.text}</span></div>)}
       <div className="space-y-6">
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm"><div className="flex items-center gap-4 mb-6"><div className="bg-blue-100 p-3 rounded-full text-blue-600"><User size={24} /></div><div><h2 className="text-xl font-bold text-slate-900">Meu Perfil</h2><p className="text-slate-500 text-sm">Gerencie suas informações pessoais</p></div></div><div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6"><div><label className="block text-sm font-semibold text-slate-700 mb-2">Nome Completo</label><input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" /></div><div><label className="block text-sm font-semibold text-slate-700 mb-2">E-mail</label><input type="email" value={user.email} disabled className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl text-gray-500 cursor-not-allowed" /></div></div><div className="text-right"><button onClick={handleSaveProfile} disabled={isSaving || name === user.name} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Salvar Alterações</button></div></div>
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm relative overflow-hidden">
+            <div className={`absolute top-0 right-0 p-4 opacity-10 ${isExpired ? 'text-red-500' : 'text-emerald-500'}`}><CreditCard size={120} /></div>
+            <div className="flex items-center gap-4 mb-6 relative z-10"><div className={`p-3 rounded-full ${isExpired ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}><Calendar size={24} /></div><div><h2 className="text-xl font-bold text-slate-900">Minha Assinatura</h2><p className="text-slate-500 text-sm">Detalhes do seu plano atual</p></div></div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
+                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100"><p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Status</p><div className={`text-lg font-bold flex items-center gap-2 ${isExpired ? 'text-red-600' : 'text-emerald-600'}`}>{isExpired ? <XCircle size={20} /> : <CheckCircle size={20} />}{isExpired ? 'Expirada' : 'Ativa'}</div></div>
+                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100"><p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Vencimento</p><p className="text-lg font-bold text-slate-700">{formattedDate}</p></div>
+                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100"><p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Tempo Restante</p><p className={`text-lg font-bold ${daysLeft < 5 ? 'text-orange-600' : 'text-slate-700'}`}>{daysLeft > 0 ? `${daysLeft} dias` : '0 dias'}</p></div>
+            </div>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+            <div className="flex items-center gap-4 mb-6"><div className="bg-blue-100 p-3 rounded-full text-blue-600"><User size={24} /></div><div><h2 className="text-xl font-bold text-slate-900">Meu Perfil</h2><p className="text-slate-500 text-sm">Gerencie suas informações pessoais</p></div></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div><label className="block text-sm font-semibold text-slate-700 mb-2">Nome Completo</label><input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
+                <div><label className="block text-sm font-semibold text-slate-700 mb-2">E-mail</label><input type="email" value={user.email} disabled className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl text-gray-500 cursor-not-allowed" /></div>
+                <div className="md:col-span-2"><label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2"><Smartphone size={16} className="text-green-600" /> WhatsApp (Opcional)</label><input type="text" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="(00) 00000-0000" className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" /><p className="text-xs text-gray-400 mt-1">Usaremos apenas para comunicações importantes sobre sua conta.</p></div>
+            </div>
+            <div className="text-right"><button onClick={handleSaveProfile} disabled={isSaving || (name === user.name && whatsapp === user.whatsapp)} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Salvar Alterações</button></div>
+        </div>
         <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm"><div className="flex items-center gap-4 mb-6"><div className="bg-orange-100 p-3 rounded-full text-orange-600"><Key size={24} /></div><div><h2 className="text-xl font-bold text-slate-900">Segurança</h2><p className="text-slate-500 text-sm">Gerencie sua senha de acesso</p></div></div><div className="flex flex-col md:flex-row items-center justify-between p-4 bg-white rounded-xl border border-gray-100"><div className="mb-4 md:mb-0"><h4 className="font-semibold text-slate-800">Alterar Senha</h4><p className="text-xs text-gray-500">Recomendamos usar uma senha forte e única.</p></div><button onClick={() => setIsPasswordModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white font-bold rounded-lg hover:bg-slate-900 transition-colors"><Key size={18} /> Alterar Senha</button></div></div>
         <div className="bg-red-50 rounded-2xl border border-red-200 p-6 shadow-sm"><div className="flex items-center gap-4 mb-6"><div className="bg-red-100 p-3 rounded-full text-red-600"><AlertTriangle size={24} /></div><div><h2 className="text-xl font-bold text-red-700">Zona de Perigo</h2><p className="text-red-500 text-sm">Ações irreversíveis de gerenciamento de dados</p></div></div><div className="space-y-4"><div className="flex flex-col md:flex-row items-center justify-between p-4 bg-white rounded-xl border border-red-100"><div className="mb-4 md:mb-0"><h4 className="font-semibold text-slate-800">Resetar Questões</h4><p className="text-xs text-gray-500">Apaga o histórico de respostas. As questões voltam a ser novas.</p></div><button onClick={() => openModal('questions')} className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-600 font-bold rounded-lg hover:bg-red-50 transition-colors"><RotateCcw size={18} /> Resetar Questões</button></div><div className="flex flex-col md:flex-row items-center justify-between p-4 bg-white rounded-xl border border-red-100"><div className="mb-4 md:mb-0"><h4 className="font-semibold text-slate-800">Resetar Tudo</h4><p className="text-xs text-gray-500">Apaga tudo, inclusive sua sequência (streak).</p></div><button onClick={() => openModal('history')} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors"><Trash2 size={18} /> Resetar Tudo</button></div></div></div>
       </div>
@@ -1101,7 +1261,7 @@ function AddQuestionView({ onBack }) {
 }
 
 // --- QUESTION VIEW ATUALIZADA (COM REPORT E SUGGESTION) ---
-function QuestionView({ area, initialData, user, onExit, onFinish, onPause }) {
+function QuestionView({ area, initialData, user, onExit, onFinish, onPause, onUpdateProgress }) {
   const [questions] = useState(() => initialData ? initialData.questionsData : []); 
   const [userAnswers, setUserAnswers] = useState(() => initialData ? initialData.answersData : {}); 
   const [currentIndex, setCurrentIndex] = useState(() => initialData ? initialData.currentIndex : 0);
@@ -1110,6 +1270,13 @@ function QuestionView({ area, initialData, user, onExit, onFinish, onPause }) {
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [suggestionModalOpen, setSuggestionModalOpen] = useState(false);
   const [suggestionType, setSuggestionType] = useState(null); 
+
+  // Notifica o componente pai sobre mudanças para o "Autosave" da navegação segura
+  useEffect(() => {
+     if (onUpdateProgress) {
+         onUpdateProgress(questions, userAnswers, currentIndex, initialData?.id);
+     }
+  }, [questions, userAnswers, currentIndex, onUpdateProgress, initialData?.id]);
 
   useEffect(() => {
     if (userAnswers[currentIndex]) {
@@ -1128,33 +1295,6 @@ function QuestionView({ area, initialData, user, onExit, onFinish, onPause }) {
   const handlePrevious = () => { if (currentIndex > 0) { setCurrentIndex(prev => prev - 1); window.scrollTo(0,0); } };
   const handleRedo = () => { setSelectedOption(null); setStatus('unanswered'); };
   const handleSaveAndExit = () => { onPause(questions, userAnswers, currentIndex, initialData?.id); };
-  
-  // Função de cópia com fallback para iFrames
-  const copyToClipboard = (text) => {
-      const fallbackCopy = (txt) => {
-          const textArea = document.createElement("textarea");
-          textArea.value = txt;
-          textArea.style.position = "fixed";
-          textArea.style.left = "-9999px";
-          document.body.appendChild(textArea);
-          textArea.focus();
-          textArea.select();
-          try {
-              document.execCommand('copy');
-              alert("ID copiado!");
-          } catch (err) {
-              console.error('Fallback copy failed', err);
-              alert("Não foi possível copiar automaticamente.");
-          }
-          document.body.removeChild(textArea);
-      };
-
-      if (navigator.clipboard && window.isSecureContext) {
-          navigator.clipboard.writeText(text).then(() => alert("ID copiado!")).catch(() => fallbackCopy(text));
-      } else {
-          fallbackCopy(text);
-      }
-  };
   
   const MobileNavBar = () => (
       <div className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 p-3 z-50 flex items-center justify-between shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] md:hidden">
@@ -1198,11 +1338,11 @@ function QuestionView({ area, initialData, user, onExit, onFinish, onPause }) {
                       <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2 py-1 rounded border border-gray-200">{currentQuestion.topic}</span>
                   </div>
                   
-                  {/* ID e Reportar */}
+                  {/* ID e Reportar - USANDO O NOVO COMPONENTE COPYBUTTON */}
                   <div className="flex items-center gap-3">
                       <div className="flex items-center gap-2 text-[10px] md:text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100 font-bold uppercase tracking-wider">
                           <span>ID</span>
-                          <button onClick={() => copyToClipboard(currentQuestion.id)} className="hover:text-blue-600 transition-colors" title="Copiar ID"><Copy size={12}/></button>
+                          <CopyButton text={currentQuestion.id} />
                       </div>
                       <button onClick={() => setReportModalOpen(true)} className="text-red-500 hover:text-red-700 transition-colors" title="Reportar Erro"><AlertTriangle size={18} /></button>
                   </div>
