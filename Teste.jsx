@@ -1,17 +1,16 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  Search, Filter, Edit3, Trash2, Save, X, CheckCircle, 
-  AlertCircle, Database, LayoutGrid, List, ChevronDown, 
-  ChevronRight, ArrowLeft, LogOut, Loader2, FileText, 
-  CheckSquare, BookOpen, AlertTriangle, Copy, Hash,
-  MessageSquare, ThumbsUp, ThumbsDown, Flag, User, Calendar, Building, Phone,
-  Users, TrendingUp, Target, Zap, Clock, Percent, Award, MoreHorizontal, UserPlus, Shield, PlusCircle, Lock
+  Map, Save, Trash2, Settings, CheckCircle, 
+  AlertCircle, FileText, Database, 
+  Loader2, Wand2, Cpu, RefreshCw, User, X,
+  LogOut, Send, Brain, Image as ImageIcon, UploadCloud, Lock, CloudLightning, ArrowLeft,
+  AlertTriangle
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from "firebase/app";
 import { 
-  getFirestore, collection, doc, getDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, writeBatch, setDoc
+  getFirestore, collection, addDoc, doc, getDoc, deleteDoc, onSnapshot, query, orderBy, setDoc, writeBatch 
 } from "firebase/firestore";
 import { 
   getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
@@ -32,26 +31,100 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-// --- DADOS DE REFERÊNCIA ---
+// --- DADOS DE REFERÊNCIA (ATUALIZADOS) ---
 const areasBase = [
-  'Clínica Médica', 'Cirurgia Geral', 'Ginecologia e Obstetrícia', 'Pediatria', 'Preventiva'
+  'Clínica Médica', 
+  'Cirurgia Geral', 
+  'Ginecologia e Obstetrícia', 
+  'Pediatria', 
+  'Preventiva'
 ];
 
 const themesMap = {
-    'Clínica Médica': ['Cardiologia', 'Dermatologia', 'Endocrinologia e Metabologia', 'Gastroenterologia', 'Hematologia', 'Hepatologia', 'Infectologia', 'Nefrologia', 'Neurologia', 'Pneumologia', 'Psiquiatria', 'Reumatologia'],
-    'Cirurgia Geral': ['Abdome Agudo', 'Cirurgia Hepatobiliopancreática', 'Cirurgia Torácica e de Cabeça e Pescoço', 'Cirurgia Vascular', 'Cirurgia do Esôfago e Estômago', 'Coloproctologia', 'Hérnias e Parede Abdominal', 'Pré e Pós-Operatório', 'Queimaduras', 'Resposta Metabólica e Cicatrização', 'Trauma', 'Urologia'],
-    'Ginecologia e Obstetrícia': ['Ciclo Menstrual e Anticoncepção', 'Climatério e Menopausa', 'Doenças Intercorrentes na Gestação', 'Infecções Congênitas e Gestacionais', 'Infecções Ginecológicas e ISTs', 'Mastologia', 'Obstetrícia Fisiológica e Pré-Natal', 'Oncologia Pélvica', 'Parto e Puerpério', 'Sangramentos da Gestação', 'Uroginecologia e Distopias', 'Vitalidade Fetal e Amniograma'],
-    'Pediatria': ['Adolescência e Puberdade', 'Afecções Respiratórias', 'Aleitamento Materno e Nutrição', 'Cardiologia e Reumatologia Pediátrica', 'Crescimento e Desenvolvimento', 'Emergências e Acidentes', 'Gastroenterologia Pediátrica', 'Imunizações', 'Infectopediatria e Exantemáticas', 'Nefrologia Pediátrica', 'Neonatologia: Patologias', 'Neonatologia: Sala de Parto'],
-    'Preventiva': ['Atenção Primária e Saúde da Família', 'Estudos Epidemiológicos', 'Financiamento e Gestão', 'História e Princípios do SUS', 'Indicadores de Saúde e Demografia', 'Medicina Baseada em Evidências', 'Medicina Legal', 'Medidas de Associação e Testes Diagnósticos', 'Políticas Nacionais de Saúde', 'Saúde do Trabalhador', 'Vigilância em Saúde', 'Ética Médica e Bioética']
+    'Clínica Médica': [
+        'Cardiologia',
+        'Dermatologia',
+        'Endocrinologia e Metabologia',
+        'Gastroenterologia',
+        'Hematologia',
+        'Hepatologia',
+        'Infectologia',
+        'Nefrologia',
+        'Neurologia',
+        'Pneumologia',
+        'Psiquiatria',
+        'Reumatologia'
+    ],
+    'Cirurgia Geral': [
+        'Abdome Agudo',
+        'Cirurgia Hepatobiliopancreática',
+        'Cirurgia Torácica e de Cabeça e Pescoço',
+        'Cirurgia Vascular',
+        'Cirurgia do Esôfago e Estômago',
+        'Coloproctologia',
+        'Hérnias e Parede Abdominal',
+        'Pré e Pós-Operatório',
+        'Queimaduras',
+        'Resposta Metabólica e Cicatrização',
+        'Trauma',
+        'Urologia'
+    ],
+    'Ginecologia e Obstetrícia': [
+        'Ciclo Menstrual e Anticoncepção',
+        'Climatério e Menopausa',
+        'Doenças Intercorrentes na Gestação',
+        'Infecções Congênitas e Gestacionais',
+        'Infecções Ginecológicas e ISTs',
+        'Mastologia',
+        'Obstetrícia Fisiológica e Pré-Natal',
+        'Oncologia Pélvica',
+        'Parto e Puerpério',
+        'Sangramentos da Gestação',
+        'Uroginecologia e Distopias',
+        'Vitalidade Fetal e Amniograma'
+    ],
+    'Pediatria': [
+        'Adolescência e Puberdade',
+        'Afecções Respiratórias',
+        'Aleitamento Materno e Nutrição',
+        'Cardiologia e Reumatologia Pediátrica',
+        'Crescimento e Desenvolvimento',
+        'Emergências e Acidentes',
+        'Gastroenterologia Pediátrica',
+        'Imunizações',
+        'Infectopediatria e Exantemáticas',
+        'Nefrologia Pediátrica',
+        'Neonatologia: Patologias',
+        'Neonatologia: Sala de Parto'
+    ],
+    'Preventiva': [
+        'Atenção Primária e Saúde da Família',
+        'Estudos Epidemiológicos',
+        'Financiamento e Gestão',
+        'História e Princípios do SUS',
+        'Indicadores de Saúde e Demografia',
+        'Medicina Baseada em Evidências',
+        'Medicina Legal',
+        'Medidas de Associação e Testes Diagnósticos',
+        'Políticas Nacionais de Saúde',
+        'Saúde do Trabalhador',
+        'Vigilância em Saúde',
+        'Ética Médica e Bioética'
+    ]
 };
 
-// --- COMPONENTE DE NOTIFICAÇÃO ---
-function NotificationToast({ notification, onClose }) {
+// --- COMPONENTE DE NOTIFICAÇÃO INTELIGENTE ---
+function NotificationToast({ notification, onClose, positionClass }) {
   const [isHovered, setIsHovered] = useState(false);
+
   useEffect(() => {
     if (!notification || isHovered) return;
-    // Tempo reduzido para 3 segundos (3000ms)
-    const timer = setTimeout(() => onClose(), 3000);
+
+    // Define o tempo: 6 segundos para ler
+    const timer = setTimeout(() => {
+      onClose();
+    }, 6000);
+
     return () => clearTimeout(timer);
   }, [notification, isHovered, onClose]);
 
@@ -61,75 +134,86 @@ function NotificationToast({ notification, onClose }) {
     <div 
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        className="fixed top-24 right-4 z-[100] p-4 rounded-xl shadow-xl flex items-start gap-3 animate-in slide-in-from-right-10 duration-300 max-w-sm border bg-white border-gray-200 text-slate-800"
+        className={`${positionClass} z-[100] p-4 rounded-xl shadow-xl flex items-start gap-3 animate-in slide-in-from-right-10 duration-300 max-w-sm border transition-all ${notification.type === 'error' ? 'bg-white border-red-200 text-red-700' : 'bg-white border-emerald-200 text-emerald-700'}`}
     >
-        <div className={`mt-0.5 p-1 rounded-full ${notification.type === 'error' ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>
+        <div className={`mt-0.5 p-1 rounded-full ${notification.type === 'error' ? 'bg-red-100' : 'bg-emerald-100'}`}>
             {notification.type === 'error' ? <AlertCircle size={20} /> : <CheckCircle size={20} />}
         </div>
         <div className="flex-1">
-            <p className="font-bold text-sm mb-1">{notification.type === 'error' ? 'Erro' : 'Sucesso'}</p>
+            <p className="font-bold text-sm mb-1">{notification.type === 'error' ? 'Ocorreu um erro' : 'Sucesso'}</p>
             <p className="text-sm opacity-90 leading-tight">{notification.text}</p>
         </div>
-        <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full text-gray-400"><X size={18}/></button>
+        <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
+            <X size={18}/>
+        </button>
+        {/* Barra de progresso visual opcional para indicar tempo (opcional, mantive simples) */}
     </div>
   );
 }
 
-export default function MedManager() {
+export default function App() {
   const [user, setUser] = useState(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   
-  // Data State
-  const [questions, setQuestions] = useState([]);
-  const [reports, setReports] = useState([]); 
-  const [userProfiles, setUserProfiles] = useState({}); 
-  const [students, setStudents] = useState([]); 
-  const [loadingData, setLoadingData] = useState(true);
-  const [loadingStudents, setLoadingStudents] = useState(false); 
+  // Chave API
+  const DEFAULT_KEY = 'AIzaSyDzH8eYaJTdlNGM17CUE0eyCEYPo6lTupA';
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || DEFAULT_KEY);
   
-  // View State
-  const [activeView, setActiveView] = useState('questions'); 
+  // Modelos
+  const [availableModels, setAvailableModels] = useState([
+      { name: 'models/gemini-2.5-flash', displayName: 'Gemini 2.5 Flash (Padrão)' }
+  ]);
+  const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('gemini_model') || 'models/gemini-2.5-flash');
   
-  // Filter State (Questions)
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedArea, setSelectedArea] = useState('Todas');
-  const [selectedTopic, setSelectedTopic] = useState('Todos');
-  const [selectedInstitution, setSelectedInstitution] = useState('Todas'); 
-  const [selectedYear, setSelectedYear] = useState('Todos'); 
-  const [reportFilterQuestionId, setReportFilterQuestionId] = useState(null);
-
-  // Filter State (Students)
-  const [studentStatusFilter, setStudentStatusFilter] = useState('all'); // 'all', 'active', 'expired'
-  const [studentRoleFilter, setStudentRoleFilter] = useState('all'); // 'all', 'admin', 'student'
+  // Estados de Entrada e UI
+  const [rawText, setRawText] = useState('');
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isBatchAction, setIsBatchAction] = useState(false); 
+  const [isSavingKey, setIsSavingKey] = useState(false);
   
-  // Edit State (Questions)
-  const [editingQuestion, setEditingQuestion] = useState(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [associatedReport, setAssociatedReport] = useState(null);
+  const [parsedQuestions, setParsedQuestions] = useState([]);
   
-  // Edit State (Users)
-  const [isCreatingUser, setIsCreatingUser] = useState(false);
-  const [viewingUserStats, setViewingUserStats] = useState(null); 
-  
-  // UI State
+  const [activeTab, setActiveTab] = useState('input');
   const [notification, setNotification] = useState(null);
-  const [deleteModal, setDeleteModal] = useState(null); 
-  const [rejectReportModal, setRejectReportModal] = useState(null);
+  const [isValidatingKey, setIsValidatingKey] = useState(false);
+  
+  // Modais
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [tempApiKey, setTempApiKey] = useState('');
+  
+  // Modal Genérico de Confirmação
+  const [confirmationModal, setConfirmationModal] = useState({
+      isOpen: false,
+      type: null,
+      data: null,
+      title: '',
+      message: '',
+      confirmText: '',
+      confirmColor: ''
+  });
   
   // Login Inputs
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // --- AUTH ---
+  // --- AUTH CHECK ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
         if (u) {
-            const userDoc = await getDoc(doc(db, "users", u.uid));
-            if (userDoc.exists() && userDoc.data().role === 'admin') {
-                setUser(u);
-            } else {
+            try {
+                const userDocRef = doc(db, "users", u.uid);
+                const userDoc = await getDoc(userDocRef);
+                if (userDoc.exists() && userDoc.data().role === 'admin') {
+                    setUser(u);
+                } else {
+                    await signOut(auth);
+                    setUser(null);
+                    showNotification('error', 'Acesso negado: Usuário não é administrador.');
+                }
+            } catch (error) {
+                console.error("Erro ao verificar role:", error);
                 await signOut(auth);
-                showNotification('error', 'Acesso negado: Apenas administradores.');
                 setUser(null);
             }
         } else {
@@ -140,705 +224,578 @@ export default function MedManager() {
     return () => unsubscribe();
   }, []);
 
-  // --- LOGOUT FUNCTION ---
-  const handleLogout = async () => {
-      try {
-          await signOut(auth);
-          setUser(null);
-          // Limpa estados locais ao sair
-          setQuestions([]);
-          setReports([]);
-          setStudents([]);
-          setActiveView('questions');
-      } catch (error) {
-          console.error("Erro ao sair:", error);
-      }
-  };
-
-  // --- LOAD DATA ---
+  // --- SYNC CHAVE API ---
   useEffect(() => {
-    if (!user) return;
-    
-    // Questions
-    const qQuest = query(collection(db, "questions"), orderBy("createdAt", "desc"));
-    const unsubQuest = onSnapshot(qQuest, (snap) => {
-        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setQuestions(list);
-        setLoadingData(false);
-    });
+      if (!user) return;
+      const unsubscribe = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
+          if (docSnap.exists() && docSnap.data().geminiApiKey) {
+              const globalKey = docSnap.data().geminiApiKey;
+              if (globalKey !== apiKey) {
+                  setApiKey(globalKey);
+                  localStorage.setItem('gemini_api_key', globalKey);
+              }
+          }
+      }, (error) => console.error("Erro ao sincronizar chave:", error));
+      return () => unsubscribe();
+  }, [user, apiKey]);
 
-    // Pending Reports
-    const qReports = query(collection(db, "reports"), where("status", "==", "pending"));
-    const unsubReports = onSnapshot(qReports, (snap) => {
-        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setReports(list);
-    });
-
-    return () => {
-        unsubQuest();
-        unsubReports();
-    };
+  // --- SYNC RASCUNHOS ---
+  useEffect(() => {
+      if (!user) {
+          setParsedQuestions([]);
+          return;
+      }
+      const q = query(collection(db, "draft_questions"), orderBy("createdAt", "desc"));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+          const drafts = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, status: 'draft' }));
+          setParsedQuestions(drafts);
+      }, (error) => showNotification('error', 'Erro ao sincronizar fila de aprovação: ' + error.message));
+      return () => unsubscribe();
   }, [user]);
 
-  // --- LOAD STUDENTS ---
-  useEffect(() => {
-      if (!user || activeView !== 'students') return;
-      setLoadingStudents(true);
-
-      const q = query(collection(db, "users"), orderBy("name")); 
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-          const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setStudents(list);
-          setLoadingStudents(false);
-      }, (error) => {
-          console.error("Erro ao buscar alunos:", error);
-          setLoadingStudents(false);
-      });
-
-      return () => unsubscribe();
-  }, [user, activeView]);
-
-  // --- FETCH USER PROFILES ---
-  useEffect(() => {
-      const fetchReporters = async () => {
-        if (reports.length === 0) return;
-        const uids = new Set(reports.map(r => r.userId).filter(uid => uid));
-        const newProfiles = { ...userProfiles };
-        const toFetch = [];
-        uids.forEach(uid => { if (!newProfiles[uid]) toFetch.push(uid); });
-
-        if (toFetch.length === 0) return;
-
-        await Promise.all(toFetch.map(async (uid) => {
-            try {
-                const snap = await getDoc(doc(db, "users", uid));
-                if (snap.exists()) { newProfiles[uid] = snap.data(); } 
-                else { newProfiles[uid] = { name: 'Desconhecido', whatsapp: '' }; }
-            } catch (e) { console.error("Erro ao buscar user", uid, e); }
-        }));
-        setUserProfiles(newProfiles);
-      };
-      fetchReporters();
-  }, [reports]);
-
-  // --- FILTER LOGIC ---
-  const uniqueInstitutions = useMemo(() => ['Todas', ...Array.from(new Set(questions.map(q => q.institution).filter(i => i))).sort()], [questions]);
-  const uniqueYears = useMemo(() => ['Todos', ...Array.from(new Set(questions.map(q => q.year ? String(q.year) : '').filter(y => y))).sort().reverse()], [questions]);
-  const reportsCountByQuestion = useMemo(() => {
-      const counts = {}; reports.forEach(r => { counts[r.questionId] = (counts[r.questionId] || 0) + 1; }); return counts;
-  }, [reports]);
-  const pendingReportsCount = reports.length;
-
-  const filteredQuestions = useMemo(() => {
-      let result = questions.filter(q => {
-          const matchesSearch = q.text.toLowerCase().includes(searchTerm.toLowerCase()) || q.institution?.toLowerCase().includes(searchTerm.toLowerCase()) || q.year?.toString().includes(searchTerm) || q.id.toLowerCase().includes(searchTerm.toLowerCase());
-          const matchesArea = selectedArea === 'Todas' || q.area === selectedArea;
-          const matchesTopic = selectedTopic === 'Todos' || q.topic === selectedTopic;
-          const matchesInstitution = selectedInstitution === 'Todas' || q.institution === selectedInstitution;
-          const matchesYear = selectedYear === 'Todos' || String(q.year) === selectedYear;
-          return matchesSearch && matchesArea && matchesTopic && matchesInstitution && matchesYear;
-      });
-      result.sort((a, b) => {
-          const countA = reportsCountByQuestion[a.id] || 0;
-          const countB = reportsCountByQuestion[b.id] || 0;
-          if (countB !== countA) return countB - countA;
-          return 0; 
-      });
-      return result;
-  }, [questions, searchTerm, selectedArea, selectedTopic, selectedInstitution, selectedYear, reportsCountByQuestion]);
-
-  const filteredReports = useMemo(() => {
-      let result = reports;
-      if (reportFilterQuestionId) result = result.filter(r => r.questionId === reportFilterQuestionId);
-      if (activeView === 'reports' && searchTerm) {
-          const lower = searchTerm.toLowerCase();
-          result = result.filter(r => r.userId?.toLowerCase().includes(lower) || r.questionId?.toLowerCase().includes(lower) || r.text?.toLowerCase().includes(lower) || r.details?.toLowerCase().includes(lower) || (userProfiles[r.userId]?.name || '').toLowerCase().includes(lower));
-      }
-      return result;
-  }, [reports, reportFilterQuestionId, searchTerm, activeView, userProfiles]);
-
-  const filteredStudents = useMemo(() => {
-      if (activeView !== 'students') return [];
-      const lower = searchTerm.toLowerCase();
-      
-      return students.filter(s => {
-          // Busca textual
-          const matchesSearch = 
-              s.name?.toLowerCase().includes(lower) || 
-              s.email?.toLowerCase().includes(lower) || 
-              s.id?.toLowerCase().includes(lower);
-          
-          // Filtro de Role
-          const matchesRole = studentRoleFilter === 'all' || s.role === studentRoleFilter;
-
-          // Filtro de Status (Assinatura)
-          // Se for Admin, ignora o status
-          if (s.role === 'admin') return matchesSearch && matchesRole;
-
-          const isPremium = s.subscriptionUntil && new Date(s.subscriptionUntil) > new Date();
-          let matchesStatus = true;
-          if (studentStatusFilter === 'active') matchesStatus = isPremium;
-          if (studentStatusFilter === 'expired') matchesStatus = !isPremium;
-
-          return matchesSearch && matchesRole && matchesStatus;
-      });
-  }, [students, searchTerm, activeView, studentRoleFilter, studentStatusFilter]);
-
-  const showNotification = (type, text) => setNotification({ type, text });
-
-  // --- HELPERS ---
-  const formatReportCategory = (c) => ({'metadata_suggestion':'Sugestão Metadados','suggestion_update':'Sugestão Atualização','Enunciado incorreto/confuso':'Enunciado Errado'}[c] || c || 'Geral');
-  
-  const getUserDetails = (uid) => { const p = userProfiles[uid]; return { name: p?.name || '...', whatsapp: p?.whatsapp || '' }; };
-  
-  const checkSubscriptionStatus = (d, role) => { 
-      if (role === 'admin') return { status: 'Admin', color: 'indigo', label: 'Admin' };
-      if (!d) return { status: 'Expirado', color: 'red', label: 'Expirado' }; 
-      return new Date(d) > new Date() ? { status: 'Ativo', color: 'emerald', label: 'Ativo' } : { status: 'Expirado', color: 'red', label: 'Expirado' }; 
-  };
-  
-  const availableTopics = selectedArea === 'Todas' ? [] : (themesMap[selectedArea] || []);
-
-  // --- ACTIONS (USER MANAGEMENT) ---
-  const handleCreateUser = async (e) => {
-      e.preventDefault();
-      setIsSaving(true);
-      const formData = new FormData(e.target);
-      const userData = Object.fromEntries(formData);
+  // --- HELPER FUNCTIONS ---
+  const saveApiKeyFromModal = async () => {
+      if (!tempApiKey.trim()) return showNotification('error', 'A chave não pode estar vazia.');
+      setIsSavingKey(true);
       try {
-          const newUserId = crypto.randomUUID(); 
-          await setDoc(doc(db, "users", newUserId), {
-              ...userData,
-              createdAt: new Date().toISOString(),
-              role: userData.role || 'student',
-              subscriptionUntil: userData.subscriptionUntil || null,
-              whatsapp: userData.whatsapp || '',
-              stats: { correctAnswers: 0, totalAnswers: 0, streak: 0 }
-          });
-          showNotification('success', 'Aluno criado!');
-          setIsCreatingUser(false);
+          await setDoc(doc(db, "settings", "global"), {
+              geminiApiKey: tempApiKey,
+              updatedBy: user.email,
+              updatedAt: new Date().toISOString()
+          }, { merge: true });
+          setShowApiKeyModal(false);
+          showNotification('success', 'Chave API salva no Banco de Dados Geral!');
       } catch (error) {
-          showNotification('error', 'Erro ao criar: ' + error.message);
+          showNotification('error', 'Erro ao salvar chave: ' + error.message);
       } finally {
-          setIsSaving(false);
+          setIsSavingKey(false);
       }
   };
 
-  const handleInlineUserUpdate = async (id, field, value) => {
-      try {
-          await updateDoc(doc(db, "users", id), { [field]: value });
-          showNotification('success', 'Atualizado com sucesso!');
-      } catch (error) {
-          showNotification('error', 'Erro ao atualizar: ' + error.message);
-      }
+  const handleModelChange = (modelName) => {
+      setSelectedModel(modelName);
+      localStorage.setItem('gemini_model', modelName);
   };
 
-  const handleAdd30Days = async (student) => {
-      const now = new Date();
-      let newDate = new Date();
-      
-      if (student.subscriptionUntil) {
-          const currentExpiry = new Date(student.subscriptionUntil);
-          // Se ainda não venceu, soma 30 dias na data de vencimento
-          if (currentExpiry > now) {
-              newDate = new Date(currentExpiry);
+  const showNotification = (type, text) => {
+    setNotification({ type, text });
+  };
+
+  const closeNotification = () => {
+      setNotification(null);
+  };
+
+  const handleLogout = () => {
+      signOut(auth);
+      setParsedQuestions([]);
+      setActiveTab('input');
+  };
+
+  const handleImageUpload = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onloadend = () => {
+          const result = reader.result;
+          setSelectedImage({
+              data: result.split(',')[1],
+              mime: file.type,
+              preview: result
+          });
+      };
+      reader.readAsDataURL(file);
+  };
+
+  const handlePasteImage = (e) => {
+      const items = e.clipboardData.items;
+      for (let i = 0; i < items.length; i++) {
+          if (items[i].type.indexOf("image") !== -1) {
+              const blob = items[i].getAsFile();
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                  setSelectedImage({
+                      data: reader.result.split(',')[1],
+                      mime: blob.type,
+                      preview: reader.result
+                  });
+              };
+              reader.readAsDataURL(blob);
           }
       }
-      
-      // Adiciona 30 dias
-      newDate.setDate(newDate.getDate() + 30);
-      
-      try {
-          await updateDoc(doc(db, "users", student.id), { subscriptionUntil: newDate.toISOString() });
-          showNotification('success', '+30 dias adicionados com sucesso!');
-      } catch (error) {
-          showNotification('error', 'Erro ao adicionar dias: ' + error.message);
-      }
   };
 
-  const handleDeleteUser = async () => {
-      if (!deleteModal || !deleteModal.email) return; 
+  const validateKeyAndFetchModels = async () => {
+      if (!apiKey) return showNotification('error', 'Configure uma chave API primeiro.');
+      setIsValidatingKey(true);
       try {
-          await deleteDoc(doc(db, "users", deleteModal.id));
-          showNotification('success', 'Aluno excluído.');
-          setDeleteModal(null);
-      } catch (error) {
-          showNotification('error', 'Erro ao excluir.');
-      }
-  };
-
-  const fetchUserStats = async (student) => {
-      setViewingUserStats({ ...student, loading: true });
-      try {
-          const statsSnap = await getDoc(doc(db, "users", student.id, "stats", "main"));
-          if (statsSnap.exists()) {
-              setViewingUserStats({ ...student, stats: statsSnap.data(), loading: false });
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+          const data = await response.json();
+          if (data.error) throw new Error(data.error.message);
+          if (!data.models) throw new Error("Sem acesso a modelos.");
+          const genModels = data.models.filter(m => m.supportedGenerationMethods?.includes("generateContent") && (m.name.includes("gemini")));
+          if (genModels.length > 0) {
+              setAvailableModels(genModels);
+              showNotification('success', `${genModels.length} modelos liberados!`);
           } else {
-              setViewingUserStats({ ...student, stats: null, loading: false });
+              showNotification('error', 'Chave válida mas sem modelos Gemini.');
           }
-      } catch (e) {
-          console.error(e);
-          setViewingUserStats({ ...student, stats: null, loading: false });
+      } catch (error) {
+          showNotification('error', `Erro na chave: ${error.message}`);
+      } finally {
+          setIsValidatingKey(false);
       }
   };
 
-  // --- ACTIONS (QUESTIONS & REPORTS) ---
-  const handleSave = async (shouldResolveReport = false) => {
-      setIsSaving(true);
+  // --- PROCESSAMENTO IA ---
+  const processWithAI = async () => {
+    if (!apiKey) return showNotification('error', 'Chave API inválida.');
+    if (activeTab === 'input' && !rawText.trim()) return showNotification('error', 'Cole o texto.');
+    if (activeTab === 'image' && !selectedImage) return showNotification('error', 'Selecione uma imagem.');
+
+    setIsProcessing(true);
+
+    const systemPrompt = `
+      Você é um especialista em banco de dados médicos (MedMaps).
+      Extraia questões no formato JSON ESTRITO.
+      
+      REGRAS:
+      1. Retorne APENAS o JSON (sem markdown).
+      2. Tópico: Escolha baseado estritamente na lista abaixo. Se não encaixar perfeitamente, escolha o mais próximo:
+         ${JSON.stringify(themesMap)}
+      3. Instituição: Se não tiver, vazio "".
+      4. Ano: Se não tiver, vazio "".
+      5. Gabarito: Deduza se não houver.
+      
+      Formato Saída:
+      [
+        {
+          "institution": "String", "year": Number|String, "area": "String", "topic": "String",
+          "text": "String", "options": [{"id": "a", "text": "String"}],
+          "correctOptionId": "char", "explanation": "String"
+        }
+      ]
+    `;
+
+    let contentsPayload = [];
+    if (activeTab === 'input') {
+        contentsPayload = [{ parts: [{ text: systemPrompt + "\n\nCONTEÚDO:\n" + rawText }] }];
+    } else {
+        contentsPayload = [{
+            parts: [
+                { text: systemPrompt + "\n\nAnalise esta imagem:" },
+                { inline_data: { mime_type: selectedImage.mime, data: selectedImage.data } }
+            ]
+        }];
+    }
+
+    try {
+      const modelNameClean = selectedModel.startsWith('models/') ? selectedModel.replace('models/', '') : selectedModel;
+      
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelNameClean}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: contentsPayload })
+      });
+
+      const data = await response.json();
+      if (data.error) throw new Error(data.error.message);
+
+      let jsonString = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      jsonString = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
+
+      let questions;
       try {
-          const batch = writeBatch(db);
-          const { id, ...data } = editingQuestion;
-          batch.update(doc(db, "questions", id), data);
-          if (shouldResolveReport && associatedReport) {
-              batch.update(doc(db, "reports", associatedReport.id), { status: 'resolved', resolvedBy: user.email, resolvedAt: new Date().toISOString() });
+        questions = JSON.parse(jsonString);
+      } catch (e) {
+        jsonString = jsonString.replace(/[\u0000-\u0019]+/g,""); 
+        questions = JSON.parse(jsonString);
+      }
+      
+      let savedCount = 0;
+      const batch = writeBatch(db);
+      
+      for (const q of questions) {
+          const docRef = doc(collection(db, "draft_questions"));
+          batch.set(docRef, {
+              ...q,
+              institution: q.institution || "", 
+              year: q.year || "",
+              createdAt: new Date().toISOString(),
+              createdBy: user.email,
+              hasImage: false
+          });
+          savedCount++;
+      }
+      await batch.commit();
+
+      setRawText('');
+      setSelectedImage(null);
+      setActiveTab('review');
+      showNotification('success', `${savedCount} questões enviadas para fila de aprovação!`);
+
+    } catch (error) {
+      console.error(error);
+      if (error.message.includes('JSON')) {
+          showNotification('error', 'Erro de formatação da IA. Tente novamente.');
+      } else {
+          showNotification('error', 'Erro: ' + error.message);
+      }
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // --- FUNÇÕES DE MODAL DE CONFIRMAÇÃO ---
+  const handleDiscardOneClick = (q) => {
+      setConfirmationModal({
+          isOpen: true,
+          type: 'delete_one',
+          data: q,
+          title: 'Excluir Rascunho?',
+          message: 'Tem certeza que deseja excluir esta questão? Esta ação não pode ser desfeita.',
+          confirmText: 'Sim, Excluir',
+          confirmColor: 'red'
+      });
+  };
+
+  const handleApproveAllClick = () => {
+      if (parsedQuestions.length === 0) return;
+      setConfirmationModal({
+          isOpen: true,
+          type: 'approve_all',
+          data: null,
+          title: 'Aprovar Todas?',
+          message: `Tem certeza que deseja publicar TODAS as ${parsedQuestions.length} questões da fila para o banco oficial?`,
+          confirmText: 'Sim, Publicar Tudo',
+          confirmColor: 'emerald'
+      });
+  };
+
+  const handleDiscardAllClick = () => {
+      if (parsedQuestions.length === 0) return;
+      setConfirmationModal({
+          isOpen: true,
+          type: 'delete_all',
+          data: null,
+          title: 'Limpar Fila Completa?',
+          message: `ATENÇÃO: Isso excluirá PERMANENTEMENTE todas as ${parsedQuestions.length} questões da fila de rascunho.`,
+          confirmText: 'Sim, Excluir Tudo',
+          confirmColor: 'red'
+      });
+  };
+
+  const executeConfirmationAction = async () => {
+      const { type, data } = confirmationModal;
+      setConfirmationModal({ ...confirmationModal, isOpen: false }); 
+
+      if (type === 'delete_one') {
+          if (!data || !data.id) return;
+          try {
+              await deleteDoc(doc(db, "draft_questions", data.id));
+              showNotification('success', 'Rascunho excluído.');
+          } catch (error) {
+              showNotification('error', 'Erro ao excluir: ' + error.message);
           }
-          await batch.commit();
-          showNotification('success', shouldResolveReport ? 'Questão salva e reporte resolvido!' : 'Questão atualizada!');
-          setEditingQuestion(null);
-          setAssociatedReport(null);
-      } catch (error) { console.error(error); showNotification('error', error.message); } finally { setIsSaving(false); }
-  };
-
-  const handleRejectReport = async () => {
-      if (!rejectReportModal) return;
-      try {
-          await deleteDoc(doc(db, "reports", rejectReportModal.id));
-          showNotification('success', 'Reporte excluído.');
-          if (associatedReport && associatedReport.id === rejectReportModal.id) { setAssociatedReport(null); setEditingQuestion(null); }
-          setRejectReportModal(null);
-      } catch (error) { showNotification('error', error.message); }
-  };
-
-  const handleOpenFromReport = (report) => {
-      const question = questions.find(q => q.id === report.questionId);
-      if (question) {
-          let qToEdit = { ...question };
-          if (report.category === "metadata_suggestion" || report.category === "suggestion_update") {
-              if (report.suggestedInstitution) qToEdit.institution = report.suggestedInstitution;
-              if (report.suggestedYear) qToEdit.year = report.suggestedYear;
+      } 
+      else if (type === 'approve_all') {
+          setIsBatchAction(true);
+          let successCount = 0;
+          const queue = [...parsedQuestions];
+          
+          try {
+              for (let i = 0; i < queue.length; i++) {
+                  const q = queue[i];
+                  const { id, status, createdAt, createdBy, ...finalData } = q;
+                  if (q.area && q.topic && q.text) {
+                     await addDoc(collection(db, "questions"), {
+                         ...finalData,
+                         createdAt: new Date().toISOString(),
+                         approvedBy: user.email,
+                         hasImage: false
+                     });
+                     await deleteDoc(doc(db, "draft_questions", id));
+                     successCount++;
+                  }
+              }
+              showNotification('success', `${successCount} questões foram publicadas com sucesso!`);
+          } catch (err) {
+              console.error(err);
+              showNotification('error', 'Erro durante aprovação em massa: ' + err.message);
+          } finally {
+              setIsBatchAction(false);
           }
-          setEditingQuestion(qToEdit);
-          setAssociatedReport(report);
-      } else { showNotification('error', 'Questão não encontrada.'); }
+      }
+      else if (type === 'delete_all') {
+          setIsBatchAction(true);
+          try {
+              const batch = writeBatch(db);
+              parsedQuestions.forEach(q => {
+                  const ref = doc(db, "draft_questions", q.id);
+                  batch.delete(ref);
+              });
+              await batch.commit();
+              showNotification('success', 'Fila de aprovação limpa com sucesso.');
+          } catch (err) {
+              console.error(err);
+              showNotification('error', 'Erro ao limpar fila: ' + err.message);
+          } finally {
+              setIsBatchAction(false);
+          }
+      }
   };
 
-  const handleDeleteQuestion = async () => {
-      if (!deleteModal || deleteModal.email) return; 
-      try {
-          await deleteDoc(doc(db, "questions", deleteModal.id));
-          showNotification('success', 'Questão excluída.');
-          if (editingQuestion && editingQuestion.id === deleteModal.id) { setEditingQuestion(null); setAssociatedReport(null); }
-          setDeleteModal(null);
-      } catch (error) { showNotification('error', 'Erro ao excluir.'); }
+  const approveQuestion = async (q) => {
+    if (!q.area || !q.topic || !q.text || !q.options || q.options.length < 2) {
+      return showNotification('error', 'Preencha os campos obrigatórios antes de aprovar.');
+    }
+    try {
+      const { id, status, createdAt, createdBy, ...finalData } = q;
+      await addDoc(collection(db, "questions"), {
+        ...finalData,
+        createdAt: new Date().toISOString(),
+        approvedBy: user.email,
+        hasImage: false
+      });
+      await deleteDoc(doc(db, "draft_questions", id));
+      showNotification('success', 'Questão aprovada e publicada!');
+    } catch (error) {
+      showNotification('error', 'Erro ao aprovar: ' + error.message);
+    }
   };
 
-  const copyToClipboard = async (text) => {
-      try {
-          const textArea = document.createElement("textarea"); textArea.value = text;
-          textArea.style.position = "fixed"; textArea.style.left = "-9999px";
-          document.body.appendChild(textArea); textArea.focus(); textArea.select();
-          document.execCommand('copy'); document.body.removeChild(textArea);
-          showNotification('success', 'Copiado!');
-      } catch (err) { showNotification('error', 'Erro ao copiar.'); }
+  const updateQuestionField = (idx, field, val) => {
+      const newQ = [...parsedQuestions];
+      newQ[idx][field] = val;
+      setParsedQuestions(newQ);
+  };
+  const updateOptionText = (qIdx, optIdx, val) => {
+      const newQ = [...parsedQuestions];
+      newQ[qIdx].options[optIdx].text = val;
+      setParsedQuestions(newQ);
   };
 
+  // --- RENDER LOGIN ---
   if (isLoadingAuth) return <div className="min-h-screen bg-slate-900 flex items-center justify-center"><Loader2 className="text-white animate-spin" size={48} /></div>;
+  
   if (!user) return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans">
-          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl text-center">
-              <div className="flex justify-center mb-4"><div className="bg-blue-100 p-4 rounded-full"><Lock className="w-8 h-8 text-blue-600"/></div></div>
-              <h1 className="text-2xl font-bold text-slate-800 mb-2">MedManager</h1>
-              <p className="text-sm text-gray-500 mb-6">Acesso restrito a administradores</p>
-              <form onSubmit={(e) => { e.preventDefault(); signInWithEmailAndPassword(auth, email, password).catch(err => showNotification('error', "Erro de login: " + err.message)); }} className="space-y-4">
-                  <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500" required/>
-                  <input type="password" placeholder="Senha" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500" required/>
-                  <button className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-xl transition-colors">Entrar</button>
-              </form>
+        <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300">
+          <div className="flex items-center gap-3 mb-6 justify-center">
+             <div className="bg-blue-600 p-3 rounded-xl shadow-lg shadow-blue-900/20"><Map className="text-white" size={32} /></div>
+             <h1 className="text-2xl font-bold text-slate-800">MedMaps Admin</h1>
           </div>
-          <NotificationToast notification={notification} onClose={() => setNotification(null)} />
+          <p className="text-slate-500 text-center mb-6">Acesso restrito a administradores.</p>
+          <form onSubmit={(e) => { e.preventDefault(); signInWithEmailAndPassword(auth, email, password).catch(err => showNotification('error', err.message)); }} className="space-y-4">
+            <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition-all"/>
+            <input type="password" placeholder="Senha" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition-all"/>
+            <button className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center gap-2"><Lock size={18} /> Acessar Sistema</button>
+          </form>
+        </div>
+        
+        {/* Usando o novo componente NotificationToast */}
+        <NotificationToast notification={notification} onClose={closeNotification} positionClass="fixed bottom-4 right-4" />
       </div>
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans text-slate-800 flex">
-      <NotificationToast notification={notification} onClose={() => setNotification(null)} />
+    <div className="min-h-screen bg-gray-50 font-sans text-slate-800 pb-20">
       
-      {/* SIDEBAR */}
-      <aside className="w-64 bg-white border-r border-gray-200 fixed h-full z-10 flex flex-col shadow-sm">
-          <div className="p-6 border-b border-gray-100">
-              <div className="flex items-center gap-2 text-blue-800 font-bold text-xl mb-1">
-                  <Database /> MedManager
-              </div>
-              <p className="text-xs text-gray-400">Gestão de Acervo v3.4</p>
+      {/* HEADER */}
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <button onClick={() => window.location.href = '/'} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Voltar para o App Principal"><ArrowLeft size={24} /></button>
+            <div className="flex items-center gap-2"><Map className="text-blue-600" size={28} /><h1 className="text-xl font-bold text-slate-800">MedMaps Importer</h1></div>
           </div>
           
-          <div className="p-4 flex-1 overflow-y-auto space-y-2">
-              <button onClick={() => { setActiveView('questions'); setReportFilterQuestionId(null); setSearchTerm(''); }} className={`w-full flex items-center justify-between p-3 rounded-xl font-bold text-sm transition-all ${activeView === 'questions' ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:bg-gray-50'}`}><span className="flex items-center gap-2"><List size={18} /> Questões</span></button>
-              <button onClick={() => { setActiveView('reports'); setReportFilterQuestionId(null); setSearchTerm(''); }} className={`w-full flex items-center justify-between p-3 rounded-xl font-bold text-sm transition-all ${activeView === 'reports' ? 'bg-red-50 text-red-700' : 'text-gray-500 hover:bg-gray-50'}`}><span className="flex items-center gap-2"><MessageSquare size={18} /> Reportes</span>{pendingReportsCount > 0 && <span className="bg-red-600 text-white text-xs px-2 py-0.5 rounded-full">{pendingReportsCount}</span>}</button>
-              <button onClick={() => { setActiveView('students'); setReportFilterQuestionId(null); setSearchTerm(''); }} className={`w-full flex items-center justify-between p-3 rounded-xl font-bold text-sm transition-all ${activeView === 'students' ? 'bg-purple-50 text-purple-700' : 'text-gray-500 hover:bg-gray-50'}`}><span className="flex items-center gap-2"><Users size={18} /> Alunos</span></button>
-              
-              {/* FILTERS FOR QUESTIONS */}
-              {activeView === 'questions' && (
-                <div className="mt-6 pt-6 border-t border-gray-100 space-y-3">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Filtros</label>
-                    <div className="relative"><Filter size={16} className="absolute left-3 top-3 text-gray-400" /><select value={selectedArea} onChange={e => { setSelectedArea(e.target.value); setSelectedTopic('Todos'); }} className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium outline-none"><option value="Todas">Todas as Áreas</option>{areasBase.map(a => <option key={a} value={a}>{a}</option>)}</select></div>
-                    <div className="relative"><BookOpen size={16} className="absolute left-3 top-3 text-gray-400" /><select value={selectedTopic} onChange={e => setSelectedTopic(e.target.value)} disabled={selectedArea === 'Todas'} className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium outline-none disabled:opacity-50"><option value="Todos">Todos os Tópicos</option>{availableTopics.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
-                    <div className="relative"><Building size={16} className="absolute left-3 top-3 text-gray-400" /><select value={selectedInstitution} onChange={e => setSelectedInstitution(e.target.value)} className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium outline-none">{uniqueInstitutions.map(inst => <option key={inst} value={inst}>{inst}</option>)}</select></div>
-                    <div className="relative"><Calendar size={16} className="absolute left-3 top-3 text-gray-400" /><select value={selectedYear} onChange={e => setSelectedYear(e.target.value)} className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium outline-none">{uniqueYears.map(year => <option key={year} value={year}>{year}</option>)}</select></div>
+          <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto items-center">
+            <button onClick={() => { setTempApiKey(apiKey); setShowApiKeyModal(true); }} className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2 text-sm font-medium"><Settings size={18} /><span className="hidden md:inline">API</span></button>
+            <div className="relative group flex-1 md:flex-none w-full md:w-auto flex items-center gap-2">
+                <div className="relative">
+                    <Cpu size={16} className="absolute left-3 top-3 text-gray-500" />
+                    <select value={selectedModel} onChange={(e) => handleModelChange(e.target.value)} className="w-full md:w-56 pl-9 pr-3 py-2 text-sm bg-gray-100 border-none rounded-lg font-medium text-slate-700 focus:ring-2 focus:ring-blue-500 cursor-pointer appearance-none">
+                        {availableModels.map(model => (<option key={model.name} value={model.name}>{model.displayName || model.name}</option>))}
+                    </select>
                 </div>
-              )}
-
-              {/* FILTERS FOR STUDENTS */}
-              {activeView === 'students' && (
-                <div className="mt-6 pt-6 border-t border-gray-100 space-y-3">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Filtros</label>
-                    <div className="relative"><Shield size={16} className="absolute left-3 top-3 text-gray-400" /><select value={studentRoleFilter} onChange={e => setStudentRoleFilter(e.target.value)} className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium outline-none"><option value="all">Todas as Funções</option><option value="student">Alunos</option><option value="admin">Admins</option></select></div>
-                    <div className="relative"><Award size={16} className="absolute left-3 top-3 text-gray-400" /><select value={studentStatusFilter} onChange={e => setStudentStatusFilter(e.target.value)} className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium outline-none"><option value="all">Todos os Status</option><option value="active">Ativos (Premium)</option><option value="expired">Expirados</option></select></div>
-                </div>
-              )}
+                <button onClick={validateKeyAndFetchModels} disabled={isValidatingKey || !apiKey} className="p-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors disabled:opacity-50" title="Sincronizar Modelos">
+                    {isValidatingKey ? <Loader2 size={18} className="animate-spin"/> : <RefreshCw size={18} />}
+                </button>
+            </div>
+            <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Sair"><LogOut size={20} /></button>
           </div>
-          
-          <div className="p-4 border-t border-gray-100 space-y-1">
-              <button onClick={() => window.location.href = '/'} className="flex items-center gap-2 text-gray-500 hover:text-blue-600 text-sm font-bold w-full p-2 rounded-lg hover:bg-gray-50 transition-colors"><ArrowLeft size={16} /> Voltar ao App</button>
-              <button onClick={handleLogout} className="flex items-center gap-2 text-red-400 hover:text-red-600 text-sm font-bold w-full p-2 rounded-lg hover:bg-red-50 transition-colors"><LogOut size={16} /> Sair</button>
-          </div>
-      </aside>
+        </div>
+      </header>
 
-      {/* MAIN CONTENT */}
-      <main className="ml-64 flex-1 p-8 overflow-y-auto">
-          
-          {/* SEARCH HEADER */}
-          <div className="flex items-center justify-between mb-8 gap-4">
-              <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
-                  {activeView === 'questions' && <><List className="text-blue-600"/> Questões</>}
-                  {activeView === 'reports' && <><MessageSquare className="text-red-600"/> Reportes <span className="text-sm font-normal text-gray-500 bg-gray-100 px-3 py-1 rounded-full">{pendingReportsCount} Pendentes</span></>}
-                  {activeView === 'students' && <><Users className="text-purple-600"/> Gestão de Alunos</>}
-              </h2>
-              <div className="relative flex-1 max-w-md">
-                  <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
-                  <input type="text" placeholder="Pesquisar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" />
-              </div>
-              {activeView === 'students' && (
-                  <button onClick={() => setIsCreatingUser(true)} className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg flex items-center gap-2 transition-transform hover:scale-105">
-                      <UserPlus size={20} /> Novo Aluno
-                  </button>
-              )}
-          </div>
+      {/* NOTIFICATION (Usando o novo componente) */}
+      <NotificationToast notification={notification} onClose={closeNotification} positionClass="fixed top-24 right-4" />
 
-          {/* VIEW: QUESTIONS */}
-          {activeView === 'questions' && (
-              <div className="space-y-4">
-                  {filteredQuestions.map(q => {
-                      const reportCount = reportsCountByQuestion[q.id] || 0;
-                      return (
-                          <div key={q.id} className={`bg-white rounded-xl border shadow-sm hover:shadow-md transition-all p-5 flex flex-col md:flex-row gap-4 items-start ${reportCount > 0 ? 'border-amber-200 shadow-amber-100' : 'border-gray-200'}`}>
-                              <div className="flex-1 min-w-0">
-                                  <div className="flex flex-wrap items-center gap-y-2 gap-x-3 mb-3">
-                                      <span onClick={() => copyToClipboard(q.id)} className="bg-slate-100 text-slate-500 text-xs font-mono px-2 py-1 rounded cursor-pointer hover:bg-slate-200 flex items-center gap-1 border border-slate-200" title="Copiar ID"><Hash size={10}/> {q.id.slice(0, 8)}...</span>
-                                      {reportCount > 0 && (
-                                          <button onClick={(e) => { e.stopPropagation(); handleGoToReports(q.id); }} className="bg-amber-100 hover:bg-amber-200 text-amber-700 text-xs font-bold px-2 py-1 rounded flex items-center gap-1 border border-amber-200 animate-pulse transition-colors cursor-pointer"><AlertTriangle size={12}/> {reportCount} Reportes (Ver)</button>
-                                      )}
-                                      <div className="flex items-center gap-2">
-                                          <span className="flex items-center gap-1 bg-blue-50 text-blue-700 text-xs font-bold px-2 py-1 rounded border border-blue-100"><Building size={10}/> {q.institution || 'N/A'}</span>
-                                          <span className="flex items-center gap-1 bg-gray-100 text-gray-600 text-xs font-bold px-2 py-1 rounded border border-gray-200"><Calendar size={10}/> {q.year || '----'}</span>
-                                      </div>
-                                      <div className="flex items-center flex-wrap gap-1"><span className="text-xs font-bold text-slate-600 whitespace-nowrap">{q.area}</span><span className="text-xs font-medium text-gray-400">/</span><span className="text-xs font-medium text-slate-500">{q.topic}</span></div>
-                                  </div>
-                                  <p className="text-slate-800 text-sm line-clamp-2 mb-3">{q.text}</p>
-                              </div>
-                              <div className="flex items-center gap-2 self-start md:self-center">
-                                  <button onClick={() => setEditingQuestion(q)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg hover:border-blue-100 border border-transparent"><Edit3 size={18}/></button>
-                                  <button onClick={() => setDeleteModal(q)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg hover:border-red-100 border border-transparent"><Trash2 size={18}/></button>
-                              </div>
-                          </div>
-                      );
-                  })}
-              </div>
-          )}
-
-          {/* VIEW: REPORTS */}
-          {activeView === 'reports' && (
-              <div className="max-w-4xl mx-auto space-y-6">
-                  {reportFilterQuestionId && (
-                      <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl flex items-center justify-between">
-                          <div className="flex items-center gap-2 font-medium"><Filter size={18} /> Filtrando reportes da questão <span className="font-mono bg-white px-2 py-0.5 rounded border border-amber-100">{reportFilterQuestionId}</span></div>
-                          <button onClick={handleClearReportFilter} className="text-sm underline hover:text-amber-900 font-bold">Limpar Filtro</button>
-                      </div>
-                  )}
-                  {filteredReports.map(report => {
-                      const reporter = getUserDetails(report.userId);
-                      return (
-                          <div key={report.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 relative overflow-hidden">
-                              <div className="flex justify-between items-start mb-4">
-                                  <div className="flex items-center gap-3">
-                                      <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-400"><User size={20} /></div>
-                                      <div><p className="text-sm font-bold text-slate-800">{reporter.name}</p><div onClick={() => copyToClipboard(report.userId)} className="text-xs text-gray-500 flex items-center gap-1 cursor-pointer hover:text-blue-600" title="Copiar ID">ID: {report.userId.slice(0,8)}... <Copy size={10} /></div></div>
-                                  </div>
-                                  <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${report.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{report.type === 'error' ? <AlertTriangle size={12}/> : <MessageSquare size={12}/>}{formatReportCategory(report.category)}</span>
-                              </div>
-                              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 mb-4">{getReportDetails(report)}</div>
-                              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-                                  <button onClick={() => setRejectReportModal(report)} className="px-4 py-2 text-orange-600 hover:bg-orange-50 rounded-lg font-bold text-sm flex items-center gap-2"><ThumbsDown size={16}/> Recusar e Excluir</button>
-                                  <button onClick={() => handleOpenFromReport(report)} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm flex items-center gap-2"><Edit3 size={16}/> Ver Questão</button>
-                              </div>
-                          </div>
-                      );
-                  })}
-              </div>
-          )}
-
-          {/* VIEW: STUDENTS TABLE */}
-          {activeView === 'students' && (
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                  <div className="overflow-x-auto">
-                      <table className="w-full text-left text-sm text-slate-600">
-                          <thead className="bg-gray-50 text-xs uppercase font-bold text-gray-500 border-b border-gray-200">
-                              <tr>
-                                  <th className="px-6 py-4">Aluno / Email</th>
-                                  <th className="px-6 py-4">Função</th>
-                                  <th className="px-6 py-4">ID</th>
-                                  <th className="px-6 py-4">Status / Vencimento</th>
-                                  <th className="px-6 py-4 text-right">Ações</th>
-                              </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                              {loadingStudents ? (
-                                  <tr><td colSpan="5" className="px-6 py-10 text-center"><Loader2 className="animate-spin mx-auto text-purple-600" /></td></tr>
-                              ) : filteredStudents.map(student => {
-                                  const subStatus = checkSubscriptionStatus(student.subscriptionUntil, student.role);
-                                  const isAdmin = student.role === 'admin';
-                                  
-                                  return (
-                                      <tr key={student.id} className="hover:bg-gray-50 transition-colors">
-                                          <td className="px-6 py-4">
-                                              <div className="font-bold text-slate-900">{student.name || 'Sem Nome'}</div>
-                                              <div className="text-xs text-gray-500 mb-1">{student.email}</div>
-                                              {student.whatsapp && (
-                                                  <div className="text-xs text-emerald-600 flex items-center gap-1 font-medium">
-                                                      <Phone size={12}/> {student.whatsapp}
-                                                  </div>
-                                              )}
-                                          </td>
-                                          <td className="px-6 py-4">
-                                              {/* INLINE ROLE EDIT */}
-                                              <select 
-                                                  value={student.role} 
-                                                  onChange={(e) => handleInlineUserUpdate(student.id, 'role', e.target.value)}
-                                                  className={`px-2 py-1 rounded text-xs font-bold uppercase outline-none cursor-pointer border-none bg-transparent ${student.role === 'admin' ? 'text-indigo-700 bg-indigo-100' : 'text-gray-600 bg-gray-100'}`}
-                                              >
-                                                  <option value="student">Aluno</option>
-                                                  <option value="admin">Admin</option>
-                                              </select>
-                                          </td>
-                                          <td className="px-6 py-4 font-mono text-xs text-gray-400 flex items-center gap-1 cursor-pointer hover:text-purple-600" onClick={()=>copyToClipboard(student.id)}>
-                                              {student.id.slice(0, 8)}... <Copy size={12}/>
-                                          </td>
-                                          <td className="px-6 py-4">
-                                              {!isAdmin ? (
-                                                  <>
-                                                      <div className={`text-xs font-bold uppercase mb-1 ${subStatus.color === 'emerald' ? 'text-emerald-600' : 'text-red-500'}`}>{subStatus.label}</div>
-                                                      <div className="flex items-center gap-2">
-                                                          <input 
-                                                              type="date" 
-                                                              value={student.subscriptionUntil ? student.subscriptionUntil.split('T')[0] : ''}
-                                                              onChange={(e) => handleInlineUserUpdate(student.id, 'subscriptionUntil', e.target.value ? new Date(e.target.value).toISOString() : null)}
-                                                              className="text-xs text-gray-500 bg-transparent border-b border-dashed border-gray-300 focus:border-purple-500 outline-none hover:border-gray-400 cursor-pointer w-24"
-                                                          />
-                                                          <button 
-                                                              onClick={() => handleAdd30Days(student)}
-                                                              className="bg-purple-100 hover:bg-purple-200 text-purple-700 text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 transition-colors"
-                                                              title="Adicionar 30 dias"
-                                                          >
-                                                              <PlusCircle size={10}/> +30
-                                                          </button>
-                                                      </div>
-                                                  </>
-                                              ) : (
-                                                  <span className="text-gray-400 text-sm font-medium">–</span>
-                                              )}
-                                          </td>
-                                          <td className="px-6 py-4 text-right">
-                                              <div className="flex justify-end gap-2">
-                                                  <button onClick={() => fetchUserStats(student)} className="p-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-colors" title="Ver Desempenho"><TrendingUp size={18}/></button>
-                                                  <button onClick={() => setDeleteModal(student)} className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors" title="Excluir"><Trash2 size={18}/></button>
-                                              </div>
-                                          </td>
-                                      </tr>
-                                  );
-                              })}
-                          </tbody>
-                      </table>
-                  </div>
-              </div>
-          )}
-      </main>
-
-      {/* --- MODALS --- */}
-
-      {/* EDIT QUESTION MODAL */}
-      {editingQuestion && (
-          <div className="fixed inset-0 z-50 bg-white overflow-y-auto animate-in fade-in duration-200">
-              <div className="max-w-4xl mx-auto p-6 pb-20">
-                  {associatedReport && (
-                      <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between shadow-sm">
-                          <div className="flex items-start gap-3 w-full">
-                              <div className="bg-amber-100 p-2 rounded-full text-amber-600 mt-1 flex-shrink-0"><MessageSquare size={20}/></div>
-                              <div className="w-full">
-                                  <h3 className="font-bold text-amber-900 text-sm flex items-center gap-2">Atenção: Reporte Pendente <span className="text-xs font-normal bg-white/50 px-2 py-0.5 rounded text-amber-800">{formatReportCategory(associatedReport.category)}</span></h3>
-                                  <div className="mt-2 bg-white/60 p-3 rounded-lg border border-amber-100 text-amber-900 text-sm">{getReportDetails(associatedReport)}</div>
-                              </div>
-                          </div>
-                      </div>
-                  )}
-                  <div className="flex items-center justify-between mb-8 sticky top-0 bg-white py-4 border-b border-gray-100 z-10">
-                      <div className="flex items-center gap-3">
-                          <button onClick={() => { setEditingQuestion(null); setAssociatedReport(null); }} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><ArrowLeft size={24} /></button>
-                          <h2 className="text-2xl font-bold text-slate-900">Editar Questão</h2>
-                      </div>
-                      <div className="flex gap-3">
-                          {associatedReport && <button onClick={() => setRejectReportModal(associatedReport)} className="px-6 py-2 bg-orange-600 text-white hover:bg-orange-700 shadow-lg rounded-lg font-bold flex items-center gap-2"><ThumbsDown size={18} /> <span className="hidden sm:inline">Recusar Reporte</span></button>}
-                          {associatedReport ? (
-                              <button onClick={() => handleSave(true)} disabled={isSaving} className="px-6 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 shadow-lg flex items-center gap-2">{isSaving ? <Loader2 className="animate-spin" size={20} /> : <ThumbsUp size={20} />} Aprovar</button>
-                          ) : (
-                              <button onClick={() => handleSave(false)} disabled={isSaving} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-lg flex items-center gap-2">{isSaving ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />} Salvar</button>
-                          )}
-                          <button onClick={() => setDeleteModal(editingQuestion)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100 ml-2" title="Excluir Questão"><Trash2 size={20} /></button>
-                      </div>
-                  </div>
-                  {/* FORM FIELDS ... (Mantido igual) */}
-                  <form className="space-y-8">
-                      <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div><label className="block text-sm font-bold text-gray-600 mb-2">Instituição</label><input value={editingQuestion.institution} onChange={e => setEditingQuestion({...editingQuestion, institution: e.target.value})} className="w-full pl-3 p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500"/></div>
-                          <div><label className="block text-sm font-bold text-gray-600 mb-2">Ano</label><input type="number" value={editingQuestion.year} onChange={e => setEditingQuestion({...editingQuestion, year: e.target.value})} className="w-full pl-3 p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500"/></div>
-                          <div><label className="block text-sm font-bold text-gray-600 mb-2">Área</label><select value={editingQuestion.area} onChange={e => setEditingQuestion({...editingQuestion, area: e.target.value, topic: ''})} className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500">{areasBase.map(a => <option key={a} value={a}>{a}</option>)}</select></div>
-                          <div><label className="block text-sm font-bold text-gray-600 mb-2">Tópico</label><select value={editingQuestion.topic} onChange={e => setEditingQuestion({...editingQuestion, topic: e.target.value})} className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500">{(themesMap[editingQuestion.area] || []).map(t => <option key={t} value={t}>{t}</option>)}</select></div>
-                      </div>
-                      <div><label className="block text-lg font-bold text-slate-900 mb-3">Enunciado</label><textarea value={editingQuestion.text} onChange={e => setEditingQuestion({...editingQuestion, text: e.target.value})} rows={6} className="w-full p-4 border border-gray-300 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-lg leading-relaxed text-slate-800"/></div>
-                      <div className="space-y-4"><label className="block text-lg font-bold text-slate-900">Alternativas</label>{editingQuestion.options.map((opt, idx) => (<div key={idx} className={`flex items-start gap-4 p-4 rounded-xl border-2 transition-colors ${editingQuestion.correctOptionId === opt.id ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-white'}`}><div onClick={() => setEditingQuestion({...editingQuestion, correctOptionId: opt.id})} className={`w-8 h-8 rounded-full flex items-center justify-center cursor-pointer font-bold flex-shrink-0 mt-1 transition-colors ${editingQuestion.correctOptionId === opt.id ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'}`}>{opt.id.toUpperCase()}</div><textarea value={opt.text} onChange={e => { const newOpts = [...editingQuestion.options]; newOpts[idx].text = e.target.value; setEditingQuestion({...editingQuestion, options: newOpts}); }} rows={2} className="flex-1 bg-transparent border-none outline-none resize-none text-slate-700"/></div>))}</div>
-                      <div className="bg-amber-50 p-6 rounded-2xl border border-amber-100"><label className="block text-sm font-bold text-amber-800 uppercase tracking-wider mb-3">Comentário / Explicação</label><textarea value={editingQuestion.explanation} onChange={e => setEditingQuestion({...editingQuestion, explanation: e.target.value})} rows={5} className="w-full p-4 bg-white border border-amber-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 text-slate-700"/></div>
-                  </form>
-              </div>
-          </div>
-      )}
-
-      {/* CREATE USER MODAL */}
-      {isCreatingUser && (
+      {/* API KEY MODAL */}
+      {showApiKeyModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
               <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
-                  <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
-                      <div className="bg-purple-100 p-2 rounded-lg text-purple-600"><UserPlus size={24}/></div>
-                      <h2 className="text-xl font-bold text-slate-800">Novo Aluno</h2>
+                  <button onClick={() => setShowApiKeyModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={20}/></button>
+                  <h2 className="text-xl font-bold mb-4 text-slate-800 flex items-center gap-2"><Settings size={20} className="text-blue-600"/> Configurar API Gemini</h2>
+                  <div className="mb-4">
+                      <label className="block text-sm font-bold text-gray-600 mb-2">Chave da API (Global)</label>
+                      <input type="password" value={tempApiKey} onChange={e => setTempApiKey(e.target.value)} className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" placeholder="AIza..."/>
+                      <p className="text-xs text-gray-500 mt-2">Atenção: Ao salvar, essa chave será usada por TODOS os administradores.</p>
                   </div>
-                  <form onSubmit={handleCreateUser} className="space-y-4">
-                      <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome Completo</label><input name="name" required className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500 bg-gray-50" placeholder="Ex: Ana Silva" /></div>
-                      <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">E-mail</label><input name="email" type="email" required className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500 bg-gray-50" placeholder="email@exemplo.com" /></div>
-                      <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Senha (Provisória)</label><input name="password" type="text" required className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500 bg-gray-50" placeholder="123456" /></div>
-                      <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">WhatsApp (Opcional)</label><input name="whatsapp" className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500 bg-gray-50" placeholder="31999999999" /></div>
-                      <div className="grid grid-cols-2 gap-4">
-                          <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Função</label><select name="role" className="w-full p-3 border rounded-xl outline-none bg-white"><option value="student">Aluno</option><option value="admin">Administrador</option></select></div>
-                          <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Vencimento</label><input name="subscriptionUntil" type="date" className="w-full p-3 border rounded-xl outline-none bg-white"/></div>
-                      </div>
-                      <div className="flex gap-3 pt-4">
-                          <button type="button" onClick={() => setIsCreatingUser(false)} className="flex-1 py-3 border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50">Cancelar</button>
-                          <button type="submit" disabled={isSaving} className="flex-1 py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 shadow-lg">{isSaving ? <Loader2 className="animate-spin mx-auto"/> : 'Criar Aluno'}</button>
-                      </div>
-                  </form>
+                  <div className="flex justify-end gap-3">
+                      <button onClick={() => setShowApiKeyModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg font-bold">Cancelar</button>
+                      <button onClick={saveApiKeyFromModal} disabled={isSavingKey} className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 shadow-lg flex items-center gap-2">
+                          {isSavingKey ? <Loader2 size={16} className="animate-spin" /> : null}
+                          Salvar Global
+                      </button>
+                  </div>
               </div>
           </div>
       )}
 
-      {/* USER STATS MODAL */}
-      {viewingUserStats && (
+      {/* GENERIC CONFIRMATION MODAL */}
+      {confirmationModal.isOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl relative">
-                  <button onClick={() => setViewingUserStats(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={20}/></button>
-                  
-                  <div className="flex items-center gap-4 mb-6">
-                      <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-2xl">
-                          {viewingUserStats.name ? viewingUserStats.name.charAt(0) : 'U'}
-                      </div>
-                      <div>
-                          <h2 className="text-xl font-bold text-slate-800">{viewingUserStats.name}</h2>
-                          <p className="text-sm text-gray-500">{viewingUserStats.email}</p>
-                          <div className="flex gap-2 mt-1">
-                              {checkSubscriptionStatus(viewingUserStats.subscriptionUntil, viewingUserStats.role).status === 'Ativo' 
-                                  ? <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded font-bold">Premium</span> 
-                                  : <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded font-bold">Free</span>
-                              }
-                              <span className="bg-blue-50 text-blue-700 text-xs px-2 py-0.5 rounded font-bold flex items-center gap-1"><Target size={10}/> Meta: {viewingUserStats.dailyGoal || 50}</span>
-                          </div>
-                      </div>
-                  </div>
-
-                  {viewingUserStats.loading ? (
-                      <div className="py-10 flex justify-center"><Loader2 className="animate-spin text-purple-600" size={32} /></div>
-                  ) : (
-                      <div className="grid grid-cols-2 gap-4">
-                          <div className="bg-orange-50 p-4 rounded-xl text-center border border-orange-100">
-                              <div className="flex justify-center text-orange-600 mb-1"><Zap size={24}/></div>
-                              <div className="text-3xl font-bold text-slate-800">{viewingUserStats.stats?.streak || 0}</div>
-                              <div className="text-xs uppercase font-bold text-orange-600">Dias em Sequência</div>
-                          </div>
-                          <div className="bg-blue-50 p-4 rounded-xl text-center border border-blue-100">
-                              <div className="flex justify-center text-blue-600 mb-1"><CheckSquare size={24}/></div>
-                              <div className="text-3xl font-bold text-slate-800">{viewingUserStats.stats?.totalAnswers || 0}</div>
-                              <div className="text-xs uppercase font-bold text-blue-600">Questões Totais</div>
-                          </div>
-                          <div className="bg-emerald-50 p-4 rounded-xl text-center border border-emerald-100 col-span-2">
-                              <div className="flex justify-between items-center mb-2">
-                                  <span className="text-sm font-bold text-emerald-800 flex items-center gap-1"><Award size={16}/> Taxa de Acerto</span>
-                                  <span className="text-2xl font-bold text-emerald-600">
-                                      {viewingUserStats.stats?.totalAnswers > 0 
-                                          ? Math.round((viewingUserStats.stats.correctAnswers / viewingUserStats.stats.totalAnswers) * 100) 
-                                          : 0}%
-                                  </span>
-                              </div>
-                              <div className="w-full bg-emerald-200 rounded-full h-2.5">
-                                  <div className="bg-emerald-500 h-2.5 rounded-full" style={{ width: `${viewingUserStats.stats?.totalAnswers > 0 ? (viewingUserStats.stats.correctAnswers / viewingUserStats.stats.totalAnswers) * 100 : 0}%` }}></div>
-                              </div>
-                              <p className="text-xs text-emerald-600 mt-2 text-right">{viewingUserStats.stats?.correctAnswers || 0} acertos em {viewingUserStats.stats?.totalAnswers || 0} tentativas</p>
-                          </div>
-                      </div>
-                  )}
-              </div>
-          </div>
-      )}
-
-      {/* DELETE MODAL (Generic for Questions and Users) */}
-      {deleteModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl relative">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl relative animate-in zoom-in-95 duration-200">
                   <div className="flex flex-col items-center text-center">
-                    <div className="bg-red-100 p-3 rounded-full text-red-600 mb-4"><AlertTriangle size={32}/></div>
-                    <h2 className="text-xl font-bold mb-2 text-slate-800">Excluir Definitivamente?</h2>
-                    <p className="text-gray-600 mb-6 text-sm">
-                        {deleteModal.email ? `O aluno ${deleteModal.name} será removido.` : 'Essa questão será removida do banco de dados oficial.'}
-                    </p>
+                    <div className={`p-3 rounded-full mb-4 ${confirmationModal.confirmColor === 'red' ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                        <AlertTriangle size={32} />
+                    </div>
+                    <h2 className="text-xl font-bold mb-2 text-slate-800">{confirmationModal.title}</h2>
+                    <p className="text-gray-600 mb-6 text-sm">{confirmationModal.message}</p>
                     <div className="flex gap-3 w-full">
-                        <button onClick={() => setDeleteModal(null)} className="flex-1 py-3 border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50">Cancelar</button>
-                        <button onClick={deleteModal.email ? handleDeleteUser : handleDeleteQuestion} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 shadow-lg shadow-red-200">Sim, Excluir</button>
+                        <button 
+                            onClick={() => setConfirmationModal({ ...confirmationModal, isOpen: false })}
+                            className="flex-1 py-3 border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+                        >
+                            Cancelar
+                        </button>
+                        <button 
+                            onClick={executeConfirmationAction}
+                            className={`flex-1 py-3 rounded-xl font-bold text-white shadow-lg transition-colors ${confirmationModal.confirmColor === 'red' ? 'bg-red-600 hover:bg-red-700 shadow-red-200' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'}`}
+                        >
+                            {confirmationModal.confirmText}
+                        </button>
                     </div>
                   </div>
               </div>
           </div>
       )}
 
-      {/* REJECT REPORT MODAL */}
-      {rejectReportModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl relative">
-                  <div className="flex flex-col items-center text-center">
-                    <div className="bg-orange-100 p-3 rounded-full text-orange-600 mb-4"><ThumbsDown size={32}/></div>
-                    <h2 className="text-xl font-bold mb-2 text-slate-800">Recusar Sugestão?</h2>
-                    <p className="text-gray-600 mb-6 text-sm">Esta ação vai <strong>APAGAR</strong> o reporte do banco de dados.</p>
-                    <div className="flex gap-3 w-full">
-                        <button onClick={() => setRejectReportModal(null)} className="flex-1 py-3 border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50">Cancelar</button>
-                        <button onClick={handleRejectReport} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 shadow-lg shadow-red-200">Sim, Apagar</button>
+      <main className="max-w-7xl mx-auto p-4 md:p-6">
+        <div className="flex justify-center mb-8">
+            <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-200 inline-flex overflow-x-auto max-w-full">
+                <button onClick={() => setActiveTab('input')} className={`whitespace-nowrap px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${activeTab === 'input' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:text-gray-700'}`}><FileText size={18} /> Texto</button>
+                <button onClick={() => setActiveTab('image')} className={`whitespace-nowrap px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${activeTab === 'image' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:text-gray-700'}`}><ImageIcon size={18} /> Imagem</button>
+                <button onClick={() => setActiveTab('review')} className={`whitespace-nowrap px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${activeTab === 'review' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:text-gray-700'}`}>
+                    <CloudLightning size={18} /> Fila de Aprovação 
+                    {parsedQuestions.length > 0 && <span className="ml-2 bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full">{parsedQuestions.length}</span>}
+                </button>
+            </div>
+        </div>
+
+        {/* INPUT TABS */}
+        {(activeTab === 'input' || activeTab === 'image') && (
+            <div className="max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-4">
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                    <label className="block text-lg font-bold text-slate-800 mb-2">
+                        {activeTab === 'input' ? 'Cole suas questões (Texto)' : 'Envie uma Imagem'}
+                    </label>
+                    <p className="text-sm text-gray-500 mb-4">A IA vai analisar e enviar para a fila de aprovação (Database).</p>
+                    
+                    {activeTab === 'input' ? (
+                        <textarea value={rawText} onChange={(e) => setRawText(e.target.value)} placeholder="Cole aqui o texto..." className="w-full h-96 p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-800 font-mono text-sm resize-y mb-4"/>
+                    ) : (
+                        <div className="w-full h-96 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center bg-gray-50 relative overflow-hidden transition-all hover:border-blue-400" onPaste={handlePasteImage}>
+                            {selectedImage ? (
+                                <>
+                                    <img src={selectedImage.preview} alt="Preview" className="w-full h-full object-contain p-2" />
+                                    <button onClick={(e) => { e.stopPropagation(); setSelectedImage(null); }} className="absolute top-4 right-4 bg-red-500 text-white p-2 rounded-full shadow-lg hover:bg-red-600"><Trash2 size={20} /></button>
+                                </>
+                            ) : (
+                                <div className="text-center pointer-events-none p-4"><UploadCloud size={48} className="mx-auto text-gray-400 mb-3" /><p className="text-gray-500 font-medium">Clique ou cole (Ctrl+V)</p></div>
+                            )}
+                            <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" disabled={!!selectedImage}/>
+                        </div>
+                    )}
+
+                    <div className="flex justify-end gap-3 mt-4">
+                        <button onClick={() => { setRawText(''); setSelectedImage(null); }} className="px-4 py-3 text-gray-500 hover:bg-gray-100 rounded-xl font-bold">Limpar</button>
+                        <button onClick={processWithAI} disabled={isProcessing || !apiKey} className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200 flex items-center gap-2 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                            {isProcessing ? <><Loader2 className="animate-spin" size={20} /> Processando...</> : <><Wand2 size={20} /> Enviar para Fila</>}
+                        </button>
                     </div>
-                  </div>
-              </div>
-          </div>
-      )}
+                </div>
+            </div>
+        )}
+
+        {/* REVIEW TAB */}
+        {activeTab === 'review' && (
+            <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in">
+                {parsedQuestions.length > 0 && (
+                     <div className="flex flex-col md:flex-row justify-between items-center mb-4 bg-blue-50 p-4 rounded-xl border border-blue-100 gap-4">
+                        <div className="flex items-center gap-2 text-blue-800">
+                            <CloudLightning size={20} />
+                            <span className="font-bold">Fila de Aprovação ({parsedQuestions.length} itens)</span>
+                        </div>
+                        <div className="flex gap-3">
+                            <button onClick={handleDiscardAllClick} disabled={isBatchAction} className="bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold text-sm px-4 py-2.5 rounded-lg flex items-center gap-2 transition-all disabled:opacity-70 disabled:cursor-not-allowed">
+                                {isBatchAction ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />}
+                                Descartar Tudo
+                            </button>
+                            <button onClick={handleApproveAllClick} disabled={isBatchAction} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-6 py-2.5 rounded-lg shadow-lg shadow-emerald-200 flex items-center gap-2 transition-all transform hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed">
+                                {isBatchAction ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle size={18} />}
+                                {isBatchAction ? 'Processando...' : 'Aprovar Tudo'}
+                            </button>
+                        </div>
+                     </div>
+                )}
+
+                {parsedQuestions.length === 0 ? (
+                    <div className="text-center py-20 opacity-50">
+                        <Database size={64} className="mx-auto mb-4 text-gray-300" />
+                        <p className="text-xl font-medium text-gray-500">Fila de aprovação vazia.</p>
+                        <button onClick={() => setActiveTab('input')} className="mt-4 text-blue-600 font-bold hover:underline">Adicionar novas</button>
+                    </div>
+                ) : (
+                    parsedQuestions.map((q, idx) => (
+                        <div key={q.id} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden relative group">
+                            <div className="h-1.5 w-full bg-gray-100"><div className="h-full bg-orange-400 w-full animate-pulse"></div></div>
+                            <div className="p-6">
+                                {/* METADATA FIELDS */}
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Inst</label><input value={q.institution} onChange={e=>updateQuestionField(idx,'institution',e.target.value)} className="w-full p-2 bg-gray-50 border rounded-lg text-sm font-bold"/></div>
+                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Ano</label><input type="number" value={q.year} onChange={e=>updateQuestionField(idx,'year',e.target.value)} className="w-full p-2 bg-gray-50 border rounded-lg text-sm font-bold"/></div>
+                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Área</label><select value={q.area} onChange={e=>updateQuestionField(idx,'area',e.target.value)} className="w-full p-2 bg-blue-50 border border-blue-100 rounded-lg text-sm font-bold text-blue-800"><option value="">Selecione...</option>{areasBase.map(a=><option key={a} value={a}>{a}</option>)}</select></div>
+                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Tópico</label><select value={q.topic} onChange={e=>updateQuestionField(idx,'topic',e.target.value)} className="w-full p-2 bg-gray-50 border rounded-lg text-sm font-bold"><option value="">Selecione...</option>{(themesMap[q.area]||[]).map(t=><option key={t} value={t}>{t}</option>)}</select></div>
+                                </div>
+
+                                {/* QUESTION CONTENT */}
+                                <div className="mb-6"><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Enunciado</label><textarea value={q.text} onChange={e=>updateQuestionField(idx,'text',e.target.value)} rows={4} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-slate-800 text-sm focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"/></div>
+
+                                <div className="space-y-2 mb-6">
+                                    {q.options?.map((opt, optIdx) => (
+                                        <div key={opt.id} className="flex items-center gap-3">
+                                            <div onClick={()=>updateQuestionField(idx,'correctOptionId',opt.id)} className={`w-8 h-8 rounded-full flex items-center justify-center cursor-pointer font-bold text-sm flex-shrink-0 ${q.correctOptionId===opt.id?'bg-emerald-500 text-white':'bg-gray-100 text-gray-400'}`}>{opt.id.toUpperCase()}</div>
+                                            <input value={opt.text} onChange={e=>updateOptionText(idx,optIdx,e.target.value)} className={`w-full p-2 border rounded-lg text-sm ${q.correctOptionId===opt.id?'border-emerald-200 bg-emerald-50':'bg-white'}`}/>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
+                                    <label className="text-xs font-bold text-amber-700 uppercase flex items-center gap-1 mb-2"><Brain size={12}/> Comentário IA</label>
+                                    <textarea value={q.explanation} onChange={e=>updateQuestionField(idx,'explanation',e.target.value)} rows={3} className="w-full p-3 bg-white/50 border border-amber-200/50 rounded-lg text-slate-700 text-sm focus:bg-white focus:ring-2 focus:ring-amber-400 outline-none"/>
+                                </div>
+                            </div>
+                            
+                            <div className="bg-gray-50 px-6 py-4 flex justify-between items-center border-t border-gray-100">
+                                <button onClick={()=>handleDiscardOneClick(q)} className="text-red-500 hover:text-red-700 font-bold text-sm flex items-center gap-1"><Trash2 size={16}/> Descartar</button>
+                                <button onClick={()=>approveQuestion(q)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-6 py-2.5 rounded-lg shadow-lg flex items-center gap-2"><CheckCircle size={18}/> Aprovar e Publicar</button>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+        )}
+      </main>
     </div>
   );
 }
