@@ -5,7 +5,8 @@ import {
   Loader2, Wand2, Cpu, RefreshCw, User, X,
   LogOut, Send, Brain, Image as ImageIcon, UploadCloud, Lock, CloudLightning, ArrowLeft,
   AlertTriangle, ExternalLink, Key, Play, Pause, AlertOctagon, Terminal, ShieldCheck, ShieldAlert, 
-  ToggleLeft, ToggleRight, Layers, Filter, Eraser, RefreshCcw, XCircle, RotateCcw
+  ToggleLeft, ToggleRight, Layers, Filter, Eraser, RefreshCcw, XCircle, RotateCcw, Copy,
+  SkipForward, BookOpen, Clock
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -75,6 +76,36 @@ const themesMap = {
     ]
 };
 
+// --- HELPER: HASH ID GENERATOR (DEDUPLICATION) ---
+const generateQuestionHash = async (text) => {
+    if (!text) return null;
+    const normalized = text
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+    
+    const msgBuffer = new TextEncoder().encode(normalized);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 32);
+};
+
+// --- HELPER: CLEAN INSTITUTION ---
+const cleanInstitutionText = (inst) => {
+    if (!inst) return "";
+    const lower = inst.toString().toLowerCase();
+    // Lista de termos que indicam "não informado" para serem limpos
+    if (
+        lower.includes("não informado") || 
+        lower.includes("nao informado") || 
+        lower.includes("detectar") ||
+        lower.includes("nao consta")
+    ) return "";
+    return inst;
+};
+
 // --- HELPER: EXTRAIR TEMPO DE ESPERA DA MENSAGEM DE ERRO ---
 const extractRetryTime = (message) => {
     const match = message.match(/retry in ([0-9\.]+)s/);
@@ -97,13 +128,13 @@ function NotificationToast({ notification, onClose, positionClass }) {
     <div 
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        className={`${positionClass} z-[100] p-4 rounded-xl shadow-xl flex items-start gap-3 animate-in slide-in-from-right-10 duration-300 max-w-sm border transition-all ${notification.type === 'error' ? 'bg-white border-red-200 text-red-700' : 'bg-white border-emerald-200 text-emerald-700'}`}
+        className={`${positionClass} z-[100] p-4 rounded-xl shadow-xl flex items-start gap-3 animate-in slide-in-from-right-10 duration-300 max-w-sm border transition-all ${notification.type === 'error' ? 'bg-white border-red-200 text-red-700' : notification.type === 'warning' ? 'bg-white border-amber-200 text-amber-700' : 'bg-white border-emerald-200 text-emerald-700'}`}
     >
-        <div className={`mt-0.5 p-1 rounded-full ${notification.type === 'error' ? 'bg-red-100' : 'bg-emerald-100'}`}>
-            {notification.type === 'error' ? <AlertCircle size={20} /> : <CheckCircle size={20} />}
+        <div className={`mt-0.5 p-1 rounded-full ${notification.type === 'error' ? 'bg-red-100' : notification.type === 'warning' ? 'bg-amber-100' : 'bg-emerald-100'}`}>
+            {notification.type === 'error' ? <AlertCircle size={20} /> : notification.type === 'warning' ? <AlertTriangle size={20} /> : <CheckCircle size={20} />}
         </div>
         <div className="flex-1">
-            <p className="font-bold text-sm mb-1">{notification.type === 'error' ? 'Ocorreu um erro' : 'Sucesso'}</p>
+            <p className="font-bold text-sm mb-1">{notification.type === 'error' ? 'Erro' : notification.type === 'warning' ? 'Atenção' : 'Sucesso'}</p>
             <p className="text-sm opacity-90 leading-tight">{notification.text}</p>
         </div>
         <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
@@ -120,11 +151,12 @@ export default function App() {
   // Gestão de Chaves API (Múltiplas)
   const [apiKeys, setApiKeys] = useState(() => JSON.parse(localStorage.getItem('gemini_api_keys') || '[]'));
   
-  // Modelos
+  // Modelos - ATUALIZADO PARA PRO PADRÃO
   const [availableModels, setAvailableModels] = useState([
-      { name: 'models/gemini-2.5-flash', displayName: 'Gemini 2.5 Flash (Padrão)' }
+      { name: 'models/gemini-2.5-pro', displayName: 'Gemini 2.5 Pro (Padrão)' },
+      { name: 'models/gemini-2.5-flash', displayName: 'Gemini 2.5 Flash' }
   ]);
-  const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('gemini_model') || 'models/gemini-2.5-flash');
+  const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('gemini_model') || 'models/gemini-2.5-pro');
   
   // Estados UI Básicos
   const [rawText, setRawText] = useState('');
@@ -159,11 +191,16 @@ export default function App() {
 
   // --- PDF PROCESSING STATES ---
   const [pdfFile, setPdfFile] = useState(null);
-  const [pdfStatus, setPdfStatus] = useState('idle'); // idle, reading, ready, processing, paused, error, completed
+  const [pdfStatus, setPdfStatus] = useState('idle'); // idle, reading, ready, processing, pausing, paused, error, completed
   const [pdfChunks, setPdfChunks] = useState([]); 
   const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
   const [processingLogs, setProcessingLogs] = useState([]);
   const [consecutiveErrors, setConsecutiveErrors] = useState(0);
+  
+  // PDF Range Inputs
+  const [pdfStartPage, setPdfStartPage] = useState('');
+  const [pdfEndPage, setPdfEndPage] = useState('');
+
   const processorRef = useRef(null); 
   
   // --- REFS ---
@@ -342,35 +379,52 @@ export default function App() {
           const arrayBuffer = await file.arrayBuffer();
           const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
           
-          addLog('info', `PDF carregado. Total de páginas: ${pdf.numPages}`);
+          addLog('info', `PDF carregado. Total: ${pdf.numPages} págs.`);
           
+          // Lógica de Range de Páginas
+          let startP = parseInt(pdfStartPage) || 1;
+          let endP = parseInt(pdfEndPage) || pdf.numPages;
+
+          if (startP < 1) startP = 1;
+          if (endP > pdf.numPages) endP = pdf.numPages;
+          if (startP > endP) {
+               startP = 1; 
+               endP = pdf.numPages;
+               showNotification('warning', 'Intervalo inválido. Usando PDF completo.');
+          } else {
+               if (startP !== 1 || endP !== pdf.numPages) {
+                   addLog('info', `Recortando páginas: ${startP} até ${endP}`);
+               }
+          }
+
           let chunks = [];
           let currentChunkText = "";
-          let startPage = 1;
+          let chunkStartPage = startP;
 
-          for (let i = 1; i <= pdf.numPages; i++) {
+          for (let i = startP; i <= endP; i++) {
               const page = await pdf.getPage(i);
               const content = await page.getTextContent();
               const text = content.items.map(item => item.str).join(' ');
               
               currentChunkText += `\n--- PÁGINA ${i} ---\n${text}`;
 
-              if (i % CHUNK_SIZE === 0 || i === pdf.numPages) {
+              // Fatia a cada CHUNK_SIZE páginas OU se for a última página do range
+              if ((i - startP + 1) % CHUNK_SIZE === 0 || i === endP) {
                   chunks.push({
-                      id: `chunk_${startPage}_${i}`,
-                      pages: `${startPage} a ${i}`,
+                      id: `chunk_${chunkStartPage}_${i}`,
+                      pages: `${chunkStartPage} a ${i}`,
                       text: currentChunkText,
                       status: 'pending',
                       errorCount: 0
                   });
                   currentChunkText = "";
-                  startPage = i + 1;
+                  chunkStartPage = i + 1;
               }
           }
 
           setPdfChunks(chunks);
           setPdfStatus('ready');
-          addLog('success', `Fatiamento concluído! ${chunks.length} partes criadas.`);
+          addLog('success', `Pronto! ${chunks.length} partes geradas (${startP}-${endP}).`);
 
       } catch (error) {
           console.error(error);
@@ -381,17 +435,19 @@ export default function App() {
   };
 
   const handleResetPdf = () => {
-      if (pdfStatus === 'processing') return; 
+      if (pdfStatus === 'processing' || pdfStatus === 'pausing') return; 
       setPdfFile(null);
       setPdfChunks([]);
       setPdfStatus('idle');
       setCurrentChunkIndex(0);
       setProcessingLogs([]);
       setConsecutiveErrors(0);
+      setPdfStartPage('');
+      setPdfEndPage('');
   };
 
   const handleRestartPdf = () => {
-      if (!pdfFile || pdfStatus === 'processing') return;
+      if (!pdfFile || pdfStatus === 'processing' || pdfStatus === 'pausing') return;
       const resetChunks = pdfChunks.map(c => ({ ...c, status: 'pending', errorCount: 0 }));
       setPdfChunks(resetChunks);
       setCurrentChunkIndex(0);
@@ -401,18 +457,24 @@ export default function App() {
       addLog('info', 'Processamento reiniciado.');
   };
 
+  // --- NOVA LÓGICA DE NAVEGAÇÃO ("SEEK") ---
   const handleJumpToChunk = (index) => {
-      if (pdfStatus === 'processing' || pdfStatus === 'idle') return;
+      if (pdfStatus === 'processing' || pdfStatus === 'idle' || pdfStatus === 'pausing' || pdfStatus === 'reading') return;
       
-      addLog('warning', `Rebobinando para a fatia ${index + 1}...`);
+      const chunk = pdfChunks[index];
+      addLog('info', `Agulha movida para fatia ${chunk.pages} (Aguardando Início)...`);
       
-      // Reseta o status desta fatia e das próximas para pending
-      setPdfChunks(prev => prev.map((chunk, i) => {
-          if (i >= index) return { ...chunk, status: 'pending', errorCount: 0 };
-          return chunk;
-      }));
-      
+      // 1. Move a agulha para o índice clicado
       setCurrentChunkIndex(index);
+
+      // 2. Força o status da fatia clicada para 'pending' (para reprocessar se quiser)
+      //    Isso permite "tocar" o vídeo a partir daqui.
+      setPdfChunks(prev => {
+          const newChunks = [...prev];
+          // Reseta APENAS a fatia atual para garantir que ela rode
+          newChunks[index] = { ...newChunks[index], status: 'pending', errorCount: 0 };
+          return newChunks;
+      });
   };
 
   const processNextChunk = async () => {
@@ -422,29 +484,38 @@ export default function App() {
       const ovr = overridesRef.current; 
 
       if (processorRef.current) return; 
-      if (currentStatus === 'paused' || currentStatus === 'error' || currentStatus === 'completed') return;
+      // Se estiver pausado ou erro e a função for chamada (ex: retry), ok.
+      // Se estiver 'completed', para.
+      if (currentStatus === 'completed') return;
       
-      const chunkIndex = currentChunks.findIndex(c => c.status === 'pending');
+      // LÓGICA DE SEEK: Procura a próxima pendente A PARTIR do índice atual
+      const chunkIndex = currentChunks.findIndex((c, i) => i >= currentChunkIndex && c.status === 'pending');
       
       if (chunkIndex === -1) {
-          setPdfStatus('completed');
-          addLog('success', 'Processamento Completo!');
-          showNotification('success', 'Todos as partes do PDF foram processadas.');
+          // Verifica se acabou tudo MESMO ou se só acabou a partir da agulha
+          const anyPending = currentChunks.some(c => c.status === 'pending');
+          if (anyPending) {
+               addLog('warning', 'Fim da linha de tempo. Existem fatias anteriores pendentes.');
+               setPdfStatus('paused'); 
+          } else {
+               setPdfStatus('completed');
+               addLog('success', 'Processamento Completo!');
+               showNotification('success', 'Todas as partes selecionadas foram processadas.');
+          }
           return;
       }
 
-      setCurrentChunkIndex(chunkIndex);
+      setCurrentChunkIndex(chunkIndex); // Atualiza agulha visual
       const chunk = currentChunks[chunkIndex];
 
-      if (currentStatus !== 'processing') setPdfStatus('processing');
+      // Se não estiver 'pausing', garante que está 'processing'
+      if (currentStatus !== 'pausing' && currentStatus !== 'processing') setPdfStatus('processing');
       
       processorRef.current = true; 
       addLog('info', `Processando fatia ${chunk.pages}...`);
 
       try {
           // --- CONSTRUÇÃO INTELIGENTE DO MAPA DE TEMAS E PROMPT ---
-          // Se o usuário filtrou a Área, restringimos o mapa de tópicos APENAS para aquela área.
-          // Se não filtrou, mandamos tudo.
           const activeThemesMap = ovr.overrideArea ? { [ovr.overrideArea]: themesMap[ovr.overrideArea] } : themesMap;
 
           // USANDO ROTAÇÃO DE CHAVES PARA A GERAÇÃO PRINCIPAL
@@ -511,27 +582,49 @@ export default function App() {
           });
 
           // --- PÓS-PROCESSAMENTO (O "ROLO COMPRESSOR") ---
-          // Aplica os overrides na marra via JS
-          const finalQuestions = questions.map(q => ({
-              ...q,
-              institution: ovr.overrideInst || q.institution, // Se overrideInst tem valor, usa ele. Se não, usa o da IA.
-              year: ovr.overrideYear || q.year,
-              area: ovr.overrideArea || q.area,
-              topic: ovr.overrideTopic || q.topic // Se overrideTopic tem valor, usa ele.
+          let processedQuestions = await Promise.all(questions.map(async (q) => {
+              // 1. Aplica overrides E limpa instituição
+              const rawInst = ovr.overrideInst || q.institution;
+              const cleanInst = cleanInstitutionText(rawInst);
+
+              const finalQ = {
+                  ...q,
+                  institution: cleanInst, 
+                  year: ovr.overrideYear || q.year,
+                  area: ovr.overrideArea || q.area,
+                  topic: ovr.overrideTopic || q.topic 
+              };
+
+              // 2. GERA HASH (ID ÚNICO)
+              const hashId = await generateQuestionHash(finalQ.text);
+              
+              // 3. VERIFICA DUPLICATA NO BANCO FINAL (QUESTIONS)
+              let isDuplicate = false;
+              if (hashId) {
+                  const existingDoc = await getDoc(doc(db, "questions", hashId));
+                  if (existingDoc.exists()) {
+                      isDuplicate = true;
+                  }
+              }
+
+              return { ...finalQ, hashId, isDuplicate };
           }));
 
           // --- LOGICA DOUBLE CHECK SEQUENCIAL ---
-          if (finalQuestions.length > 0) {
+          const newQuestions = processedQuestions.filter(q => !q.isDuplicate);
+          const duplicateCount = processedQuestions.length - newQuestions.length;
+
+          if (newQuestions.length > 0) {
               if (doDoubleCheck) {
-                  addLog('info', `Iniciando Auditoria IA sequencial para ${finalQuestions.length} questões...`);
+                  addLog('info', `Iniciando Auditoria IA sequencial para ${newQuestions.length} questões novas...`);
                   
-                  for (let i = 0; i < finalQuestions.length; i++) {
-                      if (i > 0) await new Promise(resolve => setTimeout(resolve, 6000));
+                  for (let i = 0; i < newQuestions.length; i++) {
+                      if (i > 0) await new Promise(resolve => setTimeout(resolve, 100));
                       
                       try {
-                          const verification = await verifyQuestionWithAI(finalQuestions[i]);
-                          finalQuestions[i] = { 
-                              ...finalQuestions[i], 
+                          const verification = await verifyQuestionWithAI(newQuestions[i]);
+                          newQuestions[i] = { 
+                              ...newQuestions[i], 
                               verificationStatus: verification.status, 
                               verificationReason: verification.reason 
                           };
@@ -541,8 +634,8 @@ export default function App() {
                               throw err; 
                           }
                           console.error("Falha na auditoria individual:", err);
-                          finalQuestions[i] = { 
-                              ...finalQuestions[i], 
+                          newQuestions[i] = { 
+                              ...newQuestions[i], 
                               verificationStatus: 'unchecked', 
                               verificationReason: 'Falha na auditoria (Erro genérico)' 
                           };
@@ -550,14 +643,16 @@ export default function App() {
                   }
               } else {
                   // Mapeia sem verificação
-                  finalQuestions.forEach((q, idx) => {
-                      finalQuestions[idx] = { ...q, verificationStatus: 'unchecked', verificationReason: '' };
+                  newQuestions.forEach((q, idx) => {
+                      newQuestions[idx] = { ...q, verificationStatus: 'unchecked', verificationReason: '' };
                   });
               }
 
               const batch = writeBatch(db);
-              finalQuestions.forEach(q => {
-                  const docRef = doc(collection(db, "draft_questions"));
+              newQuestions.forEach(q => {
+                  const docId = q.hashId || doc(collection(db, "draft_questions")).id;
+                  const docRef = doc(db, "draft_questions", docId);
+                  
                   batch.set(docRef, {
                       ...q,
                       institution: q.institution || "", 
@@ -572,7 +667,7 @@ export default function App() {
               await batch.commit();
           }
 
-          addLog('success', `Sucesso fatia ${chunk.pages}: ${finalQuestions.length} questões.`);
+          addLog('success', `Sucesso fatia ${chunk.pages}: ${newQuestions.length} novas, ${duplicateCount} duplicatas descartadas.`);
           setPdfChunks(prev => {
               const newChunks = [...prev];
               newChunks[chunkIndex] = { ...newChunks[chunkIndex], status: 'success' };
@@ -580,10 +675,25 @@ export default function App() {
           });
           setConsecutiveErrors(0); 
 
+          // --- VERIFICAÇÃO DE PAUSA NO FINAL DO CICLO ---
+          if (pdfStatusRef.current === 'pausing') {
+              setPdfStatus('paused');
+              addLog('warning', 'Pausa solicitada. Ciclo atual concluído e salvo.');
+              processorRef.current = false;
+              return; // PARA A RECURSÃO AQUI
+          }
+
+          // Se estiver pausado ou idle por outro motivo
+          if (pdfStatusRef.current === 'paused' || pdfStatusRef.current === 'idle') {
+              processorRef.current = false;
+              return;
+          }
+
+          // Continua o loop
           setTimeout(() => {
               processorRef.current = false; 
               processNextChunk(); 
-          }, 3000); 
+          }, 500); 
 
       } catch (error) {
           console.error(error);
@@ -634,6 +744,14 @@ export default function App() {
               return; 
           }
 
+          // Se deu erro, mas o usuário pediu pausa, vamos respeitar a pausa
+          if (pdfStatusRef.current === 'pausing') {
+              setPdfStatus('paused');
+              addLog('warning', 'Pausa solicitada durante erro. Sistema pausado.');
+              processorRef.current = false;
+              return;
+          }
+
           setPdfChunks(prev => {
               const newChunks = [...prev];
               newChunks[chunkIndex] = { ...newChunks[chunkIndex], status: 'pending' };
@@ -650,11 +768,13 @@ export default function App() {
   const togglePdfProcessing = () => {
       const currentStatus = pdfStatusRef.current;
       if (currentStatus === 'processing') {
-          setPdfStatus('paused');
-          addLog('warning', 'Usuário pausou.');
-      } else {
+          // EM VEZ DE PAUSED DIRETO, VAI PARA PAUSING
+          setPdfStatus('pausing');
+          addLog('warning', 'Solicitando pausa... Aguardando conclusão da fatia atual.');
+      } else if (currentStatus === 'paused' || currentStatus === 'ready') {
+          // ADICIONADO 'ready' PARA O BOTÃO INICIAR FUNCIONAR
           setPdfStatus('processing');
-          addLog('info', 'Retomando...');
+          addLog('info', currentStatus === 'ready' ? 'Iniciando processamento...' : 'Retomando...');
           processorRef.current = false; 
           setTimeout(() => processNextChunk(), 100);
       }
@@ -753,7 +873,6 @@ export default function App() {
     const ovr = { overrideInst, overrideYear, overrideArea, overrideTopic };
 
     try {
-        // Mapa dinâmico também para processamento único
         const activeThemesMap = ovr.overrideArea ? { [ovr.overrideArea]: themesMap[ovr.overrideArea] } : themesMap;
 
         const questions = await executeWithKeyRotation("Processamento Único", async (key) => {
@@ -820,39 +939,65 @@ export default function App() {
         });
 
         // Pós-processamento e Auditoria
-        let finalQuestions = questions.map(q => ({
-            ...q,
-            institution: ovr.overrideInst || q.institution,
-            year: ovr.overrideYear || q.year,
-            area: ovr.overrideArea || q.area,
-            topic: ovr.overrideTopic || q.topic
+        let finalQuestions = await Promise.all(questions.map(async (q) => {
+            // Limpeza de instituição
+            const rawInst = ovr.overrideInst || q.institution;
+            const cleanInst = cleanInstitutionText(rawInst);
+            
+            const finalQ = {
+                ...q,
+                institution: cleanInst,
+                year: ovr.overrideYear || q.year,
+                area: ovr.overrideArea || q.area,
+                topic: ovr.overrideTopic || q.topic
+            };
+
+            // GERAÇÃO DE HASH E VERIFICAÇÃO DE DUPLICATA
+            const hashId = await generateQuestionHash(finalQ.text);
+            let isDuplicate = false;
+            if (hashId) {
+                const existingDoc = await getDoc(doc(db, "questions", hashId));
+                if (existingDoc.exists()) isDuplicate = true;
+            }
+
+            return { ...finalQ, hashId, isDuplicate };
         }));
 
-        if (isDoubleCheckEnabled) {
-            showNotification('success', 'Iniciando Auditoria IA...');
-            for (let i = 0; i < finalQuestions.length; i++) {
-                if (i > 0) await new Promise(resolve => setTimeout(resolve, 1500));
+        // FILTRA DUPLICATAS ANTES DO DOUBLE CHECK
+        const uniqueQuestions = finalQuestions.filter(q => !q.isDuplicate);
+        const duplicateCount = finalQuestions.length - uniqueQuestions.length;
+
+        if (isDoubleCheckEnabled && uniqueQuestions.length > 0) {
+            showNotification('success', 'Iniciando Auditoria IA nas questões novas...');
+            for (let i = 0; i < uniqueQuestions.length; i++) {
+                // OTIMIZAÇÃO: Delay reduzido para 200ms
+                if (i > 0) await new Promise(resolve => setTimeout(resolve, 200));
                 try {
-                    const verification = await verifyQuestionWithAI(finalQuestions[i]);
-                    finalQuestions[i] = { 
-                        ...finalQuestions[i], 
+                    const verification = await verifyQuestionWithAI(uniqueQuestions[i]);
+                    uniqueQuestions[i] = { 
+                        ...uniqueQuestions[i], 
                         verificationStatus: verification.status, 
                         verificationReason: verification.reason 
                     };
                 } catch (err) {
                     console.error("Erro auditoria unica:", err);
-                    finalQuestions[i] = { ...finalQuestions[i], verificationStatus: 'unchecked' };
+                    uniqueQuestions[i] = { ...uniqueQuestions[i], verificationStatus: 'unchecked' };
                 }
             }
         } else {
-            finalQuestions = finalQuestions.map(q => ({ ...q, verificationStatus: 'unchecked', verificationReason: '' }));
+            uniqueQuestions.forEach((q, idx) => {
+                 uniqueQuestions[idx] = { ...q, verificationStatus: 'unchecked', verificationReason: '' };
+            });
         }
 
         let savedCount = 0;
         const batch = writeBatch(db);
         
-        for (const q of finalQuestions) {
-            const docRef = doc(collection(db, "draft_questions"));
+        for (const q of uniqueQuestions) {
+            // USA HASH COMO ID
+            const docId = q.hashId || doc(collection(db, "draft_questions")).id;
+            const docRef = doc(db, "draft_questions", docId);
+            
             batch.set(docRef, {
                 ...q,
                 institution: q.institution || "", 
@@ -863,12 +1008,21 @@ export default function App() {
             });
             savedCount++;
         }
-        await batch.commit();
+        
+        if (savedCount > 0) await batch.commit();
 
         setRawText('');
         setSelectedImage(null);
         setActiveTab('review');
-        showNotification('success', `${savedCount} questões enviadas para fila!`);
+        
+        // NOTIFICAÇÕES MELHORADAS
+        if (savedCount === 0 && duplicateCount > 0) {
+            showNotification('warning', `Todas as ${duplicateCount} questões eram duplicatas e foram descartadas.`);
+        } else if (duplicateCount > 0) {
+            showNotification('success', `${savedCount} enviadas. ${duplicateCount} duplicatas descartadas.`);
+        } else {
+            showNotification('success', `${savedCount} questões enviadas para fila!`);
+        }
 
     } catch (error) {
         console.error(error);
@@ -893,6 +1047,13 @@ export default function App() {
 
   const handleApproveAllClick = () => {
       if (parsedQuestions.length === 0) return;
+      // Verifica se tem alguma duplicata na lista (segurança extra)
+      const hasDuplicates = parsedQuestions.some(q => q.isDuplicate);
+      if (hasDuplicates) {
+          showNotification('error', 'Remova as questões duplicadas antes de aprovar tudo.');
+          return;
+      }
+
       setConfirmationModal({
           isOpen: true,
           type: 'approve_all',
@@ -950,9 +1111,12 @@ export default function App() {
           let count = 0;
           try {
               for (const q of parsedQuestions) {
-                  const { id, status, createdAt, createdBy, verificationStatus, verificationReason, ...finalData } = q;
+                  if (q.isDuplicate) continue; // Pula duplicatas por segurança
+
+                  const { id, status, createdAt, createdBy, verificationStatus, verificationReason, isDuplicate, hashId, ...finalData } = q;
                   if (q.area && q.topic && q.text) {
-                     await addDoc(collection(db, "questions"), { ...finalData, createdAt: new Date().toISOString(), approvedBy: user.email, hasImage: false });
+                     // SETDOC para garantir ID idempotente
+                     await setDoc(doc(db, "questions", id), { ...finalData, createdAt: new Date().toISOString(), approvedBy: user.email, hasImage: false });
                      await deleteDoc(doc(db, "draft_questions", id));
                      count++;
                   }
@@ -973,11 +1137,11 @@ export default function App() {
           setIsBatchAction(true);
           let count = 0;
           try {
-              const toApprove = parsedQuestions.filter(q => q.verificationStatus === 'verified');
+              const toApprove = parsedQuestions.filter(q => q.verificationStatus === 'verified' && !q.isDuplicate);
               for (const q of toApprove) {
-                  const { id, status, createdAt, createdBy, verificationStatus, verificationReason, ...finalData } = q;
+                  const { id, status, createdAt, createdBy, verificationStatus, verificationReason, isDuplicate, hashId, ...finalData } = q;
                   if (q.area && q.topic && q.text) {
-                     await addDoc(collection(db, "questions"), { ...finalData, createdAt: new Date().toISOString(), approvedBy: user.email, hasImage: false });
+                     await setDoc(doc(db, "questions", id), { ...finalData, createdAt: new Date().toISOString(), approvedBy: user.email, hasImage: false });
                      await deleteDoc(doc(db, "draft_questions", id));
                      count++;
                   }
@@ -998,12 +1162,16 @@ export default function App() {
   };
 
   const approveQuestion = async (q) => {
+    if (q.isDuplicate) {
+        return showNotification('error', 'Esta questão já existe no banco de dados (Duplicata).');
+    }
     if (!q.area || !q.topic || !q.text || !q.options || q.options.length < 2) {
       return showNotification('error', 'Preencha os campos obrigatórios.');
     }
     try {
-      const { id, status, createdAt, createdBy, verificationStatus, verificationReason, ...finalData } = q;
-      await addDoc(collection(db, "questions"), {
+      const { id, status, createdAt, createdBy, verificationStatus, verificationReason, isDuplicate, hashId, ...finalData } = q;
+      // Garante o ID
+      await setDoc(doc(db, "questions", id), {
         ...finalData,
         createdAt: new Date().toISOString(),
         approvedBy: user.email,
@@ -1258,11 +1426,13 @@ export default function App() {
                         </div>
                         {pdfStatus !== 'idle' && (
                             <div className="flex items-center gap-2">
-                                <button onClick={handleResetPdf} title="Cancelar e Novo PDF" className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><XCircle size={20}/></button>
-                                <button onClick={handleRestartPdf} title="Reiniciar Processamento" className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors mr-2"><RotateCcw size={20}/></button>
+                                <button onClick={handleResetPdf} disabled={pdfStatus === 'processing' || pdfStatus === 'pausing'} title="Cancelar e Novo PDF" className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"><XCircle size={20}/></button>
+                                <button onClick={handleRestartPdf} disabled={pdfStatus === 'processing' || pdfStatus === 'pausing'} title="Reiniciar Processamento" className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors mr-2 disabled:opacity-30 disabled:cursor-not-allowed"><RotateCcw size={20}/></button>
                                 
                                 {pdfStatus === 'processing' ? (
                                     <button onClick={togglePdfProcessing} className="px-4 py-2 bg-amber-100 text-amber-700 rounded-lg font-bold flex items-center gap-2 hover:bg-amber-200 transition-colors"><Pause size={18}/> Pausar</button>
+                                ) : pdfStatus === 'pausing' ? (
+                                    <button disabled className="px-4 py-2 bg-amber-50 text-amber-400 border border-amber-100 rounded-lg font-bold flex items-center gap-2 cursor-wait"><Loader2 size={18} className="animate-spin"/> Pausando...</button>
                                 ) : (
                                     <button onClick={togglePdfProcessing} disabled={pdfStatus === 'reading' || pdfStatus === 'completed' || pdfStatus === 'error'} className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg font-bold flex items-center gap-2 hover:bg-emerald-200 transition-colors disabled:opacity-50"><Play size={18}/> {pdfStatus === 'paused' ? 'Continuar' : 'Iniciar'}</button>
                                 )}
@@ -1272,13 +1442,30 @@ export default function App() {
                     
                     {/* DROPZONE PDF */}
                     {pdfStatus === 'idle' && (
-                        <div className="w-full h-64 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center bg-gray-50 relative overflow-hidden transition-all hover:border-blue-400">
-                             <div className="text-center pointer-events-none p-4">
-                                <FileText size={48} className="mx-auto text-gray-400 mb-3" />
-                                <p className="text-gray-600 font-bold mb-1">Arraste seu PDF aqui</p>
-                                <p className="text-gray-400 text-sm">Suporta arquivos grandes (100MB+)</p>
-                            </div>
-                            <input type="file" accept="application/pdf" onChange={handlePdfUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                        <div className="space-y-4">
+                             {/* RANGE INPUTS */}
+                             <div className="flex items-end gap-3 p-4 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                                <div className="flex-1">
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1 flex items-center gap-1"><BookOpen size={12}/> De pg.</label>
+                                    <input type="number" min="1" value={pdfStartPage} onChange={e=>setPdfStartPage(e.target.value)} placeholder="Início" className="w-full p-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"/>
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1 flex items-center gap-1"><SkipForward size={12}/> Até pg.</label>
+                                    <input type="number" min="1" value={pdfEndPage} onChange={e=>setPdfEndPage(e.target.value)} placeholder="Fim" className="w-full p-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"/>
+                                </div>
+                                <div className="text-xs text-gray-400 pb-2 w-1/3 leading-tight">
+                                    Deixe em branco para processar o PDF inteiro.
+                                </div>
+                             </div>
+
+                             <div className="w-full h-56 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center bg-gray-50 relative overflow-hidden transition-all hover:border-blue-400">
+                                <div className="text-center pointer-events-none p-4">
+                                    <FileText size={48} className="mx-auto text-gray-400 mb-3" />
+                                    <p className="text-gray-600 font-bold mb-1">Arraste seu PDF aqui</p>
+                                    <p className="text-gray-400 text-sm">Suporta arquivos grandes (100MB+)</p>
+                                </div>
+                                <input type="file" accept="application/pdf" onChange={handlePdfUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                             </div>
                         </div>
                     )}
 
@@ -1288,16 +1475,24 @@ export default function App() {
                             {/* STATUS BAR */}
                             <div className="bg-gray-100 rounded-xl p-4 flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                    <div className={`p-2 rounded-lg ${pdfStatus === 'error' ? 'bg-red-100 text-red-600' : pdfStatus === 'processing' ? 'bg-blue-100 text-blue-600 animate-pulse' : 'bg-gray-200 text-gray-600'}`}>
+                                    <div className={`p-2 rounded-lg 
+                                        ${pdfStatus === 'error' ? 'bg-red-100 text-red-600' : 
+                                          pdfStatus === 'processing' ? 'bg-blue-100 text-blue-600 animate-pulse' : 
+                                          pdfStatus === 'pausing' ? 'bg-amber-100 text-amber-600 animate-pulse' :
+                                          'bg-gray-200 text-gray-600'}`}>
                                         {pdfStatus === 'reading' && <Loader2 className="animate-spin" size={24}/>}
                                         {pdfStatus === 'ready' && <CheckCircle size={24}/>}
                                         {pdfStatus === 'processing' && <Cpu size={24}/>}
+                                        {pdfStatus === 'pausing' && <Clock size={24}/>}
                                         {pdfStatus === 'paused' && <Pause size={24}/>}
                                         {pdfStatus === 'completed' && <CheckCircle size={24}/>}
                                         {pdfStatus === 'error' && <AlertOctagon size={24}/>}
                                     </div>
                                     <div>
-                                        <p className="font-bold text-slate-800 text-sm uppercase">{pdfStatus === 'reading' ? 'Lendo Arquivo...' : pdfStatus}</p>
+                                        <p className="font-bold text-slate-800 text-sm uppercase">
+                                            {pdfStatus === 'reading' ? 'Lendo Arquivo...' : 
+                                             pdfStatus === 'pausing' ? 'Pausando...' : pdfStatus}
+                                        </p>
                                         <p className="text-xs text-gray-500">{pdfFile?.name} • {pdfChunks.length} fatias</p>
                                     </div>
                                 </div>
@@ -1309,20 +1504,21 @@ export default function App() {
                             {/* GRID DE CHUNKS - INTERATIVO SE PAUSADO */}
                             <div className="border border-gray-200 rounded-xl p-4 max-h-60 overflow-y-auto">
                                 <p className="text-xs font-bold text-gray-400 uppercase mb-2 flex justify-between">
-                                    <span>Mapa de Processamento (Fatias de {CHUNK_SIZE} pgs)</span>
-                                    {pdfStatus === 'paused' && <span className="text-blue-500 text-[10px]">Clique para rebobinar</span>}
+                                    <span>Timeline (Navegação)</span>
+                                    {pdfStatus === 'paused' && <span className="text-blue-500 text-[10px]">Clique para Navegar (Seek)</span>}
                                 </p>
                                 <div className="grid grid-cols-5 md:grid-cols-8 lg:grid-cols-10 gap-2">
                                     {pdfChunks.map((chunk, idx) => (
                                         <button key={chunk.id} 
                                             onClick={() => handleJumpToChunk(idx)}
-                                            disabled={pdfStatus === 'processing' || pdfStatus === 'reading'}
+                                            disabled={pdfStatus === 'reading' || pdfStatus === 'processing' || pdfStatus === 'pausing'}
                                             className={`h-8 rounded-md flex items-center justify-center text-xs font-bold transition-all border
                                             ${chunk.status === 'pending' ? 'bg-gray-50 text-gray-400 border-gray-200' : ''}
                                             ${chunk.status === 'success' ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm' : ''}
                                             ${chunk.status === 'error' ? 'bg-red-500 text-white border-red-600 shadow-sm' : ''}
-                                            ${idx === currentChunkIndex && pdfStatus === 'processing' ? 'ring-2 ring-blue-500 ring-offset-1 bg-blue-50 text-blue-600 border-blue-200 animate-pulse' : ''}
-                                            ${pdfStatus === 'paused' && idx <= currentChunkIndex ? 'hover:bg-blue-100 hover:text-blue-600 cursor-pointer' : ''}
+                                            ${idx === currentChunkIndex && (pdfStatus === 'processing' || pdfStatus === 'pausing') ? 'ring-2 ring-blue-500 ring-offset-1 bg-blue-50 text-blue-600 border-blue-200 animate-pulse' : ''}
+                                            ${(pdfStatus === 'paused' || pdfStatus === 'ready' || pdfStatus === 'completed') ? 'hover:bg-blue-100 hover:text-blue-600 cursor-pointer hover:border-blue-300' : ''}
+                                            ${(pdfStatus === 'processing' || pdfStatus === 'pausing') && idx !== currentChunkIndex ? 'opacity-50 cursor-not-allowed' : ''}
                                             `}
                                             title={`Páginas ${chunk.pages} | Erros: ${chunk.errorCount}`}
                                         >
@@ -1386,14 +1582,22 @@ export default function App() {
                     </div>
                 ) : (
                     parsedQuestions.map((q, idx) => (
-                        <div key={q.id} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden relative group">
-                            {/* VERIFICATION BADGE */}
-                            <div className={`absolute top-0 right-0 p-2 z-10 rounded-bl-xl shadow-sm text-xs font-bold flex items-center gap-1
-                                ${q.verificationStatus === 'verified' ? 'bg-emerald-100 text-emerald-700' : 
-                                  q.verificationStatus === 'suspicious' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}`}>
-                                {q.verificationStatus === 'verified' && <><ShieldCheck size={14}/> Double-Checked</>}
-                                {q.verificationStatus === 'suspicious' && <><ShieldAlert size={14}/> Suspeita: {q.verificationReason}</>}
-                                {(!q.verificationStatus || q.verificationStatus === 'unchecked') && 'Não Verificada'}
+                        <div key={q.id} className={`bg-white rounded-2xl shadow-sm border overflow-hidden relative group transition-colors ${q.isDuplicate ? 'border-amber-400 ring-2 ring-amber-100' : 'border-gray-200'}`}>
+                            {/* STATUS BADGES */}
+                            <div className="absolute top-0 right-0 z-10 flex flex-col items-end gap-1">
+                                <div className={`p-2 rounded-bl-xl shadow-sm text-xs font-bold flex items-center gap-1
+                                    ${q.verificationStatus === 'verified' ? 'bg-emerald-100 text-emerald-700' : 
+                                    q.verificationStatus === 'suspicious' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}`}>
+                                    {q.verificationStatus === 'verified' && <><ShieldCheck size={14}/> Double-Checked</>}
+                                    {q.verificationStatus === 'suspicious' && <><ShieldAlert size={14}/> Suspeita: {q.verificationReason}</>}
+                                    {(!q.verificationStatus || q.verificationStatus === 'unchecked') && 'Não Verificada'}
+                                </div>
+                                
+                                {q.isDuplicate && (
+                                    <div className="bg-amber-100 text-amber-800 p-2 rounded-l-lg shadow-sm text-xs font-bold flex items-center gap-1 animate-pulse">
+                                        <Copy size={14}/> JÁ CADASTRADA
+                                    </div>
+                                )}
                             </div>
 
                             <div className="h-1.5 w-full bg-gray-100"><div className="h-full bg-orange-400 w-full animate-pulse"></div></div>
@@ -1426,7 +1630,14 @@ export default function App() {
                             
                             <div className="bg-gray-50 px-6 py-4 flex justify-between items-center border-t border-gray-100">
                                 <button onClick={()=>handleDiscardOneClick(q)} className="text-red-500 hover:text-red-700 font-bold text-sm flex items-center gap-1"><Trash2 size={16}/> Descartar</button>
-                                <button onClick={()=>approveQuestion(q)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-6 py-2.5 rounded-lg shadow-lg flex items-center gap-2"><CheckCircle size={18}/> Aprovar e Publicar</button>
+                                
+                                {q.isDuplicate ? (
+                                    <button disabled className="bg-amber-200 text-amber-700 font-bold text-sm px-6 py-2.5 rounded-lg flex items-center gap-2 cursor-not-allowed opacity-70">
+                                        <Copy size={18}/> Questão Duplicada
+                                    </button>
+                                ) : (
+                                    <button onClick={()=>approveQuestion(q)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-6 py-2.5 rounded-lg shadow-lg flex items-center gap-2"><CheckCircle size={18}/> Aprovar e Publicar</button>
+                                )}
                             </div>
                         </div>
                     ))
