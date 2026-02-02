@@ -1,38 +1,21 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Map, Save, Trash2, Settings, CheckCircle, 
-  AlertCircle, FileText, Database, 
-  Loader2, Wand2, Cpu, RefreshCw, User, X,
-  LogOut, Send, Brain, Image as ImageIcon, UploadCloud, Lock, CloudLightning, ArrowLeft,
-  AlertTriangle, ExternalLink, Key, Play, Pause, AlertOctagon, Terminal, ShieldCheck, ShieldAlert, 
-  ToggleLeft, ToggleRight, Layers, Filter, Eraser, RefreshCcw, XCircle, RotateCcw, Copy,
-  SkipForward, BookOpen, Clock
+  Search, Filter, Edit3, Trash2, Save, X, CheckCircle, 
+  AlertCircle, Database, LayoutGrid, List, ChevronDown, 
+  ChevronRight, ArrowLeft, LogOut, Loader2, FileText, 
+  CheckSquare, BookOpen, AlertTriangle, Copy, Hash,
+  MessageSquare, ThumbsUp, ThumbsDown, Flag, User, Calendar, Building, Phone,
+  Users, TrendingUp, Target, Zap, Clock, Percent, Award, MoreHorizontal, UserPlus, Shield, PlusCircle, Lock, RefreshCw
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from "firebase/app";
 import { 
-  getFirestore, collection, addDoc, doc, getDoc, deleteDoc, onSnapshot, query, orderBy, setDoc, writeBatch 
+  getFirestore, collection, doc, getDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, writeBatch, setDoc
 } from "firebase/firestore";
 import { 
   getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
 } from "firebase/auth";
-
-// --- PDF.JS IMPORT (Dynamic CDN) ---
-const loadPdfJs = async () => {
-    if (window.pdfjsLib) return window.pdfjsLib;
-    
-    return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-        script.onload = () => {
-            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-            resolve(window.pdfjsLib);
-        };
-        script.onerror = reject;
-        document.head.appendChild(script);
-    });
-};
 
 // --- CONFIGURAÇÃO FIREBASE ---
 const firebaseConfig = {
@@ -51,74 +34,23 @@ const auth = getAuth(app);
 
 // --- DADOS DE REFERÊNCIA ---
 const areasBase = [
-  'Clínica Médica', 
-  'Cirurgia Geral', 
-  'Ginecologia e Obstetrícia', 
-  'Pediatria', 
-  'Preventiva'
+  'Clínica Médica', 'Cirurgia Geral', 'Ginecologia e Obstetrícia', 'Pediatria', 'Preventiva'
 ];
 
 const themesMap = {
-    'Clínica Médica': [
-        'Cardiologia', 'Dermatologia', 'Endocrinologia e Metabologia', 'Gastroenterologia', 'Hematologia', 'Hepatologia', 'Infectologia', 'Nefrologia', 'Neurologia', 'Pneumologia', 'Psiquiatria', 'Reumatologia'
-    ],
-    'Cirurgia Geral': [
-        'Abdome Agudo', 'Cirurgia Hepatobiliopancreática', 'Cirurgia Torácica e de Cabeça e Pescoço', 'Cirurgia Vascular', 'Cirurgia do Esôfago e Estômago', 'Coloproctologia', 'Hérnias e Parede Abdominal', 'Pré e Pós-Operatório', 'Queimaduras', 'Resposta Metabólica e Cicatrização', 'Trauma', 'Urologia'
-    ],
-    'Ginecologia e Obstetrícia': [
-        'Ciclo Menstrual e Anticoncepção', 'Climatério e Menopausa', 'Doenças Intercorrentes na Gestação', 'Infecções Congênitas e Gestacionais', 'Infecções Ginecológicas e ISTs', 'Mastologia', 'Obstetrícia Fisiológica e Pré-Natal', 'Oncologia Pélvica', 'Parto e Puerpério', 'Sangramentos da Gestação', 'Uroginecologia e Distopias', 'Vitalidade Fetal e Amniograma'
-    ],
-    'Pediatria': [
-        'Adolescência e Puberdade', 'Afecções Respiratórias', 'Aleitamento Materno e Nutrição', 'Cardiologia e Reumatologia Pediátrica', 'Crescimento e Desenvolvimento', 'Emergências e Acidentes', 'Gastroenterologia Pediátrica', 'Imunizações', 'Infectopediatria e Exantemáticas', 'Nefrologia Pediátrica', 'Neonatologia: Patologias', 'Neonatologia: Sala de Parto'
-    ],
-    'Preventiva': [
-        'Atenção Primária e Saúde da Família', 'Estudos Epidemiológicos', 'Financiamento e Gestão', 'História e Princípios do SUS', 'Indicadores de Saúde e Demografia', 'Medicina Baseada em Evidências', 'Medicina Legal', 'Medidas de Associação e Testes Diagnósticos', 'Políticas Nacionais de Saúde', 'Saúde do Trabalhador', 'Vigilância em Saúde', 'Ética Médica e Bioética'
-    ]
+    'Clínica Médica': ['Cardiologia', 'Dermatologia', 'Endocrinologia e Metabologia', 'Gastroenterologia', 'Hematologia', 'Hepatologia', 'Infectologia', 'Nefrologia', 'Neurologia', 'Pneumologia', 'Psiquiatria', 'Reumatologia'],
+    'Cirurgia Geral': ['Abdome Agudo', 'Cirurgia Hepatobiliopancreática', 'Cirurgia Torácica e de Cabeça e Pescoço', 'Cirurgia Vascular', 'Cirurgia do Esôfago e Estômago', 'Coloproctologia', 'Hérnias e Parede Abdominal', 'Pré e Pós-Operatório', 'Queimaduras', 'Resposta Metabólica e Cicatrização', 'Trauma', 'Urologia'],
+    'Ginecologia e Obstetrícia': ['Ciclo Menstrual e Anticoncepção', 'Climatério e Menopausa', 'Doenças Intercorrentes na Gestação', 'Infecções Congênitas e Gestacionais', 'Infecções Ginecológicas e ISTs', 'Mastologia', 'Obstetrícia Fisiológica e Pré-Natal', 'Oncologia Pélvica', 'Parto e Puerpério', 'Sangramentos da Gestação', 'Uroginecologia e Distopias', 'Vitalidade Fetal e Amniograma'],
+    'Pediatria': ['Adolescência e Puberdade', 'Afecções Respiratórias', 'Aleitamento Materno e Nutrição', 'Cardiologia e Reumatologia Pediátrica', 'Crescimento e Desenvolvimento', 'Emergências e Acidentes', 'Gastroenterologia Pediátrica', 'Imunizações', 'Infectopediatria e Exantemáticas', 'Nefrologia Pediátrica', 'Neonatologia: Patologias', 'Neonatologia: Sala de Parto'],
+    'Preventiva': ['Atenção Primária e Saúde da Família', 'Estudos Epidemiológicos', 'Financiamento e Gestão', 'História e Princípios do SUS', 'Indicadores de Saúde e Demografia', 'Medicina Baseada em Evidências', 'Medicina Legal', 'Medidas de Associação e Testes Diagnósticos', 'Políticas Nacionais de Saúde', 'Saúde do Trabalhador', 'Vigilância em Saúde', 'Ética Médica e Bioética']
 };
 
-// --- HELPER: HASH ID GENERATOR (DEDUPLICATION) ---
-const generateQuestionHash = async (text) => {
-    if (!text) return null;
-    const normalized = text
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, "");
-    
-    const msgBuffer = new TextEncoder().encode(normalized);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 32);
-};
-
-// --- HELPER: CLEAN INSTITUTION ---
-const cleanInstitutionText = (inst) => {
-    if (!inst) return "";
-    const lower = inst.toString().toLowerCase();
-    // Lista de termos que indicam "não informado" para serem limpos
-    if (
-        lower.includes("não informado") || 
-        lower.includes("nao informado") || 
-        lower.includes("detectar") ||
-        lower.includes("nao consta")
-    ) return "";
-    return inst;
-};
-
-// --- HELPER: EXTRAIR TEMPO DE ESPERA DA MENSAGEM DE ERRO ---
-const extractRetryTime = (message) => {
-    const match = message.match(/retry in ([0-9\.]+)s/);
-    return match ? parseFloat(match[1]) : null;
-};
-
-// --- COMPONENTE DE NOTIFICAÇÃO INTELIGENTE ---
-function NotificationToast({ notification, onClose, positionClass }) {
+// --- COMPONENTE DE NOTIFICAÇÃO ---
+function NotificationToast({ notification, onClose }) {
   const [isHovered, setIsHovered] = useState(false);
-
   useEffect(() => {
     if (!notification || isHovered) return;
-    const timer = setTimeout(() => { onClose(); }, 6000);
+    const timer = setTimeout(() => onClose(), 3000);
     return () => clearTimeout(timer);
   }, [notification, isHovered, onClose]);
 
@@ -128,108 +60,75 @@ function NotificationToast({ notification, onClose, positionClass }) {
     <div 
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        className={`${positionClass} z-[100] p-4 rounded-xl shadow-xl flex items-start gap-3 animate-in slide-in-from-right-10 duration-300 max-w-sm border transition-all ${notification.type === 'error' ? 'bg-white border-red-200 text-red-700' : notification.type === 'warning' ? 'bg-white border-amber-200 text-amber-700' : 'bg-white border-emerald-200 text-emerald-700'}`}
+        className="fixed top-24 right-4 z-[100] p-4 rounded-xl shadow-xl flex items-start gap-3 animate-in slide-in-from-right-10 duration-300 max-w-sm border bg-white border-gray-200 text-slate-800"
     >
-        <div className={`mt-0.5 p-1 rounded-full ${notification.type === 'error' ? 'bg-red-100' : notification.type === 'warning' ? 'bg-amber-100' : 'bg-emerald-100'}`}>
-            {notification.type === 'error' ? <AlertCircle size={20} /> : notification.type === 'warning' ? <AlertTriangle size={20} /> : <CheckCircle size={20} />}
+        <div className={`mt-0.5 p-1 rounded-full ${notification.type === 'error' ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>
+            {notification.type === 'error' ? <AlertCircle size={20} /> : <CheckCircle size={20} />}
         </div>
         <div className="flex-1">
-            <p className="font-bold text-sm mb-1">{notification.type === 'error' ? 'Erro' : notification.type === 'warning' ? 'Atenção' : 'Sucesso'}</p>
+            <p className="font-bold text-sm mb-1">{notification.type === 'error' ? 'Erro' : 'Sucesso'}</p>
             <p className="text-sm opacity-90 leading-tight">{notification.text}</p>
         </div>
-        <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
-            <X size={18}/>
-        </button>
+        <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full text-gray-400"><X size={18}/></button>
     </div>
   );
 }
 
-export default function App() {
+export default function MedManager() {
   const [user, setUser] = useState(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   
-  // Gestão de Chaves API (Múltiplas)
-  const [apiKeys, setApiKeys] = useState(() => JSON.parse(localStorage.getItem('gemini_api_keys') || '[]'));
+  // Data State
+  const [questions, setQuestions] = useState([]);
+  const [reports, setReports] = useState([]); 
+  const [userProfiles, setUserProfiles] = useState({}); 
+  const [students, setStudents] = useState([]); 
+  const [loadingData, setLoadingData] = useState(true);
+  const [loadingStudents, setLoadingStudents] = useState(false); 
   
-  // Modelos - ATUALIZADO PARA PRO PADRÃO
-  const [availableModels, setAvailableModels] = useState([
-      { name: 'models/gemini-2.5-pro', displayName: 'Gemini 2.5 Pro (Padrão)' },
-      { name: 'models/gemini-2.5-flash', displayName: 'Gemini 2.5 Flash' }
-  ]);
-  const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('gemini_model') || 'models/gemini-2.5-pro');
+  // View State
+  const [activeView, setActiveView] = useState('questions'); 
   
-  // Estados UI Básicos
-  const [rawText, setRawText] = useState('');
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isBatchAction, setIsBatchAction] = useState(false); 
-  const [isSavingKey, setIsSavingKey] = useState(false);
-  const [parsedQuestions, setParsedQuestions] = useState([]);
-  const [activeTab, setActiveTab] = useState('input');
-  const [notification, setNotification] = useState(null);
-  const [isValidatingKey, setIsValidatingKey] = useState(false);
-  const [isDoubleCheckEnabled, setIsDoubleCheckEnabled] = useState(false); 
-  
-  // Override States (Pré-definições)
-  const [overrideInst, setOverrideInst] = useState('');
-  const [overrideYear, setOverrideYear] = useState('');
-  const [overrideArea, setOverrideArea] = useState('');
-  const [overrideTopic, setOverrideTopic] = useState('');
+  // Filter State (Questions)
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedArea, setSelectedArea] = useState('Todas');
+  const [selectedTopic, setSelectedTopic] = useState('Todos');
+  const [selectedInstitution, setSelectedInstitution] = useState('Todas'); 
+  const [selectedYear, setSelectedYear] = useState('Todos'); 
+  const [reportFilterQuestionId, setReportFilterQuestionId] = useState(null);
 
-  // Modais
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-  const [tempApiKeysText, setTempApiKeysText] = useState('');
-  const [showTutorial, setShowTutorial] = useState(false);
+  // Filter State (Students)
+  const [studentStatusFilter, setStudentStatusFilter] = useState('all'); 
+  const [studentRoleFilter, setStudentRoleFilter] = useState('all'); 
   
-  const [confirmationModal, setConfirmationModal] = useState({
-      isOpen: false, type: null, data: null, title: '', message: '', confirmText: '', confirmColor: ''
-  });
+  // Edit State (Questions)
+  const [editingQuestion, setEditingQuestion] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [associatedReport, setAssociatedReport] = useState(null);
+  
+  // Edit State (Users)
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [viewingUserStats, setViewingUserStats] = useState(null); 
+  
+  // UI State
+  const [notification, setNotification] = useState(null);
+  const [deleteModal, setDeleteModal] = useState(null); 
+  const [rejectReportModal, setRejectReportModal] = useState(null);
   
   // Login Inputs
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // --- PDF PROCESSING STATES ---
-  const [pdfFile, setPdfFile] = useState(null);
-  const [pdfStatus, setPdfStatus] = useState('idle'); // idle, reading, ready, processing, pausing, paused, error, completed
-  const [pdfChunks, setPdfChunks] = useState([]); 
-  const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
-  const [processingLogs, setProcessingLogs] = useState([]);
-  const [consecutiveErrors, setConsecutiveErrors] = useState(0);
-  
-  // PDF Range Inputs
-  const [pdfStartPage, setPdfStartPage] = useState('');
-  const [pdfEndPage, setPdfEndPage] = useState('');
-
-  const processorRef = useRef(null); 
-  
-  // --- REFS ---
-  const pdfStatusRef = useRef(pdfStatus);
-  const pdfChunksRef = useRef(pdfChunks);
-  const apiKeysRef = useRef(apiKeys);
-  const keyRotationIndex = useRef(0);
-  const doubleCheckRef = useRef(isDoubleCheckEnabled); 
-  const overridesRef = useRef({ overrideInst, overrideYear, overrideArea, overrideTopic });
-
-  const CHUNK_SIZE = 10; 
-
-  // --- AUTH CHECK ---
+  // --- AUTH ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
         if (u) {
-            try {
-                const userDocRef = doc(db, "users", u.uid);
-                const userDoc = await getDoc(userDocRef);
-                if (userDoc.exists() && userDoc.data().role === 'admin') {
-                    setUser(u);
-                } else {
-                    await signOut(auth);
-                    setUser(null);
-                    showNotification('error', 'Acesso negado: Usuário não é administrador.');
-                }
-            } catch (error) {
-                console.error("Erro ao verificar role:", error);
+            const userDoc = await getDoc(doc(db, "users", u.uid));
+            if (userDoc.exists() && userDoc.data().role === 'admin') {
+                setUser(u);
+            } else {
                 await signOut(auth);
+                showNotification('error', 'Acesso negado: Apenas administradores.');
                 setUser(null);
             }
         } else {
@@ -240,1411 +139,745 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // --- SYNC REFS ---
-  useEffect(() => { pdfStatusRef.current = pdfStatus; }, [pdfStatus]);
-  useEffect(() => { pdfChunksRef.current = pdfChunks; }, [pdfChunks]);
-  useEffect(() => { apiKeysRef.current = apiKeys; }, [apiKeys]);
-  useEffect(() => { doubleCheckRef.current = isDoubleCheckEnabled; }, [isDoubleCheckEnabled]);
-  useEffect(() => { overridesRef.current = { overrideInst, overrideYear, overrideArea, overrideTopic }; }, [overrideInst, overrideYear, overrideArea, overrideTopic]);
+  // --- LOGOUT FUNCTION ---
+  const handleLogout = async () => {
+      try {
+          await signOut(auth);
+          setUser(null);
+          setQuestions([]);
+          setReports([]);
+          setStudents([]);
+          setActiveView('questions');
+      } catch (error) {
+          console.error("Erro ao sair:", error);
+      }
+  };
 
-  // --- SYNC CHAVES API (GLOBAL SETTINGS) ---
+  // --- LOAD DATA ---
   useEffect(() => {
-      if (!user) return;
-      const unsubscribe = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
-          if (docSnap.exists()) {
-              const data = docSnap.data();
-              let newKeys = [];
-              if (data.geminiApiKeys && Array.isArray(data.geminiApiKeys)) {
-                  newKeys = data.geminiApiKeys;
-              } else if (data.geminiApiKey) {
-                  newKeys = [data.geminiApiKey];
-              }
+    if (!user) return;
+    
+    // Questions
+    const qQuest = query(collection(db, "questions"), orderBy("createdAt", "desc"));
+    const unsubQuest = onSnapshot(qQuest, (snap) => {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setQuestions(list);
+        setLoadingData(false);
+    });
 
-              // Normaliza chaves e remove duplicatas no carregamento também
-              const uniqueKeys = [...new Set(newKeys.filter(k => k && k.trim().length > 0))];
+    // Pending Reports
+    const qReports = query(collection(db, "reports"), where("status", "==", "pending"));
+    const unsubReports = onSnapshot(qReports, (snap) => {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setReports(list);
+    });
 
-              if (JSON.stringify(uniqueKeys) !== JSON.stringify(apiKeysRef.current)) {
-                  setApiKeys(uniqueKeys);
-                  localStorage.setItem('gemini_api_keys', JSON.stringify(uniqueKeys));
-              }
-          }
-      }, (error) => console.error("Erro ao sincronizar chaves:", error));
-      return () => unsubscribe();
+    return () => {
+        unsubQuest();
+        unsubReports();
+    };
   }, [user]);
 
-  // --- SYNC RASCUNHOS ---
+  // --- LOAD STUDENTS ---
   useEffect(() => {
-      if (!user) { setParsedQuestions([]); return; }
-      const q = query(collection(db, "draft_questions"), orderBy("createdAt", "desc"));
+      if (!user || activeView !== 'students') return;
+      setLoadingStudents(true);
+
+      const q = query(collection(db, "users"), orderBy("name")); 
       const unsubscribe = onSnapshot(q, (snapshot) => {
-          const drafts = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, status: 'draft' }));
-          setParsedQuestions(drafts);
+          const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setStudents(list);
+          setLoadingStudents(false);
+      }, (error) => {
+          console.error("Erro ao buscar alunos:", error);
+          setLoadingStudents(false);
       });
+
       return () => unsubscribe();
-  }, [user]);
+  }, [user, activeView]);
 
-  // --- ROTATION HELPER ---
-  const executeWithKeyRotation = async (operationName, requestFn) => {
-      const keys = apiKeysRef.current;
-      if (!keys || keys.length === 0) throw new Error("Nenhuma chave API configurada.");
+  // --- FETCH USER PROFILES ---
+  useEffect(() => {
+      const fetchReporters = async () => {
+        if (reports.length === 0) return;
+        const uids = new Set(reports.map(r => r.userId).filter(uid => uid));
+        const newProfiles = { ...userProfiles };
+        const toFetch = [];
+        uids.forEach(uid => { if (!newProfiles[uid]) toFetch.push(uid); });
 
-      let lastError = null;
-      const startIndex = keyRotationIndex.current;
+        if (toFetch.length === 0) return;
 
-      for (let i = 0; i < keys.length; i++) {
-          const currentIndex = (startIndex + i) % keys.length;
-          const currentKey = keys[currentIndex];
-          
-          keyRotationIndex.current = (currentIndex + 1) % keys.length;
+        await Promise.all(toFetch.map(async (uid) => {
+            try {
+                const snap = await getDoc(doc(db, "users", uid));
+                if (snap.exists()) { newProfiles[uid] = snap.data(); } 
+                else { newProfiles[uid] = { name: 'Desconhecido', whatsapp: '' }; }
+            } catch (e) { console.error("Erro ao buscar user", uid, e); }
+        }));
+        setUserProfiles(newProfiles);
+      };
+      fetchReporters();
+  }, [reports]);
 
-          try {
-              return await requestFn(currentKey);
-          } catch (error) {
-              const msg = error.message || "";
-              const isQuotaError = msg.includes("Quota exceeded") || msg.includes("429");
-              
-              if (isQuotaError) {
-                  addLog('warning', `[${operationName}] Chave ...${currentKey.slice(-4)} no limite. Rotacionando...`);
-                  lastError = error;
-                  continue; 
-              } else {
-                  throw error; 
-              }
-          }
-      }
-      throw lastError || new Error("Todas as chaves falharam.");
-  };
+  // --- FILTER LOGIC ---
+  const uniqueInstitutions = useMemo(() => ['Todas', ...Array.from(new Set(questions.map(q => q.institution).filter(i => i))).sort()], [questions]);
+  const uniqueYears = useMemo(() => ['Todos', ...Array.from(new Set(questions.map(q => q.year ? String(q.year) : '').filter(y => y))).sort().reverse()], [questions]);
+  const reportsCountByQuestion = useMemo(() => {
+      const counts = {}; reports.forEach(r => { counts[r.questionId] = (counts[r.questionId] || 0) + 1; }); return counts;
+  }, [reports]);
+  const pendingReportsCount = reports.length;
 
-  // --- LOGIC: VERIFICATION AGENT (DOUBLE CHECK) ---
-  const verifyQuestionWithAI = async (questionData) => {
-      return executeWithKeyRotation("Auditoria", async (key) => {
-          const verifyPrompt = `
-            Você é um Auditor Sênior de Questões Médicas.
-            Analise a questão abaixo gerada por uma IA.
-            
-            QUESTÃO:
-            Enunciado: ${questionData.text}
-            Alternativas: ${JSON.stringify(questionData.options)}
-            Gabarito Indicado: ${questionData.correctOptionId}
-            Comentário Gerado: ${questionData.explanation}
-            
-            TAREFA:
-            Verifique se a questão é medicamente correta, se o gabarito faz sentido e se não há alucinações graves.
-            
-            Retorne APENAS um JSON:
-            {
-                "isValid": boolean (true se aceitável, false se tiver erro grave/alucinação),
-                "reason": "Explicação curta se for false"
-            }
-          `;
-
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: verifyPrompt }] }] })
-          });
-          
-          const data = await response.json();
-          if (data.error) throw new Error(data.error.message);
-
-          let jsonString = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-          jsonString = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
-          const result = JSON.parse(jsonString);
-          
-          return {
-              status: result.isValid ? 'verified' : 'suspicious',
-              reason: result.reason || (result.isValid ? "Verificado por IA" : "Inconsistência detectada")
-          };
+  const filteredQuestions = useMemo(() => {
+      let result = questions.filter(q => {
+          const matchesSearch = q.text.toLowerCase().includes(searchTerm.toLowerCase()) || q.institution?.toLowerCase().includes(searchTerm.toLowerCase()) || q.year?.toString().includes(searchTerm) || q.id.toLowerCase().includes(searchTerm.toLowerCase());
+          const matchesArea = selectedArea === 'Todas' || q.area === selectedArea;
+          const matchesTopic = selectedTopic === 'Todos' || q.topic === selectedTopic;
+          const matchesInstitution = selectedInstitution === 'Todas' || q.institution === selectedInstitution;
+          const matchesYear = selectedYear === 'Todos' || String(q.year) === selectedYear;
+          return matchesSearch && matchesArea && matchesTopic && matchesInstitution && matchesYear;
       });
-  };
-
-  // --- LOGIC: PDF HANDLING ---
-  const addLog = (type, message) => {
-      const time = new Date().toLocaleTimeString();
-      setProcessingLogs(prev => [{ type, message, time }, ...prev].slice(0, 50)); 
-  };
-
-  const handlePdfUpload = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      if (file.type !== 'application/pdf') return showNotification('error', 'Por favor, envie um arquivo PDF.');
-      
-      setPdfFile(file);
-      setPdfStatus('reading');
-      setProcessingLogs([]);
-      addLog('info', `Iniciando leitura de: ${file.name}`);
-
-      try {
-          const pdfjs = await loadPdfJs();
-          const arrayBuffer = await file.arrayBuffer();
-          const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
-          
-          addLog('info', `PDF carregado. Total: ${pdf.numPages} págs.`);
-          
-          // Lógica de Range de Páginas
-          let startP = parseInt(pdfStartPage) || 1;
-          let endP = parseInt(pdfEndPage) || pdf.numPages;
-
-          if (startP < 1) startP = 1;
-          if (endP > pdf.numPages) endP = pdf.numPages;
-          if (startP > endP) {
-               startP = 1; 
-               endP = pdf.numPages;
-               showNotification('warning', 'Intervalo inválido. Usando PDF completo.');
-          } else {
-               if (startP !== 1 || endP !== pdf.numPages) {
-                   addLog('info', `Recortando páginas: ${startP} até ${endP}`);
-               }
-          }
-
-          let chunks = [];
-          let currentChunkText = "";
-          let chunkStartPage = startP;
-
-          for (let i = startP; i <= endP; i++) {
-              const page = await pdf.getPage(i);
-              const content = await page.getTextContent();
-              const text = content.items.map(item => item.str).join(' ');
-              
-              currentChunkText += `\n--- PÁGINA ${i} ---\n${text}`;
-
-              // Fatia a cada CHUNK_SIZE páginas OU se for a última página do range
-              if ((i - startP + 1) % CHUNK_SIZE === 0 || i === endP) {
-                  chunks.push({
-                      id: `chunk_${chunkStartPage}_${i}`,
-                      pages: `${chunkStartPage} a ${i}`,
-                      text: currentChunkText,
-                      status: 'pending',
-                      errorCount: 0
-                  });
-                  currentChunkText = "";
-                  chunkStartPage = i + 1;
-              }
-          }
-
-          setPdfChunks(chunks);
-          setPdfStatus('ready');
-          addLog('success', `Pronto! ${chunks.length} partes geradas (${startP}-${endP}).`);
-
-      } catch (error) {
-          console.error(error);
-          setPdfStatus('error');
-          addLog('error', `Erro crítico ao ler PDF: ${error.message}`);
-          showNotification('error', 'Erro ao ler PDF.');
-      }
-  };
-
-  const handleResetPdf = () => {
-      if (pdfStatus === 'processing' || pdfStatus === 'pausing') return; 
-      setPdfFile(null);
-      setPdfChunks([]);
-      setPdfStatus('idle');
-      setCurrentChunkIndex(0);
-      setProcessingLogs([]);
-      setConsecutiveErrors(0);
-      setPdfStartPage('');
-      setPdfEndPage('');
-  };
-
-  const handleRestartPdf = () => {
-      if (!pdfFile || pdfStatus === 'processing' || pdfStatus === 'pausing') return;
-      const resetChunks = pdfChunks.map(c => ({ ...c, status: 'pending', errorCount: 0 }));
-      setPdfChunks(resetChunks);
-      setCurrentChunkIndex(0);
-      setPdfStatus('ready');
-      setProcessingLogs([]);
-      setConsecutiveErrors(0);
-      addLog('info', 'Processamento reiniciado.');
-  };
-
-  // --- NOVA LÓGICA DE NAVEGAÇÃO ("SEEK") ---
-  const handleJumpToChunk = (index) => {
-      if (pdfStatus === 'processing' || pdfStatus === 'idle' || pdfStatus === 'pausing' || pdfStatus === 'reading') return;
-      
-      const chunk = pdfChunks[index];
-      addLog('info', `Agulha movida para fatia ${chunk.pages} (Aguardando Início)...`);
-      
-      // 1. Move a agulha para o índice clicado
-      setCurrentChunkIndex(index);
-
-      // 2. Força o status da fatia clicada para 'pending' (para reprocessar se quiser)
-      //    Isso permite "tocar" o vídeo a partir daqui.
-      setPdfChunks(prev => {
-          const newChunks = [...prev];
-          // Reseta APENAS a fatia atual para garantir que ela rode
-          newChunks[index] = { ...newChunks[index], status: 'pending', errorCount: 0 };
-          return newChunks;
+      result.sort((a, b) => {
+          const countA = reportsCountByQuestion[a.id] || 0;
+          const countB = reportsCountByQuestion[b.id] || 0;
+          if (countB !== countA) return countB - countA;
+          return 0; 
       });
-  };
+      return result;
+  }, [questions, searchTerm, selectedArea, selectedTopic, selectedInstitution, selectedYear, reportsCountByQuestion]);
 
-  const processNextChunk = async () => {
-      const currentStatus = pdfStatusRef.current;
-      const currentChunks = pdfChunksRef.current;
-      const doDoubleCheck = doubleCheckRef.current;
-      const ovr = overridesRef.current; 
-
-      if (processorRef.current) return; 
-      // Se estiver pausado ou erro e a função for chamada (ex: retry), ok.
-      // Se estiver 'completed', para.
-      if (currentStatus === 'completed') return;
-      
-      // LÓGICA DE SEEK: Procura a próxima pendente A PARTIR do índice atual
-      const chunkIndex = currentChunks.findIndex((c, i) => i >= currentChunkIndex && c.status === 'pending');
-      
-      if (chunkIndex === -1) {
-          // Verifica se acabou tudo MESMO ou se só acabou a partir da agulha
-          const anyPending = currentChunks.some(c => c.status === 'pending');
-          if (anyPending) {
-               addLog('warning', 'Fim da linha de tempo. Existem fatias anteriores pendentes.');
-               setPdfStatus('paused'); 
-          } else {
-               setPdfStatus('completed');
-               addLog('success', 'Processamento Completo!');
-               showNotification('success', 'Todas as partes selecionadas foram processadas.');
-          }
-          return;
+  const filteredReports = useMemo(() => {
+      let result = reports;
+      if (reportFilterQuestionId) result = result.filter(r => r.questionId === reportFilterQuestionId);
+      if (activeView === 'reports' && searchTerm) {
+          const lower = searchTerm.toLowerCase();
+          result = result.filter(r => r.userId?.toLowerCase().includes(lower) || r.questionId?.toLowerCase().includes(lower) || r.text?.toLowerCase().includes(lower) || r.details?.toLowerCase().includes(lower) || (userProfiles[r.userId]?.name || '').toLowerCase().includes(lower));
       }
+      return result;
+  }, [reports, reportFilterQuestionId, searchTerm, activeView, userProfiles]);
 
-      setCurrentChunkIndex(chunkIndex); // Atualiza agulha visual
-      const chunk = currentChunks[chunkIndex];
-
-      // Se não estiver 'pausing', garante que está 'processing'
-      if (currentStatus !== 'pausing' && currentStatus !== 'processing') setPdfStatus('processing');
+  const filteredStudents = useMemo(() => {
+      if (activeView !== 'students') return [];
+      const lower = searchTerm.toLowerCase();
       
-      processorRef.current = true; 
-      addLog('info', `Processando fatia ${chunk.pages}...`);
-
-      try {
-          // --- CONSTRUÇÃO INTELIGENTE DO MAPA DE TEMAS E PROMPT ---
-          const activeThemesMap = ovr.overrideArea ? { [ovr.overrideArea]: themesMap[ovr.overrideArea] } : themesMap;
-
-          // USANDO ROTAÇÃO DE CHAVES PARA A GERAÇÃO PRINCIPAL
-          const questions = await executeWithKeyRotation("Geração", async (key) => {
-              const systemPrompt = `
-                Você é um especialista em provas de Residência Médica (MedMaps).
-                Analise o texto extraído de um PDF.
-                
-                CONTEXTO (Informacional):
-                - Instituição: ${ovr.overrideInst ? ovr.overrideInst : "Não informado (Detectar do texto)"}
-                - Ano: ${ovr.overrideYear ? ovr.overrideYear : "Não informado (Detectar do texto)"}
-
-                SUA MISSÃO:
-                1. Identificar questões (Enunciado + Alternativas).
-                
-                2. CLASSIFICAÇÃO (OBRIGATÓRIO):
-                   - Classifique CADA questão em uma das Áreas e Tópicos da lista abaixo.
-                   - É CRUCIAL que a classificação esteja correta.
-                   - LISTA DE CLASSIFICAÇÃO VÁLIDA:
-                   ${JSON.stringify(activeThemesMap)}
-
-                3. GABARITO E COMENTÁRIO:
-                   - Se o gabarito estiver no texto, use-o. Se NÃO, RESOLVA a questão.
-                   - Gere sempre um campo "explanation".
-                
-                4. DADOS DE CABEÇALHO:
-                   - IGNORE nomes de cursos preparatórios (Medgrupo, Medcurso, Estratégia, etc) no campo "institution".
-                   - Procure pelo nome do HOSPITAL ou BANCA.
-                   - Se não encontrar, deixe "".
-                
-                Retorne JSON ESTRITO:
-                [{ 
-                    "institution": "String", "year": Number|"", "area": "String", "topic": "String", 
-                    "text": "String", "options": [{"id": "a", "text": "..."}], 
-                    "correctOptionId": "char", "explanation": "String" 
-                }]
-              `;
-
-              const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel.replace('models/', '')}:generateContent?key=${key}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: systemPrompt + "\n\nTEXTO DO PDF:\n" + chunk.text }] }]
-                })
-              });
-
-              const data = await response.json();
-              if (data.error) throw new Error(data.error.message);
-
-              let jsonString = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-              jsonString = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
-              jsonString = jsonString.replace(/[\u0000-\u0019]+/g,"");
-              
-              let extracted = [];
-              if (jsonString.startsWith('[') && jsonString.endsWith(']')) {
-                 extracted = JSON.parse(jsonString);
-              } else if (jsonString === '' || jsonString === '[]') {
-                 extracted = [];
-              } else {
-                 const match = jsonString.match(/\[.*\]/s);
-                 if (match) extracted = JSON.parse(match[0]);
-              }
-              return extracted;
-          });
-
-          // --- PÓS-PROCESSAMENTO (O "ROLO COMPRESSOR") ---
-          let processedQuestions = await Promise.all(questions.map(async (q) => {
-              // 1. Aplica overrides E limpa instituição
-              const rawInst = ovr.overrideInst || q.institution;
-              const cleanInst = cleanInstitutionText(rawInst);
-
-              const finalQ = {
-                  ...q,
-                  institution: cleanInst, 
-                  year: ovr.overrideYear || q.year,
-                  area: ovr.overrideArea || q.area,
-                  topic: ovr.overrideTopic || q.topic 
-              };
-
-              // 2. GERA HASH (ID ÚNICO)
-              const hashId = await generateQuestionHash(finalQ.text);
-              
-              // 3. VERIFICA DUPLICATA NO BANCO FINAL (QUESTIONS)
-              let isDuplicate = false;
-              if (hashId) {
-                  const existingDoc = await getDoc(doc(db, "questions", hashId));
-                  if (existingDoc.exists()) {
-                      isDuplicate = true;
-                  }
-              }
-
-              return { ...finalQ, hashId, isDuplicate };
-          }));
-
-          // --- LOGICA DOUBLE CHECK SEQUENCIAL ---
-          const newQuestions = processedQuestions.filter(q => !q.isDuplicate);
-          const duplicateCount = processedQuestions.length - newQuestions.length;
-
-          if (newQuestions.length > 0) {
-              if (doDoubleCheck) {
-                  addLog('info', `Iniciando Auditoria IA sequencial para ${newQuestions.length} questões novas...`);
-                  
-                  for (let i = 0; i < newQuestions.length; i++) {
-                      if (i > 0) await new Promise(resolve => setTimeout(resolve, 100));
-                      
-                      try {
-                          const verification = await verifyQuestionWithAI(newQuestions[i]);
-                          newQuestions[i] = { 
-                              ...newQuestions[i], 
-                              verificationStatus: verification.status, 
-                              verificationReason: verification.reason 
-                          };
-                      } catch (err) {
-                          const msg = err.message || "";
-                          if (msg.includes("Quota exceeded") || msg.includes("429")) {
-                              throw err; 
-                          }
-                          console.error("Falha na auditoria individual:", err);
-                          newQuestions[i] = { 
-                              ...newQuestions[i], 
-                              verificationStatus: 'unchecked', 
-                              verificationReason: 'Falha na auditoria (Erro genérico)' 
-                          };
-                      }
-                  }
-              } else {
-                  // Mapeia sem verificação
-                  newQuestions.forEach((q, idx) => {
-                      newQuestions[idx] = { ...q, verificationStatus: 'unchecked', verificationReason: '' };
-                  });
-              }
-
-              const batch = writeBatch(db);
-              newQuestions.forEach(q => {
-                  const docId = q.hashId || doc(collection(db, "draft_questions")).id;
-                  const docRef = doc(db, "draft_questions", docId);
-                  
-                  batch.set(docRef, {
-                      ...q,
-                      institution: q.institution || "", 
-                      year: q.year || "",
-                      createdAt: new Date().toISOString(),
-                      createdBy: user.email,
-                      sourceFile: pdfFile.name,
-                      sourcePages: chunk.pages,
-                      hasImage: false
-                  });
-              });
-              await batch.commit();
-          }
-
-          addLog('success', `Sucesso fatia ${chunk.pages}: ${newQuestions.length} novas, ${duplicateCount} duplicatas descartadas.`);
-          setPdfChunks(prev => {
-              const newChunks = [...prev];
-              newChunks[chunkIndex] = { ...newChunks[chunkIndex], status: 'success' };
-              return newChunks;
-          });
-          setConsecutiveErrors(0); 
-
-          // --- VERIFICAÇÃO DE PAUSA NO FINAL DO CICLO ---
-          if (pdfStatusRef.current === 'pausing') {
-              setPdfStatus('paused');
-              addLog('warning', 'Pausa solicitada. Ciclo atual concluído e salvo.');
-              processorRef.current = false;
-              return; // PARA A RECURSÃO AQUI
-          }
-
-          // Se estiver pausado ou idle por outro motivo
-          if (pdfStatusRef.current === 'paused' || pdfStatusRef.current === 'idle') {
-              processorRef.current = false;
-              return;
-          }
-
-          // Continua o loop
-          setTimeout(() => {
-              processorRef.current = false; 
-              processNextChunk(); 
-          }, 500); 
-
-      } catch (error) {
-          console.error(error);
-          const errorMessage = error.message || "";
-          const retrySeconds = extractRetryTime(errorMessage);
+      return students.filter(s => {
+          const matchesSearch = 
+              s.name?.toLowerCase().includes(lower) || 
+              s.email?.toLowerCase().includes(lower) || 
+              s.id?.toLowerCase().includes(lower);
           
-          let delay = 3000;
+          const matchesRole = studentRoleFilter === 'all' || s.role === studentRoleFilter;
 
-          if (errorMessage.includes("Quota exceeded") || errorMessage.includes("429")) {
-              if (retrySeconds) {
-                  delay = (retrySeconds * 1000) + 2000; 
-                  addLog('warning', `Todas as chaves esgotadas. Aguardando ${Math.ceil(retrySeconds)}s...`);
-              } else {
-                  delay = 60000; 
-                  addLog('warning', `Todas as chaves esgotadas. Aguardando 60s...`);
-              }
-          } else if (errorMessage.includes("API key expired")) {
-              setPdfStatus('paused');
-              addLog('error', `ERRO CRÍTICO: Chaves API Inválidas! Pausado.`);
-              showNotification('error', 'Chaves API Inválidas.');
-              processorRef.current = false;
-              return; 
-          } else {
-              const newErrorCount = chunk.errorCount + 1;
-              delay = 3000 * Math.pow(2, newErrorCount);
-              
-              if (newErrorCount >= 3) {
-                  addLog('error', `Fatia ${chunk.pages} marcada com ERRO APÓS 3 TENTATIVAS.`);
-                  setPdfChunks(prev => {
-                      const newChunks = [...prev];
-                      newChunks[chunkIndex] = { ...newChunks[chunkIndex], status: 'error', errorCount: newErrorCount };
-                      return newChunks;
-                  });
-                  setConsecutiveErrors(0);
-                  processorRef.current = false;
-                  setTimeout(() => processNextChunk(), 1000);
-                  return;
-              }
-          }
+          // Admins não entram no filtro de status
+          if (studentStatusFilter !== 'all' && s.role === 'admin') return false;
 
-          const newConsecutiveErrors = consecutiveErrors + 1;
-          setConsecutiveErrors(newConsecutiveErrors);
+          const isPremium = s.subscriptionUntil && new Date(s.subscriptionUntil) > new Date();
+          let matchesStatus = true;
+          if (studentStatusFilter === 'active') matchesStatus = isPremium;
+          if (studentStatusFilter === 'expired') matchesStatus = !isPremium;
 
-          if (newConsecutiveErrors >= 10) { 
-              setPdfStatus('paused'); 
-              addLog('error', 'PAUSADO: Muitos erros consecutivos.');
-              processorRef.current = false;
-              return; 
-          }
+          return matchesSearch && matchesRole && matchesStatus;
+      });
+  }, [students, searchTerm, activeView, studentRoleFilter, studentStatusFilter]);
 
-          // Se deu erro, mas o usuário pediu pausa, vamos respeitar a pausa
-          if (pdfStatusRef.current === 'pausing') {
-              setPdfStatus('paused');
-              addLog('warning', 'Pausa solicitada durante erro. Sistema pausado.');
-              processorRef.current = false;
-              return;
-          }
+  const showNotification = (type, text) => setNotification({ type, text });
 
-          setPdfChunks(prev => {
-              const newChunks = [...prev];
-              newChunks[chunkIndex] = { ...newChunks[chunkIndex], status: 'pending' };
-              return newChunks;
+  // --- ACTIONS ---
+  
+  const handleGoToReports = (questionId) => {
+      setReportFilterQuestionId(questionId);
+      setSearchTerm('');
+      setActiveView('reports');
+  };
+
+  const handleClearReportFilter = () => {
+      setReportFilterQuestionId(null);
+  };
+
+  const handleClearQuestionFilters = () => {
+      setSearchTerm('');
+      setSelectedArea('Todas');
+      setSelectedTopic('Todos');
+      setSelectedInstitution('Todas');
+      setSelectedYear('Todos');
+  };
+
+  const handleClearStudentFilters = () => {
+      setSearchTerm('');
+      setStudentRoleFilter('all');
+      setStudentStatusFilter('all');
+  };
+
+  const handleCreateUser = async (e) => {
+      e.preventDefault();
+      setIsSaving(true);
+      const formData = new FormData(e.target);
+      const userData = Object.fromEntries(formData);
+      try {
+          const newUserId = crypto.randomUUID(); 
+          await setDoc(doc(db, "users", newUserId), {
+              ...userData,
+              createdAt: new Date().toISOString(),
+              role: userData.role || 'student',
+              subscriptionUntil: userData.subscriptionUntil || null,
+              whatsapp: userData.whatsapp || '',
+              stats: { correctAnswers: 0, totalAnswers: 0, streak: 0 }
           });
-
-          setTimeout(() => {
-              processorRef.current = false;
-              processNextChunk();
-          }, delay);
+          showNotification('success', 'Aluno criado!');
+          setIsCreatingUser(false);
+      } catch (error) {
+          showNotification('error', 'Erro ao criar: ' + error.message);
+      } finally {
+          setIsSaving(false);
       }
   };
 
-  const togglePdfProcessing = () => {
-      const currentStatus = pdfStatusRef.current;
-      if (currentStatus === 'processing') {
-          // EM VEZ DE PAUSED DIRETO, VAI PARA PAUSING
-          setPdfStatus('pausing');
-          addLog('warning', 'Solicitando pausa... Aguardando conclusão da fatia atual.');
-      } else if (currentStatus === 'paused' || currentStatus === 'ready') {
-          // ADICIONADO 'ready' PARA O BOTÃO INICIAR FUNCIONAR
-          setPdfStatus('processing');
-          addLog('info', currentStatus === 'ready' ? 'Iniciando processamento...' : 'Retomando...');
-          processorRef.current = false; 
-          setTimeout(() => processNextChunk(), 100);
+  const handleInlineUserUpdate = async (id, field, value) => {
+      try {
+          await updateDoc(doc(db, "users", id), { [field]: value });
+          showNotification('success', 'Atualizado com sucesso!');
+      } catch (error) {
+          showNotification('error', 'Erro ao atualizar: ' + error.message);
       }
+  };
+
+  const handleAdd30Days = async (student) => {
+      const now = new Date();
+      let newDate = new Date();
+      if (student.subscriptionUntil) {
+          const currentExpiry = new Date(student.subscriptionUntil);
+          if (currentExpiry > now) {
+              newDate = new Date(currentExpiry);
+          }
+      }
+      newDate.setDate(newDate.getDate() + 30);
+      try {
+          await updateDoc(doc(db, "users", student.id), { subscriptionUntil: newDate.toISOString() });
+          showNotification('success', '+30 dias adicionados com sucesso!');
+      } catch (error) {
+          showNotification('error', 'Erro ao adicionar dias: ' + error.message);
+      }
+  };
+
+  const handleDeleteUser = async () => {
+      if (!deleteModal || !deleteModal.email) return; 
+      try {
+          await deleteDoc(doc(db, "users", deleteModal.id));
+          showNotification('success', 'Aluno excluído.');
+          setDeleteModal(null);
+      } catch (error) {
+          showNotification('error', 'Erro ao excluir.');
+      }
+  };
+
+  const fetchUserStats = async (student) => {
+      setViewingUserStats({ ...student, loading: true });
+      try {
+          const statsSnap = await getDoc(doc(db, "users", student.id, "stats", "main"));
+          if (statsSnap.exists()) {
+              setViewingUserStats({ ...student, stats: statsSnap.data(), loading: false });
+          } else {
+              setViewingUserStats({ ...student, stats: null, loading: false });
+          }
+      } catch (e) {
+          console.error(e);
+          setViewingUserStats({ ...student, stats: null, loading: false });
+      }
+  };
+
+  // --- ACTIONS (QUESTIONS & REPORTS) ---
+  const handleSave = async (shouldResolveReport = false) => {
+      setIsSaving(true);
+      try {
+          const batch = writeBatch(db);
+          const { id, ...data } = editingQuestion;
+          batch.update(doc(db, "questions", id), data);
+          if (shouldResolveReport && associatedReport) {
+              batch.update(doc(db, "reports", associatedReport.id), { status: 'resolved', resolvedBy: user.email, resolvedAt: new Date().toISOString() });
+          }
+          await batch.commit();
+          showNotification('success', shouldResolveReport ? 'Questão salva e reporte resolvido!' : 'Questão atualizada!');
+          setEditingQuestion(null);
+          setAssociatedReport(null);
+      } catch (error) { console.error(error); showNotification('error', error.message); } finally { setIsSaving(false); }
+  };
+
+  const handleRejectReport = async () => {
+      if (!rejectReportModal) return;
+      try {
+          await deleteDoc(doc(db, "reports", rejectReportModal.id));
+          showNotification('success', 'Reporte excluído.');
+          if (associatedReport && associatedReport.id === rejectReportModal.id) { setAssociatedReport(null); setEditingQuestion(null); }
+          setRejectReportModal(null);
+      } catch (error) { showNotification('error', error.message); }
+  };
+
+  const handleOpenFromReport = (report) => {
+      const question = questions.find(q => q.id === report.questionId);
+      if (question) {
+          let qToEdit = { ...question };
+          if (report.category === "metadata_suggestion" || report.category === "suggestion_update") {
+              if (report.suggestedInstitution) qToEdit.institution = report.suggestedInstitution;
+              if (report.suggestedYear) qToEdit.year = report.suggestedYear;
+          }
+          setEditingQuestion(qToEdit);
+          setAssociatedReport(report);
+      } else { showNotification('error', 'Questão não encontrada.'); }
+  };
+
+  const handleDeleteQuestion = async () => {
+      if (!deleteModal || deleteModal.email) return; 
+      try {
+          await deleteDoc(doc(db, "questions", deleteModal.id));
+          showNotification('success', 'Questão excluída.');
+          if (editingQuestion && editingQuestion.id === deleteModal.id) { setEditingQuestion(null); setAssociatedReport(null); }
+          setDeleteModal(null);
+      } catch (error) { showNotification('error', 'Erro ao excluir.'); }
+  };
+
+  const copyToClipboard = async (text) => {
+      try {
+          const textArea = document.createElement("textarea"); textArea.value = text;
+          textArea.style.position = "fixed"; textArea.style.left = "-9999px";
+          document.body.appendChild(textArea); textArea.focus(); textArea.select();
+          document.execCommand('copy'); document.body.removeChild(textArea);
+          showNotification('success', 'Copiado!');
+      } catch (err) { showNotification('error', 'Erro ao copiar.'); }
   };
 
   // --- HELPER FUNCTIONS ---
-  const saveApiKeyFromModal = async () => {
-      const rawKeys = tempApiKeysText.split('\n').map(k => k.trim()).filter(k => k.length > 0);
-      const uniqueKeys = [...new Set(rawKeys)];
-
-      if (uniqueKeys.length === 0) return showNotification('error', 'Adicione pelo menos uma chave.');
-      
-      setIsSavingKey(true);
-      try {
-          setApiKeys(uniqueKeys);
-          localStorage.setItem('gemini_api_keys', JSON.stringify(uniqueKeys));
-          apiKeysRef.current = uniqueKeys;
-          keyRotationIndex.current = 0; 
-
-          await setDoc(doc(db, "settings", "global"), {
-              geminiApiKeys: uniqueKeys, 
-              geminiApiKey: uniqueKeys[0], 
-              updatedBy: user.email,
-              updatedAt: new Date().toISOString()
-          }, { merge: true });
-          
-          setShowApiKeyModal(false);
-          setShowTutorial(false);
-          showNotification('success', `${uniqueKeys.length} Chaves API Salvas!`);
-          
-          if (pdfStatus === 'paused') addLog('success', 'Novas chaves detectadas! Clique em "Continuar".');
-
-      } catch (error) {
-          showNotification('error', 'Erro ao salvar: ' + error.message);
-      } finally {
-          setIsSavingKey(false);
-      }
-  };
-
-  const handleGetKey = () => { window.open('https://aistudio.google.com/app/api-keys', '_blank'); setShowTutorial(true); };
-  const handleModelChange = (modelName) => { setSelectedModel(modelName); localStorage.setItem('gemini_model', modelName); };
-  const showNotification = (type, text) => { setNotification({ type, text }); };
-  const closeNotification = () => { setNotification(null); };
-  const handleLogout = () => { signOut(auth); setParsedQuestions([]); setActiveTab('input'); };
-
-  const handleImageUpload = (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onloadend = () => { setSelectedImage({ data: reader.result.split(',')[1], mime: file.type, preview: reader.result }); };
-      reader.readAsDataURL(file);
-  };
-
-  const handlePasteImage = (e) => {
-      const items = e.clipboardData.items;
-      for (let i = 0; i < items.length; i++) {
-          if (items[i].type.indexOf("image") !== -1) {
-              const blob = items[i].getAsFile();
-              const reader = new FileReader();
-              reader.onloadend = () => { setSelectedImage({ data: reader.result.split(',')[1], mime: blob.type, preview: reader.result }); };
-              reader.readAsDataURL(blob);
-          }
-      }
-  };
-
-  const validateKeyAndFetchModels = async () => {
-      const currentKey = apiKeysRef.current[0]; 
-      if (!currentKey) return showNotification('error', 'Configure as chaves API primeiro.');
-      setIsValidatingKey(true);
-      try {
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${currentKey}`);
-          const data = await response.json();
-          if (data.error) throw new Error(data.error.message);
-          if (!data.models) throw new Error("Sem acesso a modelos.");
-          const genModels = data.models.filter(m => m.supportedGenerationMethods?.includes("generateContent") && (m.name.includes("gemini")));
-          if (genModels.length > 0) {
-              setAvailableModels(genModels);
-              showNotification('success', `${genModels.length} modelos liberados!`);
-          } else {
-              showNotification('error', 'Chave válida mas sem modelos.');
-          }
-      } catch (error) {
-          showNotification('error', `Erro na chave principal: ${error.message}`);
-      } finally {
-          setIsValidatingKey(false);
-      }
-  };
-
-  // --- PROCESSAMENTO IA (Texto/Imagem Único) ---
-  const processWithAI = async () => {
-    if (activeTab === 'input' && !rawText.trim()) return showNotification('error', 'Cole o texto.');
-    if (activeTab === 'image' && !selectedImage) return showNotification('error', 'Selecione uma imagem.');
-
-    setIsProcessing(true);
-
-    const ovr = { overrideInst, overrideYear, overrideArea, overrideTopic };
-
-    try {
-        const activeThemesMap = ovr.overrideArea ? { [ovr.overrideArea]: themesMap[ovr.overrideArea] } : themesMap;
-
-        const questions = await executeWithKeyRotation("Processamento Único", async (key) => {
-            const systemPrompt = `
-              Você é um especialista em banco de dados médicos (MedMaps).
-              Extraia questões no formato JSON ESTRITO.
-              
-              CONTEXTO (Informacional):
-              - Instituição: ${ovr.overrideInst ? ovr.overrideInst : "Não informado (Detectar do texto)"}
-              - Ano: ${ovr.overrideYear ? ovr.overrideYear : "Não informado (Detectar do texto)"}
-
-              REGRAS:
-              1. Retorne APENAS o JSON (sem markdown).
-              2. CLASSIFICAÇÃO (OBRIGATÓRIO):
-                 - Classifique CADA questão usando a lista abaixo.
-                 - LISTA VÁLIDA: ${JSON.stringify(activeThemesMap)}
-              3. GABARITO E COMENTÁRIO: 
-                 - Tente encontrar o gabarito. Se não houver, RESOLVA a questão.
-                 - Gere sempre um campo "explanation".
-              4. DADOS DE CABEÇALHO:
-                 - IGNORE nomes de cursos preparatórios no campo "institution".
-              
-              Formato Saída:
-              [
-                {
-                  "institution": "String", "year": Number|String, "area": "String", "topic": "String",
-                  "text": "String", "options": [{"id": "a", "text": "String"}],
-                  "correctOptionId": "char", "explanation": "String"
-                }
-              ]
-            `;
-
-            let contentsPayload = [];
-            if (activeTab === 'input') {
-                contentsPayload = [{ parts: [{ text: systemPrompt + "\n\nCONTEÚDO:\n" + rawText }] }];
-            } else {
-                contentsPayload = [{
-                    parts: [
-                        { text: systemPrompt + "\n\nAnalise esta imagem:" },
-                        { inline_data: { mime_type: selectedImage.mime, data: selectedImage.data } }
-                    ]
-                }];
-            }
-
-            const modelNameClean = selectedModel.startsWith('models/') ? selectedModel.replace('models/', '') : selectedModel;
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelNameClean}:generateContent?key=${key}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: contentsPayload })
-            });
-
-            const data = await response.json();
-            if (data.error) throw new Error(data.error.message);
-
-            let jsonString = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-            jsonString = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
-
-            try {
-                return JSON.parse(jsonString);
-            } catch (e) {
-                jsonString = jsonString.replace(/[\u0000-\u0019]+/g,""); 
-                return JSON.parse(jsonString);
-            }
-        });
-
-        // Pós-processamento e Auditoria
-        let finalQuestions = await Promise.all(questions.map(async (q) => {
-            // Limpeza de instituição
-            const rawInst = ovr.overrideInst || q.institution;
-            const cleanInst = cleanInstitutionText(rawInst);
-            
-            const finalQ = {
-                ...q,
-                institution: cleanInst,
-                year: ovr.overrideYear || q.year,
-                area: ovr.overrideArea || q.area,
-                topic: ovr.overrideTopic || q.topic
-            };
-
-            // GERAÇÃO DE HASH E VERIFICAÇÃO DE DUPLICATA
-            const hashId = await generateQuestionHash(finalQ.text);
-            let isDuplicate = false;
-            if (hashId) {
-                const existingDoc = await getDoc(doc(db, "questions", hashId));
-                if (existingDoc.exists()) isDuplicate = true;
-            }
-
-            return { ...finalQ, hashId, isDuplicate };
-        }));
-
-        // FILTRA DUPLICATAS ANTES DO DOUBLE CHECK
-        const uniqueQuestions = finalQuestions.filter(q => !q.isDuplicate);
-        const duplicateCount = finalQuestions.length - uniqueQuestions.length;
-
-        if (isDoubleCheckEnabled && uniqueQuestions.length > 0) {
-            showNotification('success', 'Iniciando Auditoria IA nas questões novas...');
-            for (let i = 0; i < uniqueQuestions.length; i++) {
-                // OTIMIZAÇÃO: Delay reduzido para 200ms
-                if (i > 0) await new Promise(resolve => setTimeout(resolve, 200));
-                try {
-                    const verification = await verifyQuestionWithAI(uniqueQuestions[i]);
-                    uniqueQuestions[i] = { 
-                        ...uniqueQuestions[i], 
-                        verificationStatus: verification.status, 
-                        verificationReason: verification.reason 
-                    };
-                } catch (err) {
-                    console.error("Erro auditoria unica:", err);
-                    uniqueQuestions[i] = { ...uniqueQuestions[i], verificationStatus: 'unchecked' };
-                }
-            }
-        } else {
-            uniqueQuestions.forEach((q, idx) => {
-                 uniqueQuestions[idx] = { ...q, verificationStatus: 'unchecked', verificationReason: '' };
-            });
-        }
-
-        let savedCount = 0;
-        const batch = writeBatch(db);
-        
-        for (const q of uniqueQuestions) {
-            // USA HASH COMO ID
-            const docId = q.hashId || doc(collection(db, "draft_questions")).id;
-            const docRef = doc(db, "draft_questions", docId);
-            
-            batch.set(docRef, {
-                ...q,
-                institution: q.institution || "", 
-                year: q.year || "",
-                createdAt: new Date().toISOString(),
-                createdBy: user.email,
-                hasImage: false
-            });
-            savedCount++;
-        }
-        
-        if (savedCount > 0) await batch.commit();
-
-        setRawText('');
-        setSelectedImage(null);
-        setActiveTab('review');
-        
-        // NOTIFICAÇÕES MELHORADAS
-        if (savedCount === 0 && duplicateCount > 0) {
-            showNotification('warning', `Todas as ${duplicateCount} questões eram duplicatas e foram descartadas.`);
-        } else if (duplicateCount > 0) {
-            showNotification('success', `${savedCount} enviadas. ${duplicateCount} duplicatas descartadas.`);
-        } else {
-            showNotification('success', `${savedCount} questões enviadas para fila!`);
-        }
-
-    } catch (error) {
-        console.error(error);
-        showNotification('error', 'Erro: ' + error.message);
-    } finally {
-        setIsProcessing(false);
-    }
-  };
-
-  // --- FUNÇÕES DE MODAL DE CONFIRMAÇÃO ---
-  const handleDiscardOneClick = (q) => {
-      setConfirmationModal({
-          isOpen: true,
-          type: 'delete_one',
-          data: q,
-          title: 'Excluir Rascunho?',
-          message: 'Tem certeza que deseja excluir esta questão?',
-          confirmText: 'Sim, Excluir',
-          confirmColor: 'red'
-      });
-  };
-
-  const handleApproveAllClick = () => {
-      if (parsedQuestions.length === 0) return;
-      // Verifica se tem alguma duplicata na lista (segurança extra)
-      const hasDuplicates = parsedQuestions.some(q => q.isDuplicate);
-      if (hasDuplicates) {
-          showNotification('error', 'Remova as questões duplicadas antes de aprovar tudo.');
-          return;
-      }
-
-      setConfirmationModal({
-          isOpen: true,
-          type: 'approve_all',
-          data: null,
-          title: 'Aprovar Todas?',
-          message: `Tem certeza que deseja publicar TODAS as ${parsedQuestions.length} questões?`,
-          confirmText: 'Sim, Publicar Tudo',
-          confirmColor: 'emerald'
-      });
-  };
-
-  const handleDiscardAllClick = () => {
-      if (parsedQuestions.length === 0) return;
-      setConfirmationModal({
-          isOpen: true,
-          type: 'delete_all',
-          data: null,
-          title: 'Limpar Fila Completa?',
-          message: `Isso excluirá TODAS as ${parsedQuestions.length} questões do rascunho.`,
-          confirmText: 'Sim, Excluir Tudo',
-          confirmColor: 'red'
-      });
-  };
-
-  const handleApproveVerifiedClick = () => {
-      const verifiedCount = parsedQuestions.filter(q => q.verificationStatus === 'verified').length;
-      if (verifiedCount === 0) return showNotification('error', 'Nenhuma questão verificada (Double-Checked) na fila.');
-      setConfirmationModal({
-          isOpen: true, type: 'approve_verified', data: null,
-          title: 'Aprovar Verificadas?', message: `Publicar apenas as ${verifiedCount} questões validadas pela Auditoria IA?`,
-          confirmText: `Aprovar ${verifiedCount}`, confirmColor: 'emerald'
-      });
-  };
-
-  const handleDiscardSuspiciousClick = () => {
-      const suspiciousCount = parsedQuestions.filter(q => q.verificationStatus === 'suspicious').length;
-      if (suspiciousCount === 0) return showNotification('error', 'Nenhuma questão suspeita (Alucinada) na fila.');
-      setConfirmationModal({
-          isOpen: true, type: 'discard_suspicious', data: null,
-          title: 'Descartar Suspeitas?', message: `Excluir as ${suspiciousCount} questões marcadas como suspeitas/alucinadas pela IA?`,
-          confirmText: `Excluir ${suspiciousCount}`, confirmColor: 'red'
-      });
-  };
-
-  const executeConfirmationAction = async () => {
-      const { type, data } = confirmationModal;
-      setConfirmationModal({ ...confirmationModal, isOpen: false }); 
-
-      if (type === 'delete_one') {
-          if (!data || !data.id) return;
-          try { await deleteDoc(doc(db, "draft_questions", data.id)); showNotification('success', 'Excluído.'); } catch (e) { showNotification('error', e.message); }
-      } 
-      else if (type === 'approve_all') {
-          setIsBatchAction(true);
-          let count = 0;
-          try {
-              for (const q of parsedQuestions) {
-                  if (q.isDuplicate) continue; // Pula duplicatas por segurança
-
-                  const { id, status, createdAt, createdBy, verificationStatus, verificationReason, isDuplicate, hashId, ...finalData } = q;
-                  if (q.area && q.topic && q.text) {
-                     // SETDOC para garantir ID idempotente
-                     await setDoc(doc(db, "questions", id), { ...finalData, createdAt: new Date().toISOString(), approvedBy: user.email, hasImage: false });
-                     await deleteDoc(doc(db, "draft_questions", id));
-                     count++;
-                  }
-              }
-              showNotification('success', `${count} questões publicadas!`);
-          } catch (e) { showNotification('error', e.message); } finally { setIsBatchAction(false); }
-      }
-      else if (type === 'delete_all') {
-          setIsBatchAction(true);
-          try {
-              const batch = writeBatch(db);
-              parsedQuestions.forEach(q => batch.delete(doc(db, "draft_questions", q.id)));
-              await batch.commit();
-              showNotification('success', 'Fila limpa.');
-          } catch (e) { showNotification('error', e.message); } finally { setIsBatchAction(false); }
-      }
-      else if (type === 'approve_verified') {
-          setIsBatchAction(true);
-          let count = 0;
-          try {
-              const toApprove = parsedQuestions.filter(q => q.verificationStatus === 'verified' && !q.isDuplicate);
-              for (const q of toApprove) {
-                  const { id, status, createdAt, createdBy, verificationStatus, verificationReason, isDuplicate, hashId, ...finalData } = q;
-                  if (q.area && q.topic && q.text) {
-                     await setDoc(doc(db, "questions", id), { ...finalData, createdAt: new Date().toISOString(), approvedBy: user.email, hasImage: false });
-                     await deleteDoc(doc(db, "draft_questions", id));
-                     count++;
-                  }
-              }
-              showNotification('success', `${count} questões verificadas foram publicadas!`);
-          } catch (e) { showNotification('error', e.message); } finally { setIsBatchAction(false); }
-      }
-      else if (type === 'discard_suspicious') {
-          setIsBatchAction(true);
-          try {
-              const batch = writeBatch(db);
-              const toDelete = parsedQuestions.filter(q => q.verificationStatus === 'suspicious');
-              toDelete.forEach(q => batch.delete(doc(db, "draft_questions", q.id)));
-              await batch.commit();
-              showNotification('success', `${toDelete.length} questões suspeitas excluídas.`);
-          } catch (e) { showNotification('error', e.message); } finally { setIsBatchAction(false); }
-      }
-  };
-
-  const approveQuestion = async (q) => {
-    if (q.isDuplicate) {
-        return showNotification('error', 'Esta questão já existe no banco de dados (Duplicata).');
-    }
-    if (!q.area || !q.topic || !q.text || !q.options || q.options.length < 2) {
-      return showNotification('error', 'Preencha os campos obrigatórios.');
-    }
-    try {
-      const { id, status, createdAt, createdBy, verificationStatus, verificationReason, isDuplicate, hashId, ...finalData } = q;
-      // Garante o ID
-      await setDoc(doc(db, "questions", id), {
-        ...finalData,
-        createdAt: new Date().toISOString(),
-        approvedBy: user.email,
-        hasImage: false
-      });
-      await deleteDoc(doc(db, "draft_questions", id));
-      showNotification('success', 'Publicada!');
-    } catch (error) {
-      showNotification('error', 'Erro: ' + error.message);
-    }
-  };
-
-  const updateQuestionField = (idx, field, val) => {
-      const newQ = [...parsedQuestions];
-      newQ[idx][field] = val;
-      setParsedQuestions(newQ);
-  };
-  const updateOptionText = (qIdx, optIdx, val) => {
-      const newQ = [...parsedQuestions];
-      newQ[qIdx].options[optIdx].text = val;
-      setParsedQuestions(newQ);
-  };
-
-  // --- RENDER LOGIN ---
-  if (isLoadingAuth) return <div className="min-h-screen bg-slate-900 flex items-center justify-center"><Loader2 className="text-white animate-spin" size={48} /></div>;
+  const formatReportCategory = (c) => ({'metadata_suggestion':'Sugestão Metadados','suggestion_update':'Sugestão Atualização','Enunciado incorreto/confuso':'Enunciado Errado'}[c] || c || 'Geral');
   
+  const getUserDetails = (uid) => { const p = userProfiles[uid]; return { name: p?.name || '...', whatsapp: p?.whatsapp || '' }; };
+  
+  const checkSubscriptionStatus = (d, role) => { 
+      if (role === 'admin') return { status: 'Admin', color: 'indigo', label: 'Admin' };
+      if (!d) return { status: 'Expirado', color: 'red', label: 'Expirado' }; 
+      return new Date(d) > new Date() ? { status: 'Ativo', color: 'emerald', label: 'Ativo' } : { status: 'Expirado', color: 'red', label: 'Expirado' }; 
+  };
+  
+  const getReportDetails = (r) => {
+      if (r.category === "metadata_suggestion" || r.category === "suggestion_update") {
+          return (
+              <div className="flex gap-4 mt-2">
+                 <div className="flex flex-col">
+                     <span className="text-xs uppercase text-gray-500 font-bold">Banca Sugerida</span>
+                     <span className="text-sm font-medium text-slate-800">{r.suggestedInstitution || 'N/A'}</span>
+                 </div>
+                 <div className="flex flex-col">
+                     <span className="text-xs uppercase text-gray-500 font-bold">Ano Sugerido</span>
+                     <span className="text-sm font-medium text-slate-800">{r.suggestedYear || 'N/A'}</span>
+                 </div>
+              </div>
+          );
+      }
+      return <p className="text-slate-700 text-sm italic mt-1">"{r.details || r.text || 'Sem detalhes'}"</p>;
+  };
+
+  const availableTopics = selectedArea === 'Todas' ? [] : (themesMap[selectedArea] || []);
+
+  if (isLoadingAuth) return <div className="min-h-screen bg-slate-900 flex items-center justify-center"><Loader2 className="text-white animate-spin" size={48} /></div>;
   if (!user) return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans">
-        <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300">
-          <div className="flex items-center gap-3 mb-6 justify-center">
-             <div className="bg-blue-600 p-3 rounded-xl shadow-lg shadow-blue-900/20"><Map className="text-white" size={32} /></div>
-             <h1 className="text-2xl font-bold text-slate-800">MedMaps Admin</h1>
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl text-center">
+              <div className="flex justify-center mb-4"><div className="bg-blue-100 p-4 rounded-full"><Lock className="w-8 h-8 text-blue-600"/></div></div>
+              <h1 className="text-2xl font-bold text-slate-800 mb-2">MedManager</h1>
+              <p className="text-sm text-gray-500 mb-6">Acesso restrito a administradores</p>
+              <form onSubmit={(e) => { e.preventDefault(); signInWithEmailAndPassword(auth, email, password).catch(err => showNotification('error', "Erro de login: " + err.message)); }} className="space-y-4">
+                  <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500" required/>
+                  <input type="password" placeholder="Senha" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500" required/>
+                  <button className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-xl transition-colors">Entrar</button>
+              </form>
           </div>
-          <p className="text-slate-500 text-center mb-6">Acesso restrito a administradores.</p>
-          <form onSubmit={(e) => { e.preventDefault(); signInWithEmailAndPassword(auth, email, password).catch(err => showNotification('error', err.message)); }} className="space-y-4">
-            <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition-all"/>
-            <input type="password" placeholder="Senha" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition-all"/>
-            <button className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center gap-2"><Lock size={18} /> Acessar Sistema</button>
-          </form>
-        </div>
-        <NotificationToast notification={notification} onClose={closeNotification} positionClass="fixed bottom-4 right-4" />
+          <NotificationToast notification={notification} onClose={() => setNotification(null)} />
       </div>
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans text-slate-800 pb-20">
+    <div className="min-h-screen bg-gray-50 font-sans text-slate-800 flex">
+      <NotificationToast notification={notification} onClose={() => setNotification(null)} />
       
-      {/* HEADER */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <button onClick={() => window.location.href = '/'} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Voltar para o App Principal"><ArrowLeft size={24} /></button>
-            <div className="flex items-center gap-2"><Map className="text-blue-600" size={28} /><h1 className="text-xl font-bold text-slate-800">MedMaps Importer</h1></div>
+      {/* SIDEBAR */}
+      <aside className="w-64 bg-white border-r border-gray-200 fixed h-full z-10 flex flex-col shadow-sm">
+          <div className="p-6 border-b border-gray-100">
+              <div className="flex items-center gap-2 text-blue-800 font-bold text-xl mb-1">
+                  <Database /> MedManager
+              </div>
+              <p className="text-xs text-gray-400">Gestão de Acervo v3.8</p>
           </div>
           
-          <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto items-center">
-            {/* TOGGLE DOUBLE CHECK */}
-            <div 
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer transition-all border ${isDoubleCheckEnabled ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}
-                onClick={() => setIsDoubleCheckEnabled(!isDoubleCheckEnabled)}
-                title="A IA vai auditar cada questão gerada (Double Check)"
-            >
-                {isDoubleCheckEnabled ? <ToggleRight size={24} className="text-indigo-600"/> : <ToggleLeft size={24}/>}
-                <span className="text-sm font-bold whitespace-nowrap flex items-center gap-1">
-                    {isDoubleCheckEnabled ? <ShieldCheck size={16}/> : null}
-                    Auditoria IA {isDoubleCheckEnabled ? 'ON' : 'OFF'}
-                </span>
-            </div>
-
-            <button onClick={() => { 
-                setTempApiKeysText(apiKeys.join('\n')); 
-                setShowApiKeyModal(true); 
-                setShowTutorial(false); 
-            }} className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2 text-sm font-medium"><Settings size={18} /><span className="hidden md:inline">API</span></button>
-            
-            <div className="relative group flex-1 md:flex-none w-full md:w-auto flex items-center gap-2">
-                <div className="relative">
-                    <Cpu size={16} className="absolute left-3 top-3 text-gray-500" />
-                    <select value={selectedModel} onChange={(e) => handleModelChange(e.target.value)} className="w-full md:w-56 pl-9 pr-3 py-2 text-sm bg-gray-100 border-none rounded-lg font-medium text-slate-700 focus:ring-2 focus:ring-blue-500 cursor-pointer appearance-none">
-                        {availableModels.map(model => (<option key={model.name} value={model.name}>{model.displayName || model.name}</option>))}
-                    </select>
+          <div className="p-4 flex-1 overflow-y-auto space-y-2">
+              <button onClick={() => { setActiveView('questions'); setReportFilterQuestionId(null); setSearchTerm(''); }} className={`w-full flex items-center justify-between p-3 rounded-xl font-bold text-sm transition-all ${activeView === 'questions' ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:bg-gray-50'}`}><span className="flex items-center gap-2"><List size={18} /> Questões</span></button>
+              <button onClick={() => { setActiveView('reports'); setReportFilterQuestionId(null); setSearchTerm(''); }} className={`w-full flex items-center justify-between p-3 rounded-xl font-bold text-sm transition-all ${activeView === 'reports' ? 'bg-red-50 text-red-700' : 'text-gray-500 hover:bg-gray-50'}`}><span className="flex items-center gap-2"><MessageSquare size={18} /> Reportes</span>{pendingReportsCount > 0 && <span className="bg-red-600 text-white text-xs px-2 py-0.5 rounded-full">{pendingReportsCount}</span>}</button>
+              <button onClick={() => { setActiveView('students'); setReportFilterQuestionId(null); setSearchTerm(''); }} className={`w-full flex items-center justify-between p-3 rounded-xl font-bold text-sm transition-all ${activeView === 'students' ? 'bg-purple-50 text-purple-700' : 'text-gray-500 hover:bg-gray-50'}`}><span className="flex items-center gap-2"><Users size={18} /> Alunos</span></button>
+              
+              {/* FILTERS FOR QUESTIONS */}
+              {activeView === 'questions' && (
+                <div className="mt-6 pt-6 border-t border-gray-100 space-y-3">
+                    <div className="flex justify-between items-center mb-1">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Filtros</label>
+                        <button onClick={handleClearQuestionFilters} className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"><RefreshCw size={10}/> Limpar</button>
+                    </div>
+                    <div className="relative"><Filter size={16} className="absolute left-3 top-3 text-gray-400" /><select value={selectedArea} onChange={e => { setSelectedArea(e.target.value); setSelectedTopic('Todos'); }} className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium outline-none"><option value="Todas">Todas as Áreas</option>{areasBase.map(a => <option key={a} value={a}>{a}</option>)}</select></div>
+                    <div className="relative"><BookOpen size={16} className="absolute left-3 top-3 text-gray-400" /><select value={selectedTopic} onChange={e => setSelectedTopic(e.target.value)} disabled={selectedArea === 'Todas'} className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium outline-none disabled:opacity-50"><option value="Todos">Todos os Tópicos</option>{availableTopics.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                    <div className="relative"><Building size={16} className="absolute left-3 top-3 text-gray-400" /><select value={selectedInstitution} onChange={e => setSelectedInstitution(e.target.value)} className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium outline-none">{uniqueInstitutions.map(inst => <option key={inst} value={inst}>{inst}</option>)}</select></div>
+                    <div className="relative"><Calendar size={16} className="absolute left-3 top-3 text-gray-400" /><select value={selectedYear} onChange={e => setSelectedYear(e.target.value)} className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium outline-none">{uniqueYears.map(year => <option key={year} value={year}>{year}</option>)}</select></div>
                 </div>
-                <button onClick={validateKeyAndFetchModels} disabled={isValidatingKey || apiKeys.length === 0} className="p-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors disabled:opacity-50" title="Sincronizar Modelos">
-                    {isValidatingKey ? <Loader2 size={18} className="animate-spin"/> : <RefreshCw size={18} />}
-                </button>
-            </div>
-            <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Sair"><LogOut size={20} /></button>
+              )}
+
+              {/* FILTERS FOR STUDENTS */}
+              {activeView === 'students' && (
+                <div className="mt-6 pt-6 border-t border-gray-100 space-y-3">
+                    <div className="flex justify-between items-center mb-1">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Filtros</label>
+                        <button onClick={handleClearStudentFilters} className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1"><RefreshCw size={10}/> Limpar</button>
+                    </div>
+                    <div className="relative"><Shield size={16} className="absolute left-3 top-3 text-gray-400" /><select value={studentRoleFilter} onChange={e => setStudentRoleFilter(e.target.value)} className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium outline-none"><option value="all">Todas as Funções</option><option value="student">Alunos</option><option value="admin">Admins</option></select></div>
+                    <div className="relative"><Award size={16} className="absolute left-3 top-3 text-gray-400" /><select value={studentStatusFilter} onChange={e => setStudentStatusFilter(e.target.value)} className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium outline-none"><option value="all">Todos os Status</option><option value="active">Ativos</option><option value="expired">Expirados</option></select></div>
+                </div>
+              )}
           </div>
-        </div>
-      </header>
+          
+          <div className="p-4 border-t border-gray-100 space-y-1">
+              <button onClick={() => window.location.href = '/'} className="flex items-center gap-2 text-gray-500 hover:text-blue-600 text-sm font-bold w-full p-2 rounded-lg hover:bg-gray-50 transition-colors"><ArrowLeft size={16} /> Voltar ao App</button>
+              <button onClick={handleLogout} className="flex items-center gap-2 text-red-400 hover:text-red-600 text-sm font-bold w-full p-2 rounded-lg hover:bg-red-50 transition-colors"><LogOut size={16} /> Sair</button>
+          </div>
+      </aside>
 
-      {/* NOTIFICATION */}
-      <NotificationToast notification={notification} onClose={closeNotification} positionClass="fixed top-24 right-4" />
+      {/* MAIN CONTENT */}
+      <main className="ml-64 flex-1 p-8 overflow-y-auto">
+          
+          {/* SEARCH HEADER */}
+          <div className="flex items-center justify-between mb-8 gap-4">
+              <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
+                  {activeView === 'questions' && <><List className="text-blue-600"/> Questões</>}
+                  {activeView === 'reports' && <><MessageSquare className="text-red-600"/> Reportes <span className="text-sm font-normal text-gray-500 bg-gray-100 px-3 py-1 rounded-full">{pendingReportsCount} Pendentes</span></>}
+                  {activeView === 'students' && <><Users className="text-purple-600"/> Gestão de Alunos</>}
+              </h2>
+              <div className="relative flex-1 max-w-md">
+                  <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
+                  <input type="text" placeholder="Pesquisar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" />
+              </div>
+              {activeView === 'students' && (
+                  <button onClick={() => setIsCreatingUser(true)} className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg flex items-center gap-2 transition-transform hover:scale-105">
+                      <UserPlus size={20} /> Novo Aluno
+                  </button>
+              )}
+          </div>
 
-      {/* API KEY MODAL (Omitted for brevity) */}
-      {showApiKeyModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-xl shadow-2xl relative flex flex-col max-h-[90vh] overflow-y-auto">
-                  <button onClick={() => setShowApiKeyModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={20}/></button>
-                  <h2 className="text-xl font-bold mb-4 text-slate-800 flex items-center gap-2"><Settings size={20} className="text-blue-600"/> Configurar API Gemini</h2>
-                  <div className="mb-4">
-                      <label className="block text-sm font-bold text-gray-600 mb-2">Chaves da API (Uma por linha)</label>
-                      <div className="flex flex-col gap-2">
-                        <textarea 
-                            value={tempApiKeysText} 
-                            onChange={e => setTempApiKeysText(e.target.value)} 
-                            className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-800 font-mono text-sm h-32 resize-y" 
-                            placeholder="AIza...&#10;AIza...&#10;AIza..."
-                        />
-                        <button onClick={handleGetKey} className="self-end px-4 py-2 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-xl hover:bg-indigo-100 font-bold whitespace-nowrap flex items-center gap-2 transition-colors text-sm"><Key size={16} /> Gerar Nova Chave</button>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-2 flex items-center gap-1"><Layers size={14}/> Dica: Adicione múltiplas chaves para evitar limites de uso (Erro 429). O sistema fará o rodízio automático.</p>
-                  </div>
-                  {showTutorial && (
-                      <div className="mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100 animate-in slide-in-from-top-2">
-                          <h3 className="font-bold text-blue-800 mb-2 flex items-center gap-2"><ExternalLink size={16}/> Como gerar chaves extras:</h3>
-                          <ol className="text-sm text-blue-800/80 space-y-1.5 list-decimal list-inside">
-                              <li>Clique em "Gerar Nova Chave" para abrir o Google AI Studio.</li>
-                              <li>Clique em "Create API key".</li>
-                              <li>Escolha <strong>"Create API key in new project"</strong>.</li>
-                              <li>Copie a chave e cole uma em cada linha acima.</li>
-                              <li>Repita para criar quantos projetos quiser (cada projeto tem sua cota).</li>
-                          </ol>
+          {/* VIEW: QUESTIONS */}
+          {activeView === 'questions' && (
+              <div className="space-y-4">
+                  {filteredQuestions.map(q => {
+                      const reportCount = reportsCountByQuestion[q.id] || 0;
+                      return (
+                          <div key={q.id} className={`bg-white rounded-xl border shadow-sm hover:shadow-md transition-all p-5 flex flex-col md:flex-row gap-4 items-start ${reportCount > 0 ? 'border-amber-200 shadow-amber-100' : 'border-gray-200'}`}>
+                              <div className="flex-1 min-w-0">
+                                  <div className="flex flex-wrap items-center gap-y-2 gap-x-3 mb-3">
+                                      <span onClick={() => copyToClipboard(q.id)} className="bg-slate-100 text-slate-500 text-xs font-mono px-2 py-1 rounded cursor-pointer hover:bg-slate-200 flex items-center gap-1 border border-slate-200" title="Copiar ID"><Hash size={10}/> {q.id.slice(0, 8)}...</span>
+                                      {reportCount > 0 && (
+                                          <button onClick={(e) => { e.stopPropagation(); handleGoToReports(q.id); }} className="bg-amber-100 hover:bg-amber-200 text-amber-700 text-xs font-bold px-2 py-1 rounded flex items-center gap-1 border border-amber-200 animate-pulse transition-colors cursor-pointer"><AlertTriangle size={12}/> {reportCount} Reportes (Ver)</button>
+                                      )}
+                                      <div className="flex items-center gap-2">
+                                          <span className="flex items-center gap-1 bg-blue-50 text-blue-700 text-xs font-bold px-2 py-1 rounded border border-blue-100"><Building size={10}/> {q.institution || 'N/A'}</span>
+                                          <span className="flex items-center gap-1 bg-gray-100 text-gray-600 text-xs font-bold px-2 py-1 rounded border border-gray-200"><Calendar size={10}/> {q.year || '----'}</span>
+                                      </div>
+                                      <div className="flex items-center flex-wrap gap-1"><span className="text-xs font-bold text-slate-600 whitespace-nowrap">{q.area}</span><span className="text-xs font-medium text-gray-400">/</span><span className="text-xs font-medium text-slate-500">{q.topic}</span></div>
+                                  </div>
+                                  <p className="text-slate-800 text-sm line-clamp-2 mb-3">{q.text}</p>
+                              </div>
+                              <div className="flex items-center gap-2 self-start md:self-center">
+                                  <button onClick={() => setEditingQuestion(q)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg hover:border-blue-100 border border-transparent"><Edit3 size={18}/></button>
+                                  <button onClick={() => setDeleteModal(q)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg hover:border-red-100 border border-transparent"><Trash2 size={18}/></button>
+                              </div>
+                          </div>
+                      );
+                  })}
+              </div>
+          )}
+
+          {/* VIEW: REPORTS */}
+          {activeView === 'reports' && (
+              <div className="max-w-4xl mx-auto space-y-6">
+                  {reportFilterQuestionId && (
+                      <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl flex items-center justify-between">
+                          <div className="flex items-center gap-2 font-medium"><Filter size={18} /> Filtrando reportes da questão <span className="font-mono bg-white px-2 py-0.5 rounded border border-amber-100">{reportFilterQuestionId}</span></div>
+                          <button onClick={handleClearReportFilter} className="text-sm underline hover:text-amber-900 font-bold">Limpar Filtro</button>
                       </div>
                   )}
-                  <div className="flex justify-end gap-3 mt-auto pt-2">
-                      <button onClick={() => setShowApiKeyModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg font-bold">Cancelar</button>
-                      <button onClick={saveApiKeyFromModal} disabled={isSavingKey} className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 shadow-lg flex items-center gap-2">{isSavingKey ? <Loader2 size={16} className="animate-spin" /> : null} Salvar Chaves</button>
+                  {filteredReports.map(report => {
+                      const reporter = getUserDetails(report.userId);
+                      return (
+                          <div key={report.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 relative overflow-hidden">
+                              <div className="flex justify-between items-start mb-4">
+                                  <div className="flex items-center gap-3">
+                                      <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-400"><User size={20} /></div>
+                                      <div><p className="text-sm font-bold text-slate-800">{reporter.name}</p><div onClick={() => copyToClipboard(report.userId)} className="text-xs text-gray-500 flex items-center gap-1 cursor-pointer hover:text-blue-600" title="Copiar ID">ID: {report.userId.slice(0,8)}... <Copy size={10} /></div></div>
+                                  </div>
+                                  <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${report.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{report.type === 'error' ? <AlertTriangle size={12}/> : <MessageSquare size={12}/>}{formatReportCategory(report.category)}</span>
+                              </div>
+                              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 mb-4">{getReportDetails(report)}</div>
+                              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                                  <button onClick={() => setRejectReportModal(report)} className="px-4 py-2 text-orange-600 hover:bg-orange-50 rounded-lg font-bold text-sm flex items-center gap-2"><ThumbsDown size={16}/> Recusar</button>
+                                  <button onClick={() => handleOpenFromReport(report)} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm flex items-center gap-2"><Edit3 size={16}/> Ver Questão</button>
+                              </div>
+                          </div>
+                      );
+                  })}
+              </div>
+          )}
+
+          {/* VIEW: STUDENTS TABLE */}
+          {activeView === 'students' && (
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm text-slate-600">
+                          <thead className="bg-gray-50 text-xs uppercase font-bold text-gray-500 border-b border-gray-200">
+                              <tr>
+                                  <th className="px-6 py-4">Aluno / Email</th>
+                                  <th className="px-6 py-4">Função</th>
+                                  <th className="px-6 py-4">ID</th>
+                                  <th className="px-6 py-4">Status / Vencimento</th>
+                                  <th className="px-6 py-4 text-right">Ações</th>
+                              </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                              {loadingStudents ? (
+                                  <tr><td colSpan="5" className="px-6 py-10 text-center"><Loader2 className="animate-spin mx-auto text-purple-600" /></td></tr>
+                              ) : filteredStudents.map(student => {
+                                  const subStatus = checkSubscriptionStatus(student.subscriptionUntil, student.role);
+                                  const isAdmin = student.role === 'admin';
+                                  
+                                  return (
+                                      <tr key={student.id} className="hover:bg-gray-50 transition-colors">
+                                          <td className="px-6 py-4">
+                                              <div className="font-bold text-slate-900">{student.name || 'Sem Nome'}</div>
+                                              <div className="text-xs text-gray-500 mb-1">{student.email}</div>
+                                              {student.whatsapp && (
+                                                  <div className="text-xs text-emerald-600 flex items-center gap-1 font-medium">
+                                                      <Phone size={12}/> {student.whatsapp}
+                                                  </div>
+                                              )}
+                                          </td>
+                                          <td className="px-6 py-4">
+                                              {/* INLINE ROLE EDIT */}
+                                              <select 
+                                                  value={student.role} 
+                                                  onChange={(e) => handleInlineUserUpdate(student.id, 'role', e.target.value)}
+                                                  className={`px-2 py-1 rounded text-xs font-bold uppercase outline-none cursor-pointer border-none bg-transparent ${student.role === 'admin' ? 'text-indigo-700 bg-indigo-100' : 'text-gray-600 bg-gray-100'}`}
+                                              >
+                                                  <option value="student">Aluno</option>
+                                                  <option value="admin">Admin</option>
+                                              </select>
+                                          </td>
+                                          <td className="px-6 py-4 font-mono text-xs text-gray-400 flex items-center gap-1 cursor-pointer hover:text-purple-600" onClick={()=>copyToClipboard(student.id)}>
+                                              {student.id.slice(0, 8)}... <Copy size={12}/>
+                                          </td>
+                                          <td className="px-6 py-4">
+                                              {!isAdmin ? (
+                                                  <>
+                                                      <div className={`text-xs font-bold uppercase mb-1 ${subStatus.color === 'emerald' ? 'text-emerald-600' : 'text-red-500'}`}>{subStatus.label}</div>
+                                                      <div className="flex items-center gap-2">
+                                                          <input 
+                                                              type="date" 
+                                                              value={student.subscriptionUntil ? student.subscriptionUntil.split('T')[0] : ''}
+                                                              onChange={(e) => handleInlineUserUpdate(student.id, 'subscriptionUntil', e.target.value ? new Date(e.target.value).toISOString() : null)}
+                                                              className="text-xs text-gray-500 bg-transparent border-b border-dashed border-gray-300 focus:border-purple-500 outline-none hover:border-gray-400 cursor-pointer w-24"
+                                                          />
+                                                          <button 
+                                                              onClick={() => handleAdd30Days(student)}
+                                                              className="bg-purple-100 hover:bg-purple-200 text-purple-700 text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 transition-colors"
+                                                              title="Adicionar 30 dias"
+                                                          >
+                                                              <PlusCircle size={10}/> +30
+                                                          </button>
+                                                      </div>
+                                                  </>
+                                              ) : (
+                                                  <span className="text-gray-400 text-sm font-medium">–</span>
+                                              )}
+                                          </td>
+                                          <td className="px-6 py-4 text-right">
+                                              <div className="flex justify-end gap-2">
+                                                  <button onClick={() => fetchUserStats(student)} className="p-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-colors" title="Ver Desempenho"><TrendingUp size={18}/></button>
+                                                  <button onClick={() => setDeleteModal(student)} className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors" title="Excluir"><Trash2 size={18}/></button>
+                                              </div>
+                                          </td>
+                                      </tr>
+                                  );
+                              })}
+                          </tbody>
+                      </table>
                   </div>
               </div>
-          </div>
-      )}
-
-      {/* CONFIRMATION MODAL (Omitted for brevity) */}
-      {confirmationModal.isOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl relative animate-in zoom-in-95 duration-200">
-                  <div className="flex flex-col items-center text-center">
-                    <div className={`p-3 rounded-full mb-4 ${confirmationModal.confirmColor === 'red' ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}><AlertTriangle size={32} /></div>
-                    <h2 className="text-xl font-bold mb-2 text-slate-800">{confirmationModal.title}</h2>
-                    <p className="text-gray-600 mb-6 text-sm">{confirmationModal.message}</p>
-                    <div className="flex gap-3 w-full">
-                        <button onClick={() => setConfirmationModal({ ...confirmationModal, isOpen: false })} className="flex-1 py-3 border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50 transition-colors">Cancelar</button>
-                        <button onClick={executeConfirmationAction} className={`flex-1 py-3 rounded-xl font-bold text-white shadow-lg transition-colors ${confirmationModal.confirmColor === 'red' ? 'bg-red-600 hover:bg-red-700 shadow-red-200' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'}`}>{confirmationModal.confirmText}</button>
-                    </div>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      <main className="max-w-7xl mx-auto p-4 md:p-6">
-        <div className="flex justify-center mb-8">
-            <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-200 inline-flex overflow-x-auto max-w-full">
-                <button onClick={() => setActiveTab('input')} className={`whitespace-nowrap px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${activeTab === 'input' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:text-gray-700'}`}><FileText size={18} /> Texto</button>
-                <button onClick={() => setActiveTab('image')} className={`whitespace-nowrap px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${activeTab === 'image' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:text-gray-700'}`}><ImageIcon size={18} /> Imagem</button>
-                <button onClick={() => setActiveTab('pdf')} className={`whitespace-nowrap px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${activeTab === 'pdf' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:text-gray-700'}`}><Database size={18} /> PDF Massivo</button>
-                <button onClick={() => setActiveTab('review')} className={`whitespace-nowrap px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${activeTab === 'review' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:text-gray-700'}`}>
-                    <CloudLightning size={18} /> Fila de Aprovação 
-                    {parsedQuestions.length > 0 && <span className="ml-2 bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full">{parsedQuestions.length}</span>}
-                </button>
-            </div>
-        </div>
-
-        {/* OVERRIDES SECTION (PRÉ-DEFINIÇÕES) */}
-        {(activeTab === 'input' || activeTab === 'image' || activeTab === 'pdf') && (
-            <div className="max-w-4xl mx-auto mb-6 animate-in slide-in-from-top-4">
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center gap-2">
-                        <Filter size={16} className="text-gray-500"/>
-                        <span className="text-sm font-bold text-slate-700">Filtros de Pré-definição (Forçar Dados)</span>
-                        <span className="text-xs text-gray-400 font-normal ml-auto">Opcional • Se preenchido, a IA será obrigada a usar</span>
-                    </div>
-                    <div className="p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Instituição</label>
-                            <input value={overrideInst} onChange={e=>setOverrideInst(e.target.value)} placeholder="Ex: ENARE" className="w-full p-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Ano</label>
-                            <input type="number" value={overrideYear} onChange={e=>setOverrideYear(e.target.value)} placeholder="Ex: 2026" className="w-full p-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Área Forçada</label>
-                            <select value={overrideArea} onChange={e=>{setOverrideArea(e.target.value); setOverrideTopic('');}} className="w-full p-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
-                                <option value="">Automático (IA)</option>
-                                {areasBase.map(a => <option key={a} value={a}>{a}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Tópico Forçado</label>
-                            <select value={overrideTopic} onChange={e=>setOverrideTopic(e.target.value)} disabled={!overrideArea} className="w-full p-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white disabled:bg-gray-50 disabled:text-gray-400">
-                                <option value="">Automático (IA)</option>
-                                {(themesMap[overrideArea] || []).map(t => <option key={t} value={t}>{t}</option>)}
-                            </select>
-                        </div>
-                    </div>
-                    {(overrideInst || overrideYear || overrideArea) && (
-                        <div className="bg-blue-50 px-4 py-2 border-t border-blue-100 flex justify-between items-center">
-                            <span className="text-xs text-blue-700 font-medium">As próximas questões serão geradas com esses dados fixos.</span>
-                            <button onClick={()=>{setOverrideInst('');setOverrideYear('');setOverrideArea('');setOverrideTopic('');}} className="text-xs text-red-500 hover:text-red-700 font-bold flex items-center gap-1"><Eraser size={12}/> Limpar Filtros</button>
-                        </div>
-                    )}
-                </div>
-            </div>
-        )}
-
-        {/* INPUT TABS */}
-        {(activeTab === 'input' || activeTab === 'image') && (
-            <div className="max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-4">
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                    <label className="block text-lg font-bold text-slate-800 mb-2">
-                        {activeTab === 'input' ? 'Cole suas questões (Texto)' : 'Envie uma Imagem'}
-                    </label>
-                    <p className="text-sm text-gray-500 mb-4">A IA vai analisar e enviar para a fila de aprovação (Database).</p>
-                    
-                    {activeTab === 'input' ? (
-                        <textarea value={rawText} onChange={(e) => setRawText(e.target.value)} placeholder="Cole aqui o texto..." className="w-full h-96 p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-800 font-mono text-sm resize-y mb-4"/>
-                    ) : (
-                        <div className="w-full h-96 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center bg-gray-50 relative overflow-hidden transition-all hover:border-blue-400" onPaste={handlePasteImage}>
-                            {selectedImage ? (
-                                <>
-                                    <img src={selectedImage.preview} alt="Preview" className="w-full h-full object-contain p-2" />
-                                    <button onClick={(e) => { e.stopPropagation(); setSelectedImage(null); }} className="absolute top-4 right-4 bg-red-500 text-white p-2 rounded-full shadow-lg hover:bg-red-600"><Trash2 size={20} /></button>
-                                </>
-                            ) : (
-                                <div className="text-center pointer-events-none p-4"><UploadCloud size={48} className="mx-auto text-gray-400 mb-3" /><p className="text-gray-500 font-medium">Clique ou cole (Ctrl+V)</p></div>
-                            )}
-                            <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" disabled={!!selectedImage}/>
-                        </div>
-                    )}
-
-                    <div className="flex justify-end gap-3 mt-4">
-                        <button onClick={() => { setRawText(''); setSelectedImage(null); }} className="px-4 py-3 text-gray-500 hover:bg-gray-100 rounded-xl font-bold">Limpar</button>
-                        <button onClick={processWithAI} disabled={isProcessing || apiKeys.length === 0} className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200 flex items-center gap-2 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
-                            {isProcessing ? <><Loader2 className="animate-spin" size={20} /> Processando...</> : <><Wand2 size={20} /> Enviar para Fila</>}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
-
-        {/* PDF TAB */}
-        {activeTab === 'pdf' && (
-            <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4">
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                    <div className="flex justify-between items-start mb-6">
-                        <div>
-                            <label className="block text-lg font-bold text-slate-800 mb-1">
-                                Importador Massivo de PDF (Até 1000 pgs)
-                            </label>
-                            <p className="text-sm text-gray-500">Fatiamento automático: 10 páginas por ciclo. Detecção de erros e pausa inteligente.</p>
-                        </div>
-                        {pdfStatus !== 'idle' && (
-                            <div className="flex items-center gap-2">
-                                <button onClick={handleResetPdf} disabled={pdfStatus === 'processing' || pdfStatus === 'pausing'} title="Cancelar e Novo PDF" className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"><XCircle size={20}/></button>
-                                <button onClick={handleRestartPdf} disabled={pdfStatus === 'processing' || pdfStatus === 'pausing'} title="Reiniciar Processamento" className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors mr-2 disabled:opacity-30 disabled:cursor-not-allowed"><RotateCcw size={20}/></button>
-                                
-                                {pdfStatus === 'processing' ? (
-                                    <button onClick={togglePdfProcessing} className="px-4 py-2 bg-amber-100 text-amber-700 rounded-lg font-bold flex items-center gap-2 hover:bg-amber-200 transition-colors"><Pause size={18}/> Pausar</button>
-                                ) : pdfStatus === 'pausing' ? (
-                                    <button disabled className="px-4 py-2 bg-amber-50 text-amber-400 border border-amber-100 rounded-lg font-bold flex items-center gap-2 cursor-wait"><Loader2 size={18} className="animate-spin"/> Pausando...</button>
-                                ) : (
-                                    <button onClick={togglePdfProcessing} disabled={pdfStatus === 'reading' || pdfStatus === 'completed' || pdfStatus === 'error'} className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg font-bold flex items-center gap-2 hover:bg-emerald-200 transition-colors disabled:opacity-50"><Play size={18}/> {pdfStatus === 'paused' ? 'Continuar' : 'Iniciar'}</button>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                    
-                    {/* DROPZONE PDF */}
-                    {pdfStatus === 'idle' && (
-                        <div className="space-y-4">
-                             {/* RANGE INPUTS */}
-                             <div className="flex items-end gap-3 p-4 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-                                <div className="flex-1">
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1 flex items-center gap-1"><BookOpen size={12}/> De pg.</label>
-                                    <input type="number" min="1" value={pdfStartPage} onChange={e=>setPdfStartPage(e.target.value)} placeholder="Início" className="w-full p-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"/>
-                                </div>
-                                <div className="flex-1">
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1 flex items-center gap-1"><SkipForward size={12}/> Até pg.</label>
-                                    <input type="number" min="1" value={pdfEndPage} onChange={e=>setPdfEndPage(e.target.value)} placeholder="Fim" className="w-full p-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"/>
-                                </div>
-                                <div className="text-xs text-gray-400 pb-2 w-1/3 leading-tight">
-                                    Deixe em branco para processar o PDF inteiro.
-                                </div>
-                             </div>
-
-                             <div className="w-full h-56 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center bg-gray-50 relative overflow-hidden transition-all hover:border-blue-400">
-                                <div className="text-center pointer-events-none p-4">
-                                    <FileText size={48} className="mx-auto text-gray-400 mb-3" />
-                                    <p className="text-gray-600 font-bold mb-1">Arraste seu PDF aqui</p>
-                                    <p className="text-gray-400 text-sm">Suporta arquivos grandes (100MB+)</p>
-                                </div>
-                                <input type="file" accept="application/pdf" onChange={handlePdfUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                             </div>
-                        </div>
-                    )}
-
-                    {/* PDF PROGRESS UI */}
-                    {pdfStatus !== 'idle' && (
-                        <div className="space-y-6">
-                            {/* STATUS BAR */}
-                            <div className="bg-gray-100 rounded-xl p-4 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className={`p-2 rounded-lg 
-                                        ${pdfStatus === 'error' ? 'bg-red-100 text-red-600' : 
-                                          pdfStatus === 'processing' ? 'bg-blue-100 text-blue-600 animate-pulse' : 
-                                          pdfStatus === 'pausing' ? 'bg-amber-100 text-amber-600 animate-pulse' :
-                                          'bg-gray-200 text-gray-600'}`}>
-                                        {pdfStatus === 'reading' && <Loader2 className="animate-spin" size={24}/>}
-                                        {pdfStatus === 'ready' && <CheckCircle size={24}/>}
-                                        {pdfStatus === 'processing' && <Cpu size={24}/>}
-                                        {pdfStatus === 'pausing' && <Clock size={24}/>}
-                                        {pdfStatus === 'paused' && <Pause size={24}/>}
-                                        {pdfStatus === 'completed' && <CheckCircle size={24}/>}
-                                        {pdfStatus === 'error' && <AlertOctagon size={24}/>}
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-slate-800 text-sm uppercase">
-                                            {pdfStatus === 'reading' ? 'Lendo Arquivo...' : 
-                                             pdfStatus === 'pausing' ? 'Pausando...' : pdfStatus}
-                                        </p>
-                                        <p className="text-xs text-gray-500">{pdfFile?.name} • {pdfChunks.length} fatias</p>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-2xl font-bold text-slate-700">{Math.round((parsedQuestions.filter(q => q.sourceFile === pdfFile?.name).length))} <span className="text-sm font-normal text-gray-400">questões</span></p>
-                                </div>
-                            </div>
-
-                            {/* GRID DE CHUNKS - INTERATIVO SE PAUSADO */}
-                            <div className="border border-gray-200 rounded-xl p-4 max-h-60 overflow-y-auto">
-                                <p className="text-xs font-bold text-gray-400 uppercase mb-2 flex justify-between">
-                                    <span>Timeline (Navegação)</span>
-                                    {pdfStatus === 'paused' && <span className="text-blue-500 text-[10px]">Clique para Navegar (Seek)</span>}
-                                </p>
-                                <div className="grid grid-cols-5 md:grid-cols-8 lg:grid-cols-10 gap-2">
-                                    {pdfChunks.map((chunk, idx) => (
-                                        <button key={chunk.id} 
-                                            onClick={() => handleJumpToChunk(idx)}
-                                            disabled={pdfStatus === 'reading' || pdfStatus === 'processing' || pdfStatus === 'pausing'}
-                                            className={`h-8 rounded-md flex items-center justify-center text-xs font-bold transition-all border
-                                            ${chunk.status === 'pending' ? 'bg-gray-50 text-gray-400 border-gray-200' : ''}
-                                            ${chunk.status === 'success' ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm' : ''}
-                                            ${chunk.status === 'error' ? 'bg-red-500 text-white border-red-600 shadow-sm' : ''}
-                                            ${idx === currentChunkIndex && (pdfStatus === 'processing' || pdfStatus === 'pausing') ? 'ring-2 ring-blue-500 ring-offset-1 bg-blue-50 text-blue-600 border-blue-200 animate-pulse' : ''}
-                                            ${(pdfStatus === 'paused' || pdfStatus === 'ready' || pdfStatus === 'completed') ? 'hover:bg-blue-100 hover:text-blue-600 cursor-pointer hover:border-blue-300' : ''}
-                                            ${(pdfStatus === 'processing' || pdfStatus === 'pausing') && idx !== currentChunkIndex ? 'opacity-50 cursor-not-allowed' : ''}
-                                            `}
-                                            title={`Páginas ${chunk.pages} | Erros: ${chunk.errorCount}`}
-                                        >
-                                            {idx + 1}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* TERMINAL DE LOGS */}
-                            <div className="bg-slate-900 rounded-xl p-4 font-mono text-xs text-gray-300 h-48 overflow-y-auto shadow-inner flex flex-col-reverse">
-                                {processingLogs.length === 0 && <span className="opacity-50">Aguardando logs...</span>}
-                                {processingLogs.map((log, i) => (
-                                    <div key={i} className={`mb-1 ${log.type === 'error' ? 'text-red-400' : log.type === 'success' ? 'text-emerald-400' : log.type === 'warning' ? 'text-amber-400' : 'text-blue-300'}`}>
-                                        <span className="opacity-50 mr-2">[{log.time}]</span>
-                                        {log.message}
-                                    </div>
-                                ))}
-                                <div className="text-gray-500 border-b border-gray-800 mb-2 pb-1 flex items-center gap-2 sticky top-0 bg-slate-900"><Terminal size={12}/> Console de Execução</div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-        )}
-
-        {/* REVIEW TAB */}
-        {activeTab === 'review' && (
-            <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in">
-                {parsedQuestions.length > 0 && (
-                     <div className="flex flex-col xl:flex-row justify-between items-center mb-4 bg-blue-50 p-4 rounded-xl border border-blue-100 gap-4">
-                        <div className="flex items-center gap-2 text-blue-800">
-                            <CloudLightning size={20} />
-                            <span className="font-bold">Fila de Aprovação ({parsedQuestions.length} itens)</span>
-                        </div>
-                        <div className="flex flex-wrap gap-2 justify-end">
-                            <button onClick={handleDiscardSuspiciousClick} disabled={isBatchAction} className="bg-white border border-orange-200 text-orange-600 hover:bg-orange-50 font-bold text-xs px-3 py-2 rounded-lg flex items-center gap-2 transition-all disabled:opacity-70">
-                                {isBatchAction ? <Loader2 className="animate-spin" size={14} /> : <ShieldAlert size={14} />}
-                                Descartar Suspeitas
-                            </button>
-                            <button onClick={handleApproveVerifiedClick} disabled={isBatchAction} className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 font-bold text-xs px-3 py-2 rounded-lg flex items-center gap-2 transition-all disabled:opacity-70">
-                                {isBatchAction ? <Loader2 className="animate-spin" size={14} /> : <ShieldCheck size={14} />}
-                                Aprovar Verificadas
-                            </button>
-                            <div className="w-px h-6 bg-blue-200 mx-1 hidden md:block"></div>
-                            <button onClick={handleDiscardAllClick} disabled={isBatchAction} className="bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold text-xs px-3 py-2 rounded-lg flex items-center gap-2 transition-all disabled:opacity-70">
-                                <Trash2 size={14} /> Descartar Tudo
-                            </button>
-                            <button onClick={handleApproveAllClick} disabled={isBatchAction} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 transition-all disabled:opacity-70">
-                                <CheckCircle size={14} /> Aprovar Tudo
-                            </button>
-                        </div>
-                     </div>
-                )}
-
-                {parsedQuestions.length === 0 ? (
-                    <div className="text-center py-20 opacity-50">
-                        <Database size={64} className="mx-auto mb-4 text-gray-300" />
-                        <p className="text-xl font-medium text-gray-500">Fila de aprovação vazia.</p>
-                        <button onClick={() => setActiveTab('input')} className="mt-4 text-blue-600 font-bold hover:underline">Adicionar novas</button>
-                    </div>
-                ) : (
-                    parsedQuestions.map((q, idx) => (
-                        <div key={q.id} className={`bg-white rounded-2xl shadow-sm border overflow-hidden relative group transition-colors ${q.isDuplicate ? 'border-amber-400 ring-2 ring-amber-100' : 'border-gray-200'}`}>
-                            {/* STATUS BADGES */}
-                            <div className="absolute top-0 right-0 z-10 flex flex-col items-end gap-1">
-                                <div className={`p-2 rounded-bl-xl shadow-sm text-xs font-bold flex items-center gap-1
-                                    ${q.verificationStatus === 'verified' ? 'bg-emerald-100 text-emerald-700' : 
-                                    q.verificationStatus === 'suspicious' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}`}>
-                                    {q.verificationStatus === 'verified' && <><ShieldCheck size={14}/> Double-Checked</>}
-                                    {q.verificationStatus === 'suspicious' && <><ShieldAlert size={14}/> Suspeita: {q.verificationReason}</>}
-                                    {(!q.verificationStatus || q.verificationStatus === 'unchecked') && 'Não Verificada'}
-                                </div>
-                                
-                                {q.isDuplicate && (
-                                    <div className="bg-amber-100 text-amber-800 p-2 rounded-l-lg shadow-sm text-xs font-bold flex items-center gap-1 animate-pulse">
-                                        <Copy size={14}/> JÁ CADASTRADA
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="h-1.5 w-full bg-gray-100"><div className="h-full bg-orange-400 w-full animate-pulse"></div></div>
-                            <div className="p-6 pt-10">
-                                {/* METADATA FIELDS */}
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Inst</label><input value={q.institution} onChange={e=>updateQuestionField(idx,'institution',e.target.value)} className="w-full p-2 bg-gray-50 border rounded-lg text-sm font-bold"/></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Ano</label><input type="number" value={q.year} onChange={e=>updateQuestionField(idx,'year',e.target.value)} className="w-full p-2 bg-gray-50 border rounded-lg text-sm font-bold"/></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Área</label><select value={q.area} onChange={e=>updateQuestionField(idx,'area',e.target.value)} className="w-full p-2 bg-blue-50 border border-blue-100 rounded-lg text-sm font-bold text-blue-800"><option value="">Selecione...</option>{areasBase.map(a=><option key={a} value={a}>{a}</option>)}</select></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Tópico</label><select value={q.topic} onChange={e=>updateQuestionField(idx,'topic',e.target.value)} className="w-full p-2 bg-gray-50 border rounded-lg text-sm font-bold"><option value="">Selecione...</option>{(themesMap[q.area]||[]).map(t=><option key={t} value={t}>{t}</option>)}</select></div>
-                                </div>
-
-                                {/* QUESTION CONTENT */}
-                                <div className="mb-6"><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Enunciado</label><textarea value={q.text} onChange={e=>updateQuestionField(idx,'text',e.target.value)} rows={4} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-slate-800 text-sm focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"/></div>
-
-                                <div className="space-y-2 mb-6">
-                                    {q.options?.map((opt, optIdx) => (
-                                        <div key={opt.id} className="flex items-center gap-3">
-                                            <div onClick={()=>updateQuestionField(idx,'correctOptionId',opt.id)} className={`w-8 h-8 rounded-full flex items-center justify-center cursor-pointer font-bold text-sm flex-shrink-0 ${q.correctOptionId===opt.id?'bg-emerald-500 text-white':'bg-gray-100 text-gray-400'}`}>{opt.id.toUpperCase()}</div>
-                                            <input value={opt.text} onChange={e=>updateOptionText(idx,optIdx,e.target.value)} className={`w-full p-2 border rounded-lg text-sm ${q.correctOptionId===opt.id?'border-emerald-200 bg-emerald-50':'bg-white'}`}/>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
-                                    <label className="text-xs font-bold text-amber-700 uppercase flex items-center gap-1 mb-2"><Brain size={12}/> Comentário IA</label>
-                                    <textarea value={q.explanation} onChange={e=>updateQuestionField(idx,'explanation',e.target.value)} rows={3} className="w-full p-3 bg-white/50 border border-amber-200/50 rounded-lg text-slate-700 text-sm focus:bg-white focus:ring-2 focus:ring-amber-400 outline-none"/>
-                                </div>
-                            </div>
-                            
-                            <div className="bg-gray-50 px-6 py-4 flex justify-between items-center border-t border-gray-100">
-                                <button onClick={()=>handleDiscardOneClick(q)} className="text-red-500 hover:text-red-700 font-bold text-sm flex items-center gap-1"><Trash2 size={16}/> Descartar</button>
-                                
-                                {q.isDuplicate ? (
-                                    <button disabled className="bg-amber-200 text-amber-700 font-bold text-sm px-6 py-2.5 rounded-lg flex items-center gap-2 cursor-not-allowed opacity-70">
-                                        <Copy size={18}/> Questão Duplicada
-                                    </button>
-                                ) : (
-                                    <button onClick={()=>approveQuestion(q)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-6 py-2.5 rounded-lg shadow-lg flex items-center gap-2"><CheckCircle size={18}/> Aprovar e Publicar</button>
-                                )}
-                            </div>
-                        </div>
-                    ))
-                )}
-            </div>
-        )}
+          )}
       </main>
+
+      {/* --- MODALS --- */}
+
+      {/* EDIT QUESTION MODAL */}
+      {editingQuestion && (
+          <div className="fixed inset-0 z-50 bg-white overflow-y-auto animate-in fade-in duration-200">
+              <div className="max-w-4xl mx-auto p-6 pb-20">
+                  {associatedReport && (
+                      <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between shadow-sm">
+                          <div className="flex items-start gap-3 w-full">
+                              <div className="bg-amber-100 p-2 rounded-full text-amber-600 mt-1 flex-shrink-0"><MessageSquare size={20}/></div>
+                              <div className="w-full">
+                                  <h3 className="font-bold text-amber-900 text-sm flex items-center gap-2">Atenção: Reporte Pendente <span className="text-xs font-normal bg-white/50 px-2 py-0.5 rounded text-amber-800">{formatReportCategory(associatedReport.category)}</span></h3>
+                                  <div className="mt-2 bg-white/60 p-3 rounded-lg border border-amber-100 text-amber-900 text-sm">{getReportDetails(associatedReport)}</div>
+                              </div>
+                          </div>
+                      </div>
+                  )}
+                  <div className="flex items-center justify-between mb-8 sticky top-0 bg-white py-4 border-b border-gray-100 z-10">
+                      <div className="flex items-center gap-3">
+                          <button onClick={() => { setEditingQuestion(null); setAssociatedReport(null); }} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><ArrowLeft size={24} /></button>
+                          <h2 className="text-2xl font-bold text-slate-900">Editar Questão</h2>
+                      </div>
+                      <div className="flex gap-3">
+                          {associatedReport && <button onClick={() => setRejectReportModal(associatedReport)} className="px-6 py-2 bg-orange-600 text-white hover:bg-orange-700 shadow-lg rounded-lg font-bold flex items-center gap-2"><ThumbsDown size={18} /> <span className="hidden sm:inline">Recusar</span></button>}
+                          {associatedReport ? (
+                              <button onClick={() => handleSave(true)} disabled={isSaving} className="px-6 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 shadow-lg flex items-center gap-2">{isSaving ? <Loader2 className="animate-spin" size={20} /> : <ThumbsUp size={20} />} Aprovar</button>
+                          ) : (
+                              <button onClick={() => handleSave(false)} disabled={isSaving} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-lg flex items-center gap-2">{isSaving ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />} Salvar</button>
+                          )}
+                          <button onClick={() => setDeleteModal(editingQuestion)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100 ml-2" title="Excluir Questão"><Trash2 size={20} /></button>
+                      </div>
+                  </div>
+                  {/* FORM FIELDS ... (Mantido igual) */}
+                  <form className="space-y-8">
+                      <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div><label className="block text-sm font-bold text-gray-600 mb-2">Instituição</label><input value={editingQuestion.institution} onChange={e => setEditingQuestion({...editingQuestion, institution: e.target.value})} className="w-full pl-3 p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500"/></div>
+                          <div><label className="block text-sm font-bold text-gray-600 mb-2">Ano</label><input type="number" value={editingQuestion.year} onChange={e => setEditingQuestion({...editingQuestion, year: e.target.value})} className="w-full pl-3 p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500"/></div>
+                          <div><label className="block text-sm font-bold text-gray-600 mb-2">Área</label><select value={editingQuestion.area} onChange={e => setEditingQuestion({...editingQuestion, area: e.target.value, topic: ''})} className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500">{areasBase.map(a => <option key={a} value={a}>{a}</option>)}</select></div>
+                          <div><label className="block text-sm font-bold text-gray-600 mb-2">Tópico</label><select value={editingQuestion.topic} onChange={e => setEditingQuestion({...editingQuestion, topic: e.target.value})} className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500">{(themesMap[editingQuestion.area] || []).map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                      </div>
+                      <div><label className="block text-lg font-bold text-slate-900 mb-3">Enunciado</label><textarea value={editingQuestion.text} onChange={e => setEditingQuestion({...editingQuestion, text: e.target.value})} rows={6} className="w-full p-4 border border-gray-300 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-lg leading-relaxed text-slate-800"/></div>
+                      <div className="space-y-4"><label className="block text-lg font-bold text-slate-900">Alternativas</label>{editingQuestion.options.map((opt, idx) => (<div key={idx} className={`flex items-start gap-4 p-4 rounded-xl border-2 transition-colors ${editingQuestion.correctOptionId === opt.id ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-white'}`}><div onClick={() => setEditingQuestion({...editingQuestion, correctOptionId: opt.id})} className={`w-8 h-8 rounded-full flex items-center justify-center cursor-pointer font-bold flex-shrink-0 mt-1 transition-colors ${editingQuestion.correctOptionId === opt.id ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'}`}>{opt.id.toUpperCase()}</div><textarea value={opt.text} onChange={e => { const newOpts = [...editingQuestion.options]; newOpts[idx].text = e.target.value; setEditingQuestion({...editingQuestion, options: newOpts}); }} rows={2} className="flex-1 bg-transparent border-none outline-none resize-none text-slate-700"/></div>))}</div>
+                      <div className="bg-amber-50 p-6 rounded-2xl border border-amber-100"><label className="block text-sm font-bold text-amber-800 uppercase tracking-wider mb-3">Comentário / Explicação</label><textarea value={editingQuestion.explanation} onChange={e => setEditingQuestion({...editingQuestion, explanation: e.target.value})} rows={5} className="w-full p-4 bg-white border border-amber-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 text-slate-700"/></div>
+                  </form>
+              </div>
+          </div>
+      )}
+
+      {/* CREATE USER MODAL */}
+      {isCreatingUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
+                  <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+                      <div className="bg-purple-100 p-2 rounded-lg text-purple-600"><UserPlus size={24}/></div>
+                      <h2 className="text-xl font-bold text-slate-800">Novo Aluno</h2>
+                  </div>
+                  <form onSubmit={handleCreateUser} className="space-y-4">
+                      <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome Completo</label><input name="name" required className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500 bg-gray-50" placeholder="Ex: Ana Silva" /></div>
+                      <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">E-mail</label><input name="email" type="email" required className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500 bg-gray-50" placeholder="email@exemplo.com" /></div>
+                      <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Senha (Provisória)</label><input name="password" type="text" required className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500 bg-gray-50" placeholder="123456" /></div>
+                      <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">WhatsApp (Opcional)</label><input name="whatsapp" className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500 bg-gray-50" placeholder="31999999999" /></div>
+                      <div className="grid grid-cols-2 gap-4">
+                          <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Função</label><select name="role" className="w-full p-3 border rounded-xl outline-none bg-white"><option value="student">Aluno</option><option value="admin">Administrador</option></select></div>
+                          <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Vencimento</label><input name="subscriptionUntil" type="date" className="w-full p-3 border rounded-xl outline-none bg-white"/></div>
+                      </div>
+                      <div className="flex gap-3 pt-4">
+                          <button type="button" onClick={() => setIsCreatingUser(false)} className="flex-1 py-3 border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50">Cancelar</button>
+                          <button type="submit" disabled={isSaving} className="flex-1 py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 shadow-lg">{isSaving ? <Loader2 className="animate-spin mx-auto"/> : 'Criar Aluno'}</button>
+                      </div>
+                  </form>
+              </div>
+          </div>
+      )}
+
+      {/* USER STATS MODAL */}
+      {viewingUserStats && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl relative">
+                  <button onClick={() => setViewingUserStats(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={20}/></button>
+                  
+                  <div className="flex items-center gap-4 mb-6">
+                      <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-2xl">
+                          {viewingUserStats.name ? viewingUserStats.name.charAt(0) : 'U'}
+                      </div>
+                      <div>
+                          <h2 className="text-xl font-bold text-slate-800">{viewingUserStats.name}</h2>
+                          <p className="text-sm text-gray-500">{viewingUserStats.email}</p>
+                          <div className="flex gap-2 mt-1">
+                              {checkSubscriptionStatus(viewingUserStats.subscriptionUntil, viewingUserStats.role).status === 'Ativo' 
+                                  ? <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded font-bold">Premium</span> 
+                                  : <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded font-bold">Free</span>
+                              }
+                              <span className="bg-blue-50 text-blue-700 text-xs px-2 py-0.5 rounded font-bold flex items-center gap-1"><Target size={10}/> Meta: {viewingUserStats.dailyGoal || 50}</span>
+                          </div>
+                      </div>
+                  </div>
+
+                  {viewingUserStats.loading ? (
+                      <div className="py-10 flex justify-center"><Loader2 className="animate-spin text-purple-600" size={32} /></div>
+                  ) : (
+                      <div className="grid grid-cols-2 gap-4">
+                          <div className="bg-orange-50 p-4 rounded-xl text-center border border-orange-100">
+                              <div className="flex justify-center text-orange-600 mb-1"><Zap size={24}/></div>
+                              <div className="text-3xl font-bold text-slate-800">{viewingUserStats.stats?.streak || 0}</div>
+                              <div className="text-xs uppercase font-bold text-orange-600">Dias em Sequência</div>
+                          </div>
+                          <div className="bg-blue-50 p-4 rounded-xl text-center border border-blue-100">
+                              <div className="flex justify-center text-blue-600 mb-1"><CheckSquare size={24}/></div>
+                              <div className="text-3xl font-bold text-slate-800">{viewingUserStats.stats?.totalAnswers || 0}</div>
+                              <div className="text-xs uppercase font-bold text-blue-600">Questões Totais</div>
+                          </div>
+                          <div className="bg-emerald-50 p-4 rounded-xl text-center border border-emerald-100 col-span-2">
+                              <div className="flex justify-between items-center mb-2">
+                                  <span className="text-sm font-bold text-emerald-800 flex items-center gap-1"><Award size={16}/> Taxa de Acerto</span>
+                                  <span className="text-2xl font-bold text-emerald-600">
+                                      {viewingUserStats.stats?.totalAnswers > 0 
+                                          ? Math.round((viewingUserStats.stats.correctAnswers / viewingUserStats.stats.totalAnswers) * 100) 
+                                          : 0}%
+                                  </span>
+                              </div>
+                              <div className="w-full bg-emerald-200 rounded-full h-2.5">
+                                  <div className="bg-emerald-500 h-2.5 rounded-full" style={{ width: `${viewingUserStats.stats?.totalAnswers > 0 ? (viewingUserStats.stats.correctAnswers / viewingUserStats.stats.totalAnswers) * 100 : 0}%` }}></div>
+                              </div>
+                              <p className="text-xs text-emerald-600 mt-2 text-right">{viewingUserStats.stats?.correctAnswers || 0} acertos em {viewingUserStats.stats?.totalAnswers || 0} tentativas</p>
+                          </div>
+                      </div>
+                  )}
+              </div>
+          </div>
+      )}
+
+      {/* DELETE MODAL (Generic for Questions and Users) */}
+      {deleteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl relative">
+                  <div className="flex flex-col items-center text-center">
+                    <div className="bg-red-100 p-3 rounded-full text-red-600 mb-4"><AlertTriangle size={32}/></div>
+                    <h2 className="text-xl font-bold mb-2 text-slate-800">Excluir Definitivamente?</h2>
+                    <p className="text-gray-600 mb-6 text-sm">
+                        {deleteModal.email ? `O aluno ${deleteModal.name} será removido.` : 'Essa questão será removida do banco de dados oficial.'}
+                    </p>
+                    <div className="flex gap-3 w-full">
+                        <button onClick={() => setDeleteModal(null)} className="flex-1 py-3 border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50">Cancelar</button>
+                        <button onClick={deleteModal.email ? handleDeleteUser : handleDeleteQuestion} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 shadow-lg shadow-red-200">Sim, Excluir</button>
+                    </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* REJECT REPORT MODAL */}
+      {rejectReportModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl relative">
+                  <div className="flex flex-col items-center text-center">
+                    <div className="bg-orange-100 p-3 rounded-full text-orange-600 mb-4"><ThumbsDown size={32}/></div>
+                    <h2 className="text-xl font-bold mb-2 text-slate-800">Recusar Sugestão?</h2>
+                    <p className="text-gray-600 mb-6 text-sm">Esta ação vai <strong>APAGAR</strong> o reporte do banco de dados.</p>
+                    <div className="flex gap-3 w-full">
+                        <button onClick={() => setRejectReportModal(null)} className="flex-1 py-3 border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50">Cancelar</button>
+                        <button onClick={handleRejectReport} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 shadow-lg shadow-red-200">Sim, Apagar</button>
+                    </div>
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 }
