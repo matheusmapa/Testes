@@ -139,9 +139,6 @@ const safeJsonParse = (jsonString) => {
         console.warn("JSON quebrado detectado. Iniciando recuperação iterativa...", e.message);
         
         // 4. Estratégia de Recuperação Iterativa (Backtracking)
-        // Se a string foi cortada no meio (ex: limite de tokens), o JSON é inválido.
-        // Vamos tentar cortar a string no último fechamento de objeto '}' válido e adicionar ']'
-        
         let currentString = clean;
         let attempts = 0;
         const maxAttempts = 50; // Evita loop infinito
@@ -159,7 +156,6 @@ const safeJsonParse = (jsonString) => {
             }
             
             // Tenta fechar o array ali
-            // Ex: [... {"a":1}, {"b": "inc... -> [... {"a":1}]
             const candidate = currentString.substring(0, lastClose + 1) + ']';
             
             try {
@@ -167,8 +163,6 @@ const safeJsonParse = (jsonString) => {
                 console.log(`Recuperação com sucesso na tentativa ${attempts}! ${result.length} itens salvos de um JSON quebrado.`);
                 return result;
             } catch (e2) {
-                // Se falhar, significa que o '}' que achamos estava quebrado ou dentro de uma string
-                // Corta a string logo ANTES desse '}' para tentar o próximo (anterior)
                 currentString = currentString.substring(0, lastClose);
             }
         }
@@ -235,9 +229,11 @@ export default function App() {
   const [notification, setNotification] = useState(null);
   const [isValidatingKey, setIsValidatingKey] = useState(false);
   const [isDoubleCheckEnabled, setIsDoubleCheckEnabled] = useState(true); // <-- AGORA PADRÃO LIGADO
-  const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false); // NOVO: Chavinha de busca
-  const [filterMode, setFilterMode] = useState('all'); // 'all', 'verified', 'source', 'suspicious', 'duplicates'
+  const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(true); // NOVO: Chavinha de busca
   
+  // --- MUDANÇA 1: Estado para Filtros Múltiplos ---
+  const [activeFilters, setActiveFilters] = useState(['all']); // Array em vez de string
+
   // Override States (Pré-definições)
   const [overrideInst, setOverrideInst] = useState('');
   const [overrideYear, setOverrideYear] = useState('');
@@ -527,21 +523,53 @@ export default function App() {
       setBatchLogs(prev => [{ type, message, time }, ...prev].slice(0, 50));
   };
 
-  // --- FILTER HELPERS ---
+  // --- MUDANÇA 2: FUNÇÃO DE TOGGLE DO FILTRO ---
+  const toggleFilter = (filterKey) => {
+      setActiveFilters(prev => {
+          if (filterKey === 'all') return ['all'];
+          let newFilters = prev.filter(f => f !== 'all');
+          
+          if (newFilters.includes(filterKey)) {
+              newFilters = newFilters.filter(f => f !== filterKey);
+          } else {
+              newFilters.push(filterKey);
+          }
+          
+          if (newFilters.length === 0) return ['all'];
+          return newFilters;
+      });
+  };
+
+  // --- MUDANÇA 3: FILTRO COM LÓGICA 'OR' (SOMA) ---
   const getFilteredQuestions = () => {
-    switch (filterMode) {
-      case 'verified':
-        return parsedQuestions.filter(q => q.verificationStatus === 'verified' && !q.isDuplicate);
-      case 'source':
-        return parsedQuestions.filter(q => q.sourceFound && !q.isDuplicate);
-      case 'suspicious':
-        return parsedQuestions.filter(q => q.verificationStatus === 'suspicious');
-      case 'duplicates':
-        return parsedQuestions.filter(q => q.isDuplicate);
-      case 'all':
-      default:
-        return parsedQuestions; // Retorna todas (inclusive duplicatas se o usuario quiser ver)
-    }
+    if (activeFilters.includes('all')) return parsedQuestions;
+    
+    return parsedQuestions.filter(q => {
+      // Verifica condições ativas
+      const matchesVerified = activeFilters.includes('verified') && q.verificationStatus === 'verified';
+      const matchesSuspicious = activeFilters.includes('suspicious') && q.verificationStatus === 'suspicious';
+      const matchesSource = activeFilters.includes('source') && q.sourceFound;
+      const matchesNoSource = activeFilters.includes('no_source') && !q.sourceFound; // NOVA
+      const matchesDuplicates = activeFilters.includes('duplicates') && q.isDuplicate;
+
+      // Se bater em QUALQUER um, passa (Lógica OR)
+      const isMatch = matchesVerified || matchesSuspicious || matchesSource || matchesNoSource || matchesDuplicates;
+      
+      // Mas se for duplicata e o filtro de duplicata NÃO estiver ativo, esconde
+      if (!activeFilters.includes('duplicates') && q.isDuplicate) return false;
+
+      return isMatch;
+    });
+  };
+
+  // --- FILTER CONFIG (ATUALIZADA) ---
+  const filterLabels = {
+      'all': 'Todas',
+      'verified': 'Verificadas',
+      'source': 'Com Fonte',
+      'no_source': 'Sem Fonte', // NOVO LABEL
+      'suspicious': 'Suspeitas',
+      'duplicates': 'Duplicadas'
   };
 
   // --- LOGIC: BATCH IMAGE PROCESSING ---
@@ -765,7 +793,10 @@ export default function App() {
 
           const batch = writeBatch(db);
           let savedCount = 0;
-          let newQuestionsForAudit = processedQuestions.filter(q => !q.isDuplicate);
+          
+          // --- ALTERAÇÃO AQUI: PERMITIR DUPLICATAS NA FILA ---
+          // Antes: let newQuestionsForAudit = processedQuestions.filter(q => !q.isDuplicate);
+          let newQuestionsForAudit = processedQuestions; 
 
           // 4. Auditoria IA (Double Check)
           if (newQuestionsForAudit.length > 0) {
@@ -1193,8 +1224,9 @@ export default function App() {
           }));
 
           // --- LOGICA DOUBLE CHECK SEQUENCIAL ---
-          const newQuestions = processedQuestions.filter(q => !q.isDuplicate);
-          const duplicateCount = processedQuestions.length - newQuestions.length;
+          // --- ALTERAÇÃO AQUI: PERMITIR DUPLICATAS NA FILA (PDF) ---
+          // Antes: const newQuestions = processedQuestions.filter(q => !q.isDuplicate);
+          const newQuestions = processedQuestions;
 
           if (newQuestions.length > 0) {
               if (doDoubleCheck) {
@@ -1249,7 +1281,7 @@ export default function App() {
               await batch.commit();
           }
 
-          addLog('success', `Sucesso fatia ${chunk.pages}: ${newQuestions.length} novas, ${duplicateCount} duplicatas descartadas.`);
+          addLog('success', `Sucesso fatia ${chunk.pages}: ${newQuestions.length} questões salvas.`);
           setPdfChunks(prev => {
               const newChunks = [...prev];
               newChunks[activeIndex] = { ...newChunks[activeIndex], status: 'success' };
@@ -1553,8 +1585,9 @@ export default function App() {
         }));
 
         // FILTRA DUPLICATAS ANTES DO DOUBLE CHECK
-        const uniqueQuestions = finalQuestions.filter(q => !q.isDuplicate);
-        const duplicateCount = finalQuestions.length - uniqueQuestions.length;
+        // --- ALTERAÇÃO AQUI: PERMITIR DUPLICATAS NA FILA (TEXTO) ---
+        // Antes: const uniqueQuestions = finalQuestions.filter(q => !q.isDuplicate);
+        const uniqueQuestions = finalQuestions; 
 
         if (isDoubleCheckEnabled && uniqueQuestions.length > 0) {
             showNotification('success', 'Iniciando Auditoria IA nas questões novas...');
@@ -1603,14 +1636,7 @@ export default function App() {
         setRawText('');
         setActiveTab('review');
         
-        // NOTIFICAÇÕES MELHORADAS
-        if (savedCount === 0 && duplicateCount > 0) {
-            showNotification('warning', `Todas as ${duplicateCount} questões eram duplicatas e foram descartadas.`);
-        } else if (duplicateCount > 0) {
-            showNotification('success', `${savedCount} enviadas. ${duplicateCount} duplicatas descartadas.`);
-        } else {
-            showNotification('success', `${savedCount} questões enviadas para fila!`);
-        }
+        showNotification('success', `${savedCount} questões enviadas para fila (inclusive duplicatas)!`);
 
     } catch (error) {
         console.error(error);
@@ -1656,24 +1682,19 @@ export default function App() {
       const targetQuestions = getFilteredQuestions();
       if (targetQuestions.length === 0) return;
       
-      // Verifica se tem alguma duplicata na lista filtrada
-      const hasDuplicates = targetQuestions.some(q => q.isDuplicate);
-      if (hasDuplicates && filterMode !== 'duplicates') {
-          showNotification('warning', 'Algumas duplicatas serão ignoradas automaticamente.');
-      }
+      // --- ALTERAÇÃO AQUI: CONTA TUDO, INCLUINDO DUPLICATAS ---
+      // Antes: const count = targetQuestions.filter(q => !q.isDuplicate).length;
+      const count = targetQuestions.length;
 
-      const count = targetQuestions.filter(q => !q.isDuplicate).length;
-      if (count === 0 && filterMode !== 'duplicates') {
-           return showNotification('error', 'Nenhuma questão válida para aprovar (todas são duplicatas).');
-      }
+      const activeLabels = activeFilters.map(f => filterLabels[f]).join(' + ');
 
       setConfirmationModal({
           isOpen: true,
           type: 'approve_filtered',
           data: null,
           title: `Aprovar ${count} Questões?`,
-          message: `Você está prestes a publicar ${count} questões do filtro "${filterLabels[filterMode]}".`,
-          confirmText: 'Sim, Publicar',
+          message: `Você está prestes a publicar (ou atualizar) ${count} questões dos filtros: ${activeLabels}.`,
+          confirmText: 'Sim, Publicar/Atualizar',
           confirmColor: 'emerald'
       });
   };
@@ -1682,12 +1703,14 @@ export default function App() {
       const targetQuestions = getFilteredQuestions();
       if (targetQuestions.length === 0) return;
 
+      const activeLabels = activeFilters.map(f => filterLabels[f]).join(' + ');
+
       setConfirmationModal({
           isOpen: true,
           type: 'delete_filtered',
           data: null,
           title: `Excluir ${targetQuestions.length} Questões?`,
-          message: `Isso excluirá permanentemente as ${targetQuestions.length} questões do filtro "${filterLabels[filterMode]}".`,
+          message: `Isso excluirá permanentemente as questões dos filtros: ${activeLabels}.`,
           confirmText: 'Sim, Excluir',
           confirmColor: 'red'
       });
@@ -1737,16 +1760,18 @@ export default function App() {
 
           try {
               for (const q of targetQuestions) {
-                  if (q.isDuplicate) continue; 
+                  // --- ALTERAÇÃO AQUI: NÃO PULA MAIS AS DUPLICATAS ---
+                  // if (q.isDuplicate) continue; 
 
                   const { id, status, createdAt, createdBy, verificationStatus, verificationReason, isDuplicate, hashId, sourceFound, ...finalData } = q;
                   if (q.area && q.topic && q.text) {
-                     await setDoc(doc(db, "questions", id), { ...finalData, createdAt: new Date().toISOString(), approvedBy: user.email, hasImage: false });
+                     // setDoc vai SOBRESCREVER se já existir (id = hash)
+                     await setDoc(doc(db, "questions", id), { ...finalData, updatedAt: new Date().toISOString(), approvedBy: user.email, hasImage: false });
                      await deleteDoc(doc(db, "draft_questions", id));
                      count++;
                   }
               }
-              showNotification('success', `${count} questões publicadas!`);
+              showNotification('success', `${count} questões processadas (criadas ou atualizadas)!`);
           } catch (e) { showNotification('error', e.message); } finally { setIsBatchAction(false); }
       }
       else if (type === 'delete_filtered') {
@@ -1762,23 +1787,34 @@ export default function App() {
   };
 
   const approveQuestion = async (q) => {
+    // --- ALTERAÇÃO AQUI: PERMITIR APROVAR INDIVIDUALMENTE DUPLICATAS ---
+    /*
     if (q.isDuplicate) {
         return showNotification('error', 'Esta questão já existe no banco de dados (Duplicata).');
     }
+    */
+
     if (!q.area || !q.topic || !q.text || !q.options || q.options.length < 2) {
       return showNotification('error', 'Preencha os campos obrigatórios.');
     }
     try {
       const { id, status, createdAt, createdBy, verificationStatus, verificationReason, isDuplicate, hashId, sourceFound, ...finalData } = q;
-      // Garante o ID
+      
+      // Garante o ID e Atualiza se existir
       await setDoc(doc(db, "questions", id), {
         ...finalData,
-        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(), // Marca atualização
         approvedBy: user.email,
         hasImage: false
       });
+      
       await deleteDoc(doc(db, "draft_questions", id));
-      showNotification('success', 'Publicada!');
+      
+      if (q.isDuplicate) {
+          showNotification('success', 'Questão original ATUALIZADA com sucesso!');
+      } else {
+          showNotification('success', 'Publicada!');
+      }
     } catch (error) {
       showNotification('error', 'Erro: ' + error.message);
     }
@@ -1793,15 +1829,6 @@ export default function App() {
       const newQ = [...parsedQuestions];
       newQ[qIdx].options[optIdx].text = val;
       setParsedQuestions(newQ);
-  };
-
-  // --- FILTERS CONFIG ---
-  const filterLabels = {
-      'all': 'Todas',
-      'verified': 'Verificadas (IA)',
-      'source': 'Com Fonte (Web)',
-      'suspicious': 'Suspeitas',
-      'duplicates': 'Duplicadas'
   };
 
   const currentFilteredList = getFilteredQuestions();
@@ -1891,7 +1918,7 @@ export default function App() {
       {/* NOTIFICATION */}
       <NotificationToast notification={notification} onClose={closeNotification} positionClass="fixed top-24 right-4" />
 
-      {/* API KEY MODAL (Omitted for brevity) */}
+      {/* API KEY MODAL */}
       {showApiKeyModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
               <div className="bg-white rounded-2xl p-6 w-full max-w-xl shadow-2xl relative flex flex-col max-h-[90vh] overflow-y-auto">
@@ -1930,7 +1957,7 @@ export default function App() {
           </div>
       )}
 
-      {/* CONFIRMATION MODAL (Omitted for brevity) */}
+      {/* CONFIRMATION MODAL */}
       {confirmationModal.isOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
               <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl relative animate-in zoom-in-95 duration-200">
@@ -1960,7 +1987,7 @@ export default function App() {
             </div>
         </div>
 
-        {/* OVERRIDES SECTION (PRÉ-DEFINIÇÕES) */}
+        {/* OVERRIDES SECTION */}
         {(activeTab === 'input' || activeTab === 'pdf' || activeTab === 'batch_images') && (
             <div className="max-w-4xl mx-auto mb-6 animate-in slide-in-from-top-4">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -2024,7 +2051,7 @@ export default function App() {
             </div>
         )}
 
-        {/* BATCH IMAGES TAB (UNIFICADA) */}
+        {/* BATCH IMAGES TAB */}
         {activeTab === 'batch_images' && (
             <div className="max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4">
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
@@ -2048,7 +2075,6 @@ export default function App() {
                         </div>
                     </div>
 
-                    {/* DROPZONE MULTIPLE + PASTE SUPPORT */}
                     <div 
                         onPaste={handleBatchPaste}
                         className="w-full h-32 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center bg-gray-50 relative overflow-hidden transition-all hover:border-blue-400 mb-6 focus:outline-none focus:ring-2 focus:ring-blue-200"
@@ -2093,14 +2119,12 @@ export default function App() {
                             )}
                         </div>
 
-                        {/* CONSOLE / LOGS (SEPARADO E CORRIGIDO) */}
+                        {/* CONSOLE / LOGS */}
                         <div className="w-full lg:w-1/3 flex flex-col h-[500px]">
                             <div className="bg-slate-900 rounded-xl overflow-hidden shadow-inner flex flex-col h-full">
-                                {/* Header no TOPO */}
                                 <div className="p-3 bg-slate-800 border-b border-slate-700 text-gray-400 text-xs font-bold flex items-center gap-2">
                                     <Terminal size={14}/> Console de Imagens
                                 </div>
-                                {/* Logs rolando abaixo */}
                                 <div className="flex-1 p-4 overflow-y-auto font-mono text-xs text-gray-300 space-y-1">
                                     {batchLogs.length === 0 && <span className="opacity-50">Aguardando logs de imagem...</span>}
                                     {batchLogs.map((log, i) => (
@@ -2222,7 +2246,7 @@ export default function App() {
                                 </div>
                             </div>
 
-                            {/* GRID DE CHUNKS - INTERATIVO SE PAUSADO */}
+                            {/* GRID DE CHUNKS */}
                             <div className="border border-gray-200 rounded-xl p-4 max-h-60 overflow-y-auto">
                                 <p className="text-xs font-bold text-gray-400 uppercase mb-2 flex justify-between">
                                     <span>Timeline (Navegação)</span>
@@ -2250,7 +2274,7 @@ export default function App() {
                                 </div>
                             </div>
 
-                            {/* TERMINAL DE LOGS DO PDF (AGORA SEPARADO) */}
+                            {/* TERMINAL DE LOGS DO PDF */}
                             <div className="bg-slate-900 rounded-xl p-4 font-mono text-xs text-gray-300 h-48 overflow-y-auto shadow-inner flex flex-col-reverse">
                                 {processingLogs.length === 0 && <span className="opacity-50">Aguardando logs...</span>}
                                 {processingLogs.map((log, i) => (
@@ -2267,60 +2291,54 @@ export default function App() {
             </div>
         )}
 
-        {/* REVIEW TAB */}
+        {/* REVIEW TAB (ATUALIZADA COM FILTROS MÚLTIPLOS) */}
         {activeTab === 'review' && (
-            <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in">
+            <div className="max-w-4xl mx-auto space-y-4">
                 {parsedQuestions.length > 0 && (
-                     <div className="flex flex-col gap-4 mb-4">
-                         
-                         {/* HEADER AND FILTER TOOLBAR */}
-                         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-2 flex flex-col sm:flex-row justify-between items-center gap-4">
+                    /* --- BARRA DE FERRAMENTAS (NOVO LAYOUT) --- */
+                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col gap-4 sticky top-20 z-10">
+                        
+                        {/* Linha 1: Filtros */}
+                        <div className="flex flex-col gap-2">
+                            <div className="flex justify-between items-center px-1">
+                                <span className="text-xs font-bold text-gray-400 uppercase flex items-center gap-1"><Filter size={12}/> Filtros Ativos</span>
+                                <span className="text-xs text-gray-400">{currentFilteredList.length} questões</span>
+                            </div>
                             
-                            {/* FILTER PILLS */}
-                            <div className="flex items-center gap-1 overflow-x-auto w-full sm:w-auto p-1">
-                                <button onClick={() => setFilterMode('all')} className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${filterMode === 'all' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}>
-                                    Todas ({parsedQuestions.length})
-                                </button>
-                                <button onClick={() => setFilterMode('verified')} className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 ${filterMode === 'verified' ? 'bg-emerald-100 text-emerald-700' : 'text-gray-500 hover:bg-gray-100'}`}>
-                                    <ShieldCheck size={14}/> Verificadas
-                                </button>
-                                <button onClick={() => setFilterMode('source')} className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 ${filterMode === 'source' ? 'bg-teal-100 text-teal-700' : 'text-gray-500 hover:bg-gray-100'}`}>
-                                    <Globe size={14}/> Com Fonte
-                                </button>
-                                <button onClick={() => setFilterMode('suspicious')} className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 ${filterMode === 'suspicious' ? 'bg-red-100 text-red-700' : 'text-gray-500 hover:bg-gray-100'}`}>
-                                    <AlertTriangle size={14}/> Suspeitas
-                                </button>
-                                <button onClick={() => setFilterMode('duplicates')} className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 ${filterMode === 'duplicates' ? 'bg-amber-100 text-amber-700' : 'text-gray-500 hover:bg-gray-100'}`}>
-                                    <Copy size={14}/> Duplicadas
-                                </button>
+                            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                                <button onClick={() => toggleFilter('all')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all border ${activeFilters.includes('all') ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100'}`}>Todas</button>
+                                <button onClick={() => toggleFilter('verified')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap border flex items-center gap-1 transition-all ${activeFilters.includes('verified') ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100'}`}><ShieldCheck size={14}/> Verificadas</button>
+                                <button onClick={() => toggleFilter('source')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap border flex items-center gap-1 transition-all ${activeFilters.includes('source') ? 'bg-teal-100 text-teal-700 border-teal-200' : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100'}`}><Globe size={14}/> Com Fonte</button>
+                                <button onClick={() => toggleFilter('no_source')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap border flex items-center gap-1 transition-all ${activeFilters.includes('no_source') ? 'bg-slate-100 text-slate-700 border-slate-300' : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100'}`}><AlertOctagon size={14}/> Sem Fonte</button>
+                                <button onClick={() => toggleFilter('suspicious')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap border flex items-center gap-1 transition-all ${activeFilters.includes('suspicious') ? 'bg-red-100 text-red-700 border-red-200' : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100'}`}><AlertTriangle size={14}/> Suspeitas</button>
+                                <button onClick={() => toggleFilter('duplicates')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap border flex items-center gap-1 transition-all ${activeFilters.includes('duplicates') ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100'}`}><Copy size={14}/> Duplicadas</button>
+                            </div>
+                        </div>
+
+                        <div className="h-px bg-gray-100 w-full"></div>
+
+                        {/* Linha 2: Ações */}
+                        <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                            <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
+                                <button onClick={() => clearAllField('institution')} className="text-xs bg-white border border-gray-200 text-slate-500 px-3 py-2 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all font-medium flex items-center gap-1 shadow-sm whitespace-nowrap"><Eraser size={14}/> Limpar Inst.</button>
+                                <button onClick={() => clearAllField('year')} className="text-xs bg-white border border-gray-200 text-slate-500 px-3 py-2 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all font-medium flex items-center gap-1 shadow-sm whitespace-nowrap"><Eraser size={14}/> Limpar Anos</button>
                             </div>
 
-                            {/* ACTION BUTTONS (CONTEXTUAL TO FILTER) */}
                             <div className="flex items-center gap-2 w-full sm:w-auto">
-                                <button onClick={handleDiscardFilteredClick} disabled={isBatchAction || currentFilteredList.length === 0} className="flex-1 sm:flex-none bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold text-xs px-3 py-2 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50 whitespace-nowrap">
-                                    <Trash2 size={14} /> Descartar {currentFilteredList.length}
+                                <button onClick={handleDiscardFilteredClick} disabled={isBatchAction || currentFilteredList.length === 0} className="flex-1 sm:flex-none bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold text-xs px-4 py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50 whitespace-nowrap shadow-sm">
+                                    <Trash2 size={16} /> Descartar {currentFilteredList.length}
                                 </button>
-                                <button onClick={handleApproveFilteredClick} disabled={isBatchAction || currentFilteredList.length === 0} className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50 whitespace-nowrap">
-                                    {isBatchAction ? <Loader2 className="animate-spin" size={14}/> : <CheckCircle size={14} />} 
+                                
+                                <button onClick={handleApproveFilteredClick} disabled={isBatchAction || currentFilteredList.length === 0} className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-6 py-2.5 rounded-lg shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50 whitespace-nowrap hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0">
+                                    {isBatchAction ? <Loader2 className="animate-spin" size={16}/> : <CheckCircle size={16} />} 
                                     Aprovar {currentFilteredList.length}
                                 </button>
                             </div>
-                         </div>
-
-                         {/* SUB-TOOLBAR FOR BULK EDITING (APPLIES TO FILTERED) */}
-                         <div className="flex items-center gap-2 px-1">
-                            <span className="text-xs font-bold text-gray-400 uppercase flex items-center gap-1"><ListFilter size={12}/> Ações em {currentFilteredList.length} itens:</span>
-                            <button onClick={() => clearAllField('institution')} className="text-xs bg-white border border-gray-200 text-slate-600 px-3 py-1.5 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all font-medium flex items-center gap-1 shadow-sm">
-                                <Eraser size={12}/> Limpar Instituições
-                            </button>
-                            <button onClick={() => clearAllField('year')} className="text-xs bg-white border border-gray-200 text-slate-600 px-3 py-1.5 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all font-medium flex items-center gap-1 shadow-sm">
-                                <Eraser size={12}/> Limpar Anos
-                            </button>
-                         </div>
-
-                     </div>
+                        </div>
+                    </div>
                 )}
 
+                {/* --- LISTAGEM DAS QUESTÕES --- */}
                 {currentFilteredList.length === 0 ? (
                     <div className="text-center py-20 opacity-50">
                         <Database size={64} className="mx-auto mb-4 text-gray-300" />
@@ -2330,30 +2348,21 @@ export default function App() {
                 ) : (
                     currentFilteredList.map((q, idx) => (
                         <div key={q.id} className={`bg-white rounded-2xl shadow-sm border overflow-hidden relative group transition-colors ${q.isDuplicate ? 'border-amber-400 ring-2 ring-amber-100' : 'border-gray-200'}`}>
+                            
                             {/* STATUS BADGES */}
                             <div className="absolute top-0 right-0 z-10 flex flex-col items-end gap-1">
-                                <div className={`p-2 rounded-bl-xl shadow-sm text-xs font-bold flex items-center gap-1
-                                    ${q.verificationStatus === 'verified' ? 'bg-emerald-100 text-emerald-700' : 
-                                    q.verificationStatus === 'suspicious' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}`}>
+                                <div className={`p-2 rounded-bl-xl shadow-sm text-xs font-bold flex items-center gap-1 ${q.verificationStatus === 'verified' ? 'bg-emerald-100 text-emerald-700' : q.verificationStatus === 'suspicious' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}`}>
                                     {q.verificationStatus === 'verified' && <><ShieldCheck size={14}/> Double-Checked</>}
                                     {q.verificationStatus === 'suspicious' && <><ShieldAlert size={14}/> Suspeita: {q.verificationReason}</>}
                                     {(!q.verificationStatus || q.verificationStatus === 'unchecked') && 'Não Verificada'}
                                 </div>
                                 
-                                {q.sourceFound && (
-                                    <div className="bg-teal-100 text-teal-800 p-2 rounded-l-lg shadow-sm text-xs font-bold flex items-center gap-1">
-                                        <Globe size={14}/> FONTE ENCONTRADA
-                                    </div>
-                                )}
-
-                                {q.isDuplicate && (
-                                    <div className="bg-amber-100 text-amber-800 p-2 rounded-l-lg shadow-sm text-xs font-bold flex items-center gap-1 animate-pulse">
-                                        <Copy size={14}/> JÁ CADASTRADA
-                                    </div>
-                                )}
+                                {q.sourceFound && <div className="bg-teal-100 text-teal-800 p-2 rounded-l-lg shadow-sm text-xs font-bold flex items-center gap-1"><Globe size={14}/> FONTE ENCONTRADA</div>}
+                                {q.isDuplicate && <div className="bg-amber-100 text-amber-800 p-2 rounded-l-lg shadow-sm text-xs font-bold flex items-center gap-1 animate-pulse"><Copy size={14}/> JÁ CADASTRADA</div>}
                             </div>
 
                             <div className="h-1.5 w-full bg-gray-100"><div className="h-full bg-orange-400 w-full animate-pulse"></div></div>
+                            
                             <div className="p-6 pt-10">
                                 {/* METADATA FIELDS */}
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
@@ -2374,13 +2383,13 @@ export default function App() {
                                         </div>
                                     ))}
                                 </div>
-
+                                
                                 <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
                                     <label className="text-xs font-bold text-amber-700 uppercase flex items-center gap-1 mb-2"><Brain size={12}/> Comentário IA</label>
                                     <textarea value={q.explanation} onChange={e=>updateQuestionField(idx,'explanation',e.target.value)} rows={3} className="w-full p-3 bg-white/50 border border-amber-200/50 rounded-lg text-slate-700 text-sm focus:bg-white focus:ring-2 focus:ring-amber-400 outline-none"/>
                                 </div>
                             </div>
-                            
+
                             <div className="bg-gray-50 px-6 py-4 flex justify-between items-center border-t border-gray-100">
                                 <button onClick={()=>handleDiscardOneClick(q)} className="text-red-500 hover:text-red-700 font-bold text-sm flex items-center gap-1"><Trash2 size={16}/> Descartar</button>
                                 
