@@ -228,16 +228,13 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('input');
   const [notification, setNotification] = useState(null);
   const [isValidatingKey, setIsValidatingKey] = useState(false);
-  const [isDoubleCheckEnabled, setIsDoubleCheckEnabled] = useState(true); // <-- AGORA PADRÃO LIGADO
-  const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(true); // NOVO: Chavinha de busca
+  const [isDoubleCheckEnabled, setIsDoubleCheckEnabled] = useState(true); 
+  const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(true); 
   
-  // --- MUDANÇA 1: Estado para Filtros Múltiplos ---
-  // ... outros estados
+  // --- Estado para Filtros Múltiplos ---
   const [activeFilters, setActiveFilters] = useState(['verified', 'source']); 
-  // ADICIONE ESTA LINHA:
   const [filterLogic, setFilterLogic] = useState('AND'); // 'OR' (Soma) ou 'AND' (Restritivo)
   
-
   // Override States (Pré-definições)
   const [overrideInst, setOverrideInst] = useState('');
   const [overrideYear, setOverrideYear] = useState('');
@@ -288,9 +285,9 @@ export default function App() {
   const apiKeysRef = useRef(apiKeys);
   const keyRotationIndex = useRef(0);
   const doubleCheckRef = useRef(isDoubleCheckEnabled); 
-  const webSearchRef = useRef(isWebSearchEnabled); // Ref para o novo toggle
+  const webSearchRef = useRef(isWebSearchEnabled); 
   const overridesRef = useRef({ overrideInst, overrideYear, overrideArea, overrideTopic });
-  const currentChunkIndexRef = useRef(currentChunkIndex); // REF PARA O INDEX
+  const currentChunkIndexRef = useRef(currentChunkIndex); 
 
   const CHUNK_SIZE = 10; 
 
@@ -560,6 +557,7 @@ export default function App() {
           if (filterKey === 'source') return !!q.sourceFound;
           if (filterKey === 'no_source') return !q.sourceFound;
           if (filterKey === 'duplicates') return !!q.isDuplicate;
+          if (filterKey === 'needs_image') return !!q.needsImage; // NOVO
           return true; // Fallback
       });
 
@@ -579,9 +577,10 @@ export default function App() {
       'all': 'Todas',
       'verified': 'Verificadas',
       'source': 'Com Fonte',
-      'no_source': 'Sem Fonte', // NOVO LABEL
+      'no_source': 'Sem Fonte', 
       'suspicious': 'Suspeitas',
-      'duplicates': 'Duplicadas'
+      'duplicates': 'Duplicadas',
+      'needs_image': 'Requer Imagem' // NOVO LABEL
   };
 
   // --- LOGIC: BATCH IMAGE PROCESSING ---
@@ -751,39 +750,70 @@ export default function App() {
               return parsed.filter(q => q.options && q.options.length >= 2);
           });
 
-          // 3. Pós-Processamento e Pesquisa Web (NOVO)
+          // 3. Pós-Processamento e Pesquisa Web (NOVO - AGORA PARALELO)
           let processedQuestions = await Promise.all(questions.map(async (q) => {
+              // --- START PARALLEL TASKS ---
               let finalInst = q.institution;
               let finalYear = q.year;
-              let foundOnWeb = false;
+              let sourceFound = false;
+              let verificationStatus = 'unchecked';
+              let verificationReason = '';
 
-              // CONDICIONAL: Só busca se faltar dados E a busca estiver ligada
-              const isMissingData = !finalInst || !finalYear;
-
-              // 1. Pesquisa Web (Se habilitado e necessário)
-              if (doWebSearch && isMissingData) {
-                  try {
-                      // Pequeno delay para distribuir a carga (não fazer 10 requests simultâneos exatos)
-                      await new Promise(r => setTimeout(r, Math.random() * 2000));
-                      const searchResult = await searchQuestionSource(q.text);
-                      
-                      // Só sobrescreve se a busca retornar algo válido (não apaga dados existentes)
-                      if (searchResult.institution) {
-                          finalInst = searchResult.institution;
-                          foundOnWeb = true;
+              // TASK A: SEARCH WEB (if enabled)
+              const searchPromise = (async () => {
+                  if (doWebSearch && (!q.institution || !q.year)) {
+                      try {
+                          // Random delay to spread API hits
+                          await new Promise(r => setTimeout(r, Math.random() * 1000));
+                          const searchResult = await searchQuestionSource(q.text);
+                          return searchResult;
+                      } catch (err) {
+                          console.warn("Search failed:", err);
+                          return null;
                       }
-                      if (searchResult.year) finalYear = searchResult.year;
-                  } catch (err) {
-                      console.warn("Falha ao pesquisar questão no Google:", err.message);
                   }
+                  return null;
+              })();
+
+              // TASK B: AUDIT (Double Check) (if enabled)
+              const auditPromise = (async () => {
+                  if (doDoubleCheck) {
+                      try {
+                          // Random delay to spread API hits
+                          await new Promise(r => setTimeout(r, Math.random() * 500)); 
+                          return await verifyQuestionWithAI(q);
+                      } catch (err) {
+                          console.error("Audit failed:", err);
+                          return { status: 'unchecked', reason: 'Audit failed' };
+                      }
+                  }
+                  return { status: 'unchecked', reason: '' };
+              })();
+
+              // WAIT FOR BOTH
+              const [searchResult, auditResult] = await Promise.all([searchPromise, auditPromise]);
+
+              // --- MERGE RESULTS ---
+              
+              // 1. Apply Search Results
+              if (searchResult) {
+                  if (searchResult.institution) {
+                      finalInst = searchResult.institution;
+                      sourceFound = true;
+                  }
+                  if (searchResult.year) finalYear = searchResult.year;
               }
 
-              // 2. Overrides (Têm prioridade máxima)
+              // 2. Apply Overrides
               if (ovr.overrideInst) finalInst = ovr.overrideInst;
               if (ovr.overrideYear) finalYear = ovr.overrideYear;
 
-              // 3. Limpeza
+              // 3. Clean
               finalInst = cleanInstitutionText(finalInst);
+
+              // 4. Verification Data
+              verificationStatus = auditResult.status;
+              verificationReason = auditResult.reason;
 
               const finalQ = {
                   ...q,
@@ -791,13 +821,13 @@ export default function App() {
                   year: finalYear,
                   area: ovr.overrideArea || q.area,
                   topic: ovr.overrideTopic || q.topic,
-                  sourceFound: foundOnWeb // Flag para a UI
+                  sourceFound,
+                  verificationStatus,
+                  verificationReason
               };
 
-              // 4. Gera Hash (ID)
+              // 5. Hash & Duplicate Check
               const hashId = await generateQuestionHash(finalQ.text);
-              
-              // 5. Verifica Duplicata
               let isDuplicate = false;
               if (hashId) {
                   const existingDoc = await getDoc(doc(db, "questions", hashId));
@@ -810,52 +840,25 @@ export default function App() {
           const batch = writeBatch(db);
           let savedCount = 0;
           
-          // --- ALTERAÇÃO AQUI: PERMITIR DUPLICATAS NA FILA ---
-          // Antes: let newQuestionsForAudit = processedQuestions.filter(q => !q.isDuplicate);
           let newQuestionsForAudit = processedQuestions; 
 
-          // 4. Auditoria IA (Double Check)
-          if (newQuestionsForAudit.length > 0) {
-              if (doDoubleCheck) {
-                  addBatchLog('info', `Auditando ${newQuestionsForAudit.length} questões (Double Check)...`);
-                  
-                  for (let i = 0; i < newQuestionsForAudit.length; i++) {
-                      if (i > 0) await new Promise(resolve => setTimeout(resolve, 150));
-                      try {
-                          const verification = await verifyQuestionWithAI(newQuestionsForAudit[i]);
-                          newQuestionsForAudit[i] = { 
-                              ...newQuestionsForAudit[i], 
-                              verificationStatus: verification.status, 
-                              verificationReason: verification.reason 
-                          };
-                      } catch (err) {
-                          newQuestionsForAudit[i] = { ...newQuestionsForAudit[i], verificationStatus: 'unchecked' };
-                      }
-                  }
-              } else {
-                  newQuestionsForAudit.forEach((q, idx) => {
-                      newQuestionsForAudit[idx] = { ...q, verificationStatus: 'unchecked' };
-                  });
-              }
-
-              // 5. Salvar no Firestore
-              for (const q of newQuestionsForAudit) {
-                  const docId = q.hashId || doc(collection(db, "draft_questions")).id;
-                  const docRef = doc(db, "draft_questions", docId);
-                  batch.set(docRef, {
-                      ...q,
-                      institution: q.institution || "", 
-                      year: q.year || "",
-                      createdAt: new Date().toISOString(),
-                      createdBy: user.email,
-                      sourceFile: nextImg.name,
-                      hasImage: true 
-                  });
-                  savedCount++;
-              }
-              await batch.commit();
+          // 5. Salvar no Firestore
+          for (const q of newQuestionsForAudit) {
+              const docId = q.hashId || doc(collection(db, "draft_questions")).id;
+              const docRef = doc(db, "draft_questions", docId);
+              batch.set(docRef, {
+                  ...q,
+                  institution: q.institution || "", 
+                  year: q.year || "",
+                  createdAt: new Date().toISOString(),
+                  createdBy: user.email,
+                  sourceFile: nextImg.name,
+                  hasImage: true 
+              });
+              savedCount++;
           }
-
+          await batch.commit();
+          
           addBatchLog('success', `Sucesso em ${nextImg.name}: ${savedCount} questões salvas.`);
           setBatchImages(prev => prev.filter(img => img.id !== nextImg.id));
 
@@ -1138,17 +1141,22 @@ export default function App() {
                 SUA MISSÃO:
                 1. Identificar questões (Enunciado + Alternativas).
                 
-                2. CLASSIFICAÇÃO (OBRIGATÓRIO):
+                2. DETECÇÃO DE IMAGEM (NOVO):
+                   - Analise se o enunciado cita ou DEPENDE de uma imagem, gráfico, ECG, Radiografia ou Tabela que não está no texto.
+                   - Termos comuns: "Vide figura", "A imagem mostra", "Observe o ECG", "Raio-X anexo".
+                   - Se precisar de imagem, marque "needsImage": true. Caso contrário, false.
+
+                3. CLASSIFICAÇÃO (OBRIGATÓRIO):
                    - Classifique CADA questão em uma das Áreas e Tópicos da lista abaixo.
                    - É CRUCIAL que a classificação esteja correta.
                    - LISTA DE CLASSIFICAÇÃO VÁLIDA:
                    ${JSON.stringify(activeThemesMap)}
 
-                3. GABARITO E COMENTÁRIO:
+                4. GABARITO E COMENTÁRIO:
                    - Se o gabarito estiver no texto, use-o. Se NÃO, RESOLVA a questão.
                    - Gere sempre um campo "explanation".
                 
-                4. DADOS DE CABEÇALHO:
+                5. DADOS DE CABEÇALHO:
                    - IGNORE nomes de cursos preparatórios (Medgrupo, Medcurso, Estratégia, etc) no campo "institution".
                    - Procure pelo nome do HOSPITAL ou BANCA.
                    - Se não encontrar, deixe "".
@@ -1162,7 +1170,8 @@ export default function App() {
                 [{ 
                     "institution": "String", "year": Number|"", "area": "String", "topic": "String", 
                     "text": "String", "options": [{"id": "a", "text": "..."}], 
-                    "correctOptionId": "char", "explanation": "String" 
+                    "correctOptionId": "char", "explanation": "String",
+                    "needsImage": boolean
                 }]
               `;
 
@@ -1184,39 +1193,63 @@ export default function App() {
               return parsed.filter(q => q.options && q.options.length >= 2);
           });
 
-          // --- PÓS-PROCESSAMENTO (PESQUISA + LIMPEZA + AUDITORIA) ---
+          // --- PÓS-PROCESSAMENTO (PESQUISA + LIMPEZA + AUDITORIA PARALELA) ---
+          addLog('info', `Pós-processando ${questions.length} questões (Search + Audit)...`);
+
           let processedQuestions = await Promise.all(questions.map(async (q) => {
+              // --- START PARALLEL TASKS ---
               let finalInst = q.institution;
               let finalYear = q.year;
-              let foundOnWeb = false;
+              let sourceFound = false;
+              let verificationStatus = 'unchecked';
+              let verificationReason = '';
 
-              // CONDICIONAL: Só busca se faltar dados E a busca estiver ligada
-              const isMissingData = !finalInst || !finalYear;
-
-              // 1. Pesquisa Web (Se habilitado e necessário)
-              if (doWebSearch && isMissingData) {
-                  try {
-                      // Pequeno delay para distribuir a carga (não fazer 10 requests simultâneos exatos)
-                      await new Promise(r => setTimeout(r, Math.random() * 2000));
-                      const searchResult = await searchQuestionSource(q.text);
-                      
-                      // Só sobrescreve se a busca retornar algo válido (não apaga dados existentes)
-                      if (searchResult.institution) {
-                          finalInst = searchResult.institution;
-                          foundOnWeb = true;
+              // TASK A: SEARCH WEB (if enabled)
+              const searchPromise = (async () => {
+                  if (doWebSearch && (!q.institution || !q.year)) {
+                      try {
+                          await new Promise(r => setTimeout(r, Math.random() * 1000));
+                          const searchResult = await searchQuestionSource(q.text);
+                          return searchResult;
+                      } catch (err) {
+                          return null;
                       }
-                      if (searchResult.year) finalYear = searchResult.year;
-                  } catch (err) {
-                      console.warn("Falha ao pesquisar questão no Google:", err.message);
                   }
+                  return null;
+              })();
+
+              // TASK B: AUDIT (Double Check) (if enabled)
+              const auditPromise = (async () => {
+                  if (doDoubleCheck) {
+                      try {
+                          await new Promise(r => setTimeout(r, Math.random() * 500)); 
+                          return await verifyQuestionWithAI(q);
+                      } catch (err) {
+                          return { status: 'unchecked', reason: 'Audit failed' };
+                      }
+                  }
+                  return { status: 'unchecked', reason: '' };
+              })();
+
+              // WAIT FOR BOTH
+              const [searchResult, auditResult] = await Promise.all([searchPromise, auditPromise]);
+
+              // --- MERGE RESULTS ---
+              if (searchResult) {
+                  if (searchResult.institution) {
+                      finalInst = searchResult.institution;
+                      sourceFound = true;
+                  }
+                  if (searchResult.year) finalYear = searchResult.year;
               }
 
-              // 2. Overrides (Têm prioridade máxima)
               if (ovr.overrideInst) finalInst = ovr.overrideInst;
               if (ovr.overrideYear) finalYear = ovr.overrideYear;
 
-              // 3. Limpeza
               finalInst = cleanInstitutionText(finalInst);
+
+              verificationStatus = auditResult.status;
+              verificationReason = auditResult.reason;
 
               const finalQ = {
                   ...q,
@@ -1224,13 +1257,13 @@ export default function App() {
                   year: finalYear,
                   area: ovr.overrideArea || q.area,
                   topic: ovr.overrideTopic || q.topic,
-                  sourceFound: foundOnWeb // Flag para a UI
+                  sourceFound,
+                  verificationStatus,
+                  verificationReason
               };
 
-              // 4. Gera Hash (ID)
+              // Hash & Duplicata
               const hashId = await generateQuestionHash(finalQ.text);
-              
-              // 5. Verifica Duplicata
               let isDuplicate = false;
               if (hashId) {
                   const existingDoc = await getDoc(doc(db, "questions", hashId));
@@ -1242,65 +1275,25 @@ export default function App() {
               return { ...finalQ, hashId, isDuplicate };
           }));
 
-          // --- LOGICA DOUBLE CHECK SEQUENCIAL ---
-          // --- ALTERAÇÃO AQUI: PERMITIR DUPLICATAS NA FILA (PDF) ---
-          // Antes: const newQuestions = processedQuestions.filter(q => !q.isDuplicate);
-          const newQuestions = processedQuestions;
-
-          if (newQuestions.length > 0) {
-              if (doDoubleCheck) {
-                  addLog('info', `Auditando ${newQuestions.length} questões (Double Check)...`);
-                  
-                  for (let i = 0; i < newQuestions.length; i++) {
-                      if (i > 0) await new Promise(resolve => setTimeout(resolve, 150));
-                      
-                      try {
-                          const verification = await verifyQuestionWithAI(newQuestions[i]);
-                          newQuestions[i] = { 
-                              ...newQuestions[i], 
-                              verificationStatus: verification.status, 
-                              verificationReason: verification.reason 
-                          };
-                      } catch (err) {
-                          const msg = err.message || "";
-                          if (msg.includes("Quota exceeded") || msg.includes("429")) {
-                              throw err; 
-                          }
-                          console.error("Falha na auditoria individual:", err);
-                          newQuestions[i] = { 
-                              ...newQuestions[i], 
-                              verificationStatus: 'unchecked', 
-                              verificationReason: 'Falha na auditoria (Erro genérico)' 
-                          };
-                      }
-                  }
-              } else {
-                  // Mapeia sem verificação
-                  newQuestions.forEach((q, idx) => {
-                      newQuestions[idx] = { ...q, verificationStatus: 'unchecked', verificationReason: '' };
-                  });
-              }
-
-              const batch = writeBatch(db);
-              newQuestions.forEach(q => {
-                  const docId = q.hashId || doc(collection(db, "draft_questions")).id;
-                  const docRef = doc(db, "draft_questions", docId);
-                  
-                  batch.set(docRef, {
-                      ...q,
-                      institution: q.institution || "", 
-                      year: q.year || "",
-                      createdAt: new Date().toISOString(),
-                      createdBy: user.email,
-                      sourceFile: pdfFile.name,
-                      sourcePages: chunk.pages,
-                      hasImage: false
-                  });
+          const batch = writeBatch(db);
+          processedQuestions.forEach(q => {
+              const docId = q.hashId || doc(collection(db, "draft_questions")).id;
+              const docRef = doc(db, "draft_questions", docId);
+              
+              batch.set(docRef, {
+                  ...q,
+                  institution: q.institution || "", 
+                  year: q.year || "",
+                  createdAt: new Date().toISOString(),
+                  createdBy: user.email,
+                  sourceFile: pdfFile.name,
+                  sourcePages: chunk.pages,
+                  hasImage: false
               });
-              await batch.commit();
-          }
+          });
+          await batch.commit();
 
-          addLog('success', `Sucesso fatia ${chunk.pages}: ${newQuestions.length} questões salvas.`);
+          addLog('success', `Sucesso fatia ${chunk.pages}: ${processedQuestions.length} questões salvas.`);
           setPdfChunks(prev => {
               const newChunks = [...prev];
               newChunks[activeIndex] = { ...newChunks[activeIndex], status: 'success' };
@@ -1519,14 +1512,22 @@ export default function App() {
               - Ano: ${ovr.overrideYear ? ovr.overrideYear : "Não informado (Detectar do texto)"}
 
               REGRAS:
-              1. Retorne APENAS o JSON (sem markdown).
-              2. CLASSIFICAÇÃO (OBRIGATÓRIO):
+              1. Identificar questões (Enunciado + Alternativas).
+
+              2. DETECÇÃO DE IMAGEM (NOVO):
+                 - Analise se o enunciado cita ou DEPENDE de uma imagem, gráfico, ECG, Radiografia ou Tabela que não está no texto.
+                 - Termos comuns: "Vide figura", "A imagem mostra", "Observe o ECG", "Raio-X anexo".
+                 - Se precisar de imagem, marque "needsImage": true. Caso contrário, false.
+
+              3. CLASSIFICAÇÃO (OBRIGATÓRIO):
                  - Classifique CADA questão usando a lista abaixo.
                  - LISTA VÁLIDA: ${JSON.stringify(activeThemesMap)}
-              3. GABARITO E COMENTÁRIO: 
+
+              4. GABARITO E COMENTÁRIO: 
                  - Tente encontrar o gabarito. Se não houver, RESOLVA a questão.
                  - Gere sempre um campo "explanation".
-              4. DADOS DE CABEÇALHO:
+
+              5. DADOS DE CABEÇALHO:
                  - IGNORE nomes de cursos preparatórios no campo "institution".
               
               Formato Saída:
@@ -1534,7 +1535,8 @@ export default function App() {
                 {
                   "institution": "String", "year": Number|String, "area": "String", "topic": "String",
                   "text": "String", "options": [{"id": "a", "text": "String"}],
-                  "correctOptionId": "char", "explanation": "String"
+                  "correctOptionId": "char", "explanation": "String",
+                  "needsImage": boolean
                 }
               ]
             `;
@@ -1547,8 +1549,6 @@ export default function App() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ contents: contentsPayload })
             });
-
-            // ... dentro de processWithAI ...
             
             const data = await response.json();
             if (data.error) throw new Error(data.error.message);
@@ -1560,89 +1560,83 @@ export default function App() {
             return parsed.filter(q => q.options && q.options.length >= 2);
         });
 
-        // Pós-processamento e Auditoria
-        // ... continua o código igual ...
+        // --- PÓS-PROCESSAMENTO PARALELO (NOVO) ---
+        showNotification('info', `Pós-processando ${questions.length} questões...`);
 
-        // Pós-processamento e Auditoria
-        let finalQuestions = await Promise.all(questions.map(async (q) => {
-            let finalInst = q.institution;
-            let finalYear = q.year;
-            let foundOnWeb = false;
-
-            // 1. Pesquisa Web
-            if (doWebSearch) {
-                try {
-                    await new Promise(r => setTimeout(r, Math.random() * 2000));
-                    const searchResult = await searchQuestionSource(q.text);
-                    if (searchResult.institution) {
-                        finalInst = searchResult.institution;
-                        foundOnWeb = true;
+        let processedQuestions = await Promise.all(questions.map(async (q) => {
+             // TASK A: SEARCH WEB (if enabled)
+             const searchPromise = (async () => {
+                if (doWebSearch && (!q.institution || !q.year)) {
+                    try {
+                        await new Promise(r => setTimeout(r, Math.random() * 1000));
+                        return await searchQuestionSource(q.text);
+                    } catch (err) {
+                        return null;
                     }
-                    if (searchResult.year) finalYear = searchResult.year;
-                } catch (err) {
-                    console.warn("Falha na pesquisa web:", err);
                 }
-            }
+                return null;
+            })();
 
-            // 2. Overrides
-            if (ovr.overrideInst) finalInst = ovr.overrideInst;
-            if (ovr.overrideYear) finalYear = ovr.overrideYear;
+            // TASK B: AUDIT (Double Check) (if enabled)
+            const auditPromise = (async () => {
+                if (isDoubleCheckEnabled) {
+                    try {
+                        await new Promise(r => setTimeout(r, Math.random() * 500)); 
+                        return await verifyQuestionWithAI(q);
+                    } catch (err) {
+                        return { status: 'unchecked', reason: 'Audit failed' };
+                    }
+                }
+                return { status: 'unchecked', reason: '' };
+            })();
 
-            // 3. Clean
-            finalInst = cleanInstitutionText(finalInst);
-            
-            const finalQ = {
-                ...q,
-                institution: finalInst,
-                year: finalYear,
-                area: ovr.overrideArea || q.area,
-                topic: ovr.overrideTopic || q.topic,
-                sourceFound: foundOnWeb
-            };
+            // WAIT FOR BOTH
+            const [searchResult, auditResult] = await Promise.all([searchPromise, auditPromise]);
 
-            // 4. Hash Check
-            const hashId = await generateQuestionHash(finalQ.text);
-            let isDuplicate = false;
-            if (hashId) {
-                const existingDoc = await getDoc(doc(db, "questions", hashId));
-                if (existingDoc.exists()) isDuplicate = true;
-            }
+             // --- MERGE RESULTS ---
+             let finalInst = q.institution;
+             let finalYear = q.year;
+             let sourceFound = false;
 
-            return { ...finalQ, hashId, isDuplicate };
+             if (searchResult) {
+                 if (searchResult.institution) {
+                     finalInst = searchResult.institution;
+                     sourceFound = true;
+                 }
+                 if (searchResult.year) finalYear = searchResult.year;
+             }
+
+             if (ovr.overrideInst) finalInst = ovr.overrideInst;
+             if (ovr.overrideYear) finalYear = ovr.overrideYear;
+
+             finalInst = cleanInstitutionText(finalInst);
+
+             const finalQ = {
+                 ...q,
+                 institution: finalInst,
+                 year: finalYear,
+                 area: ovr.overrideArea || q.area,
+                 topic: ovr.overrideTopic || q.topic,
+                 sourceFound,
+                 verificationStatus: auditResult.status,
+                 verificationReason: auditResult.reason
+             };
+
+             // 4. Hash Check
+             const hashId = await generateQuestionHash(finalQ.text);
+             let isDuplicate = false;
+             if (hashId) {
+                 const existingDoc = await getDoc(doc(db, "questions", hashId));
+                 if (existingDoc.exists()) isDuplicate = true;
+             }
+
+             return { ...finalQ, hashId, isDuplicate };
         }));
-
-        // FILTRA DUPLICATAS ANTES DO DOUBLE CHECK
-        // --- ALTERAÇÃO AQUI: PERMITIR DUPLICATAS NA FILA (TEXTO) ---
-        // Antes: const uniqueQuestions = finalQuestions.filter(q => !q.isDuplicate);
-        const uniqueQuestions = finalQuestions; 
-
-        if (isDoubleCheckEnabled && uniqueQuestions.length > 0) {
-            showNotification('success', 'Iniciando Auditoria IA nas questões novas...');
-            for (let i = 0; i < uniqueQuestions.length; i++) {
-                // OTIMIZAÇÃO: Delay reduzido para 200ms
-                if (i > 0) await new Promise(resolve => setTimeout(resolve, 200));
-                try {
-                    const verification = await verifyQuestionWithAI(uniqueQuestions[i]);
-                    uniqueQuestions[i] = { 
-                        ...uniqueQuestions[i], 
-                        verificationStatus: verification.status, 
-                        verificationReason: verification.reason 
-                    };
-                } catch (err) {
-                    console.error("Erro auditoria unica:", err);
-                    uniqueQuestions[i] = { ...uniqueQuestions[i], verificationStatus: 'unchecked' };
-                }
-            }
-        } else {
-            uniqueQuestions.forEach((q, idx) => {
-                 uniqueQuestions[idx] = { ...q, verificationStatus: 'unchecked', verificationReason: '' };
-            });
-        }
 
         let savedCount = 0;
         const batch = writeBatch(db);
         
-        for (const q of uniqueQuestions) {
+        for (const q of processedQuestions) {
             // USA HASH COMO ID
             const docId = q.hashId || doc(collection(db, "draft_questions")).id;
             const docRef = doc(db, "draft_questions", docId);
@@ -2352,6 +2346,7 @@ export default function App() {
                                 <button onClick={() => toggleFilter('no_source')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap border flex items-center gap-1 transition-all ${activeFilters.includes('no_source') ? 'bg-slate-100 text-slate-700 border-slate-300' : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100'}`}><AlertOctagon size={14}/> Sem Fonte</button>
                                 <button onClick={() => toggleFilter('suspicious')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap border flex items-center gap-1 transition-all ${activeFilters.includes('suspicious') ? 'bg-red-100 text-red-700 border-red-200' : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100'}`}><AlertTriangle size={14}/> Suspeitas</button>
                                 <button onClick={() => toggleFilter('duplicates')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap border flex items-center gap-1 transition-all ${activeFilters.includes('duplicates') ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100'}`}><Copy size={14}/> Duplicadas</button>
+                                <button onClick={() => toggleFilter('needs_image')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap border flex items-center gap-1 transition-all ${activeFilters.includes('needs_image') ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100'}`}><ImageIcon size={14}/> Requer Imagem</button>
                             </div>
                         </div>
 
@@ -2417,6 +2412,13 @@ export default function App() {
                                 {q.isDuplicate && (
                                     <div className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 animate-pulse">
                                         <Copy size={12}/> DUPLICADA
+                                    </div>
+                                )}
+
+                                {/* Tag: Precisa de Imagem (NOVO) */}
+                                {q.needsImage && (
+                                    <div className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 animate-pulse border border-purple-200">
+                                        <ImageIcon size={12}/> REQUER IMAGEM
                                     </div>
                                 )}
                             </div>
