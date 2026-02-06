@@ -6,17 +6,24 @@ import {
   LogOut, Send, Brain, Image as ImageIcon, UploadCloud, Lock, CloudLightning, ArrowLeft,
   AlertTriangle, ExternalLink, Key, Play, Pause, AlertOctagon, Terminal, ShieldCheck, ShieldAlert, 
   ToggleLeft, ToggleRight, Layers, Filter, Eraser, RefreshCcw, XCircle, RotateCcw, Copy,
-  SkipForward, BookOpen, Clock, Files, Info, History, FastForward, Globe, ListFilter
+  SkipForward, BookOpen, Clock, Files, Info, History, FastForward, Globe, ListFilter,
+  FileType
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from "firebase/app";
+
+// 1. Banco de Dados (Firestore)
 import { 
-  getFirestore, collection, addDoc, doc, getDoc, deleteDoc, onSnapshot, query, orderBy, setDoc, writeBatch 
+  getFirestore, collection, addDoc, doc, getDoc, deleteDoc, onSnapshot, query, orderBy, setDoc, writeBatch, updateDoc, arrayUnion, arrayRemove 
 } from "firebase/firestore";
+
+// 2. Autenticação (Auth)
 import { 
   getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
 } from "firebase/auth";
+
+// 3. Arquivos (Storage)
 import { 
   getStorage, ref, uploadBytes, getDownloadURL, deleteObject 
 } from "firebase/storage";
@@ -138,18 +145,33 @@ const generateQuestionHash = async (text) => {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 32);
 };
 
-// --- HELPER: CLEAN INSTITUTION ---
+// --- HELPER: CLEAN INSTITUTION (ATUALIZADO - ANTI-CURSINHO) ---
 const cleanInstitutionText = (inst) => {
     if (!inst) return "";
-    const lower = inst.toString().toLowerCase();
-    // Lista de termos que indicam "não informado" para serem limpos
+    let text = inst.toString().trim();
+    const lower = text.toLowerCase();
+
+    // 1. Lista Negra de Cursinhos (Meta-dados que não são bancas)
+    const blockList = [
+        "medcurso", "medgrupo", "medcel", "medcof", 
+        "sanar", "estrategia", "hardwork", "sic", "residencia médica", "medicina livre"
+    ];
+
+    // Se o texto for EXATAMENTE um desses, limpa.
+    if (blockList.includes(lower)) return "";
+    
+    // Se começar com termos de material de estudo
+    if (lower.startsWith("apostila") || lower.startsWith("simulado") || lower.includes("banco de questões")) return "";
+
+    // 2. Termos genéricos de erro da IA
     if (
         lower.includes("não informado") || 
         lower.includes("nao informado") || 
         lower.includes("detectar") ||
         lower.includes("nao consta")
     ) return "";
-    return inst;
+
+    return text;
 };
 
 // --- HELPER: EXTRAIR TEMPO DE ESPERA DA MENSAGEM DE ERRO ---
@@ -159,24 +181,18 @@ const extractRetryTime = (message) => {
 };
 
 // --- HELPER: PARSER JSON BLINDADO (RECUPERAÇÃO ITERATIVA) ---
-// Tenta salvar o que for possível de um JSON cortado
 const safeJsonParse = (jsonString) => {
-    // 1. Limpeza básica
     let clean = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
     clean = clean.replace(/[\u0000-\u0019]+/g, ""); 
 
-    // 2. Encontrar inicio do array
     const startIndex = clean.indexOf('[');
     if (startIndex === -1) {
-        // Tenta parsing direto caso não seja array
         try { return JSON.parse(clean); } catch(e) { 
-            // Se falhar e não tiver array, tenta forçar como array vazio ou joga erro
             throw new Error("Formato inválido: JSON não encontrado."); 
         }
     }
     clean = clean.substring(startIndex);
 
-    // 3. Tenta parse direto (Caminho Feliz)
     try {
         const parsed = JSON.parse(clean);
         if (!Array.isArray(parsed) && typeof parsed === 'object') return [parsed];
@@ -184,37 +200,31 @@ const safeJsonParse = (jsonString) => {
     } catch (e) {
         console.warn("JSON quebrado detectado. Iniciando recuperação iterativa...", e.message);
         
-        // 4. Estratégia de Recuperação Iterativa (Backtracking)
         let currentString = clean;
         let attempts = 0;
-        const maxAttempts = 50; // Evita loop infinito
+        const maxAttempts = 50;
 
         while (currentString.length > 2 && attempts < maxAttempts) {
             attempts++;
-            
-            // Acha o último '}'
             const lastClose = currentString.lastIndexOf('}');
             
             if (lastClose === -1) {
-                // Não tem mais objetos fechados, recuperação falhou total
                 console.error("Recuperação falhou: nenhum objeto válido encontrado.");
-                return []; // Retorna vazio para não travar o processo
+                return []; 
             }
             
-            // Tenta fechar o array ali
             const candidate = currentString.substring(0, lastClose + 1) + ']';
             
             try {
                 const result = JSON.parse(candidate);
-                console.log(`Recuperação com sucesso na tentativa ${attempts}! ${result.length} itens salvos de um JSON quebrado.`);
+                console.log(`Recuperação com sucesso na tentativa ${attempts}! ${result.length} itens salvos.`);
                 return result;
             } catch (e2) {
                 currentString = currentString.substring(0, lastClose);
             }
         }
         
-        // Se saiu do loop, falhou. Retorna array vazio para continuar o fluxo.
-        console.error("Falha total na recuperação do JSON após múltiplas tentativas.");
+        console.error("Falha total na recuperação do JSON.");
         return [];
     }
 };
@@ -255,10 +265,10 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   
-  // Gestão de Chaves API (Múltiplas)
+  // Gestão de Chaves API
   const [apiKeys, setApiKeys] = useState(() => JSON.parse(localStorage.getItem('gemini_api_keys') || '[]'));
   
-  // Modelos - ATUALIZADO PARA PRO PADRÃO
+  // Modelos
   const [availableModels, setAvailableModels] = useState([
       { name: 'models/gemini-2.5-pro', displayName: 'Gemini 2.5 Pro (Padrão)' },
       { name: 'models/gemini-2.5-flash', displayName: 'Gemini 2.5 Flash' }
@@ -280,11 +290,11 @@ export default function App() {
   // Estado para loading de imagem individual
   const [uploadingImageId, setUploadingImageId] = useState(null);
   
-  // --- Estado para Filtros Múltiplos ---
-  const [activeFilters, setActiveFilters] = useState(['verified', 'source']); 
-  const [filterLogic, setFilterLogic] = useState('AND'); // 'OR' (Soma) ou 'AND' (Restritivo)
+  // --- Estado para Filtros Múltiplos (ATUALIZADO: text_only por padrão) ---
+  const [activeFilters, setActiveFilters] = useState(['verified', 'source', 'text_only']); 
+  const [filterLogic, setFilterLogic] = useState('AND'); 
   
-  // Override States (Pré-definições)
+  // Override States
   const [overrideInst, setOverrideInst] = useState('');
   const [overrideYear, setOverrideYear] = useState('');
   const [overrideArea, setOverrideArea] = useState('');
@@ -304,23 +314,22 @@ export default function App() {
   const [password, setPassword] = useState('');
 
   // --- BATCH IMAGE STATES ---
-  const [batchImages, setBatchImages] = useState([]); // { id, file, preview, status: 'pending'|'success'|'error', errorMsg }
-  const [batchStatus, setBatchStatus] = useState('idle'); // idle, processing, pausing, paused
-  const [batchLogs, setBatchLogs] = useState([]); // SEPARADO: Logs de imagens
+  const [batchImages, setBatchImages] = useState([]); 
+  const [batchStatus, setBatchStatus] = useState('idle'); 
+  const [batchLogs, setBatchLogs] = useState([]);
 
   // --- PDF PROCESSING STATES ---
   const [pdfFile, setPdfFile] = useState(null);
-  const [pdfStatus, setPdfStatus] = useState('idle'); // idle, reading, ready, processing, pausing, paused, error, completed
+  const [pdfStatus, setPdfStatus] = useState('idle');
   const [pdfChunks, setPdfChunks] = useState([]); 
   const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
   const [processingLogs, setProcessingLogs] = useState([]);
   const [consecutiveErrors, setConsecutiveErrors] = useState(0);
   
-  // PDF Range Inputs
   const [pdfStartPage, setPdfStartPage] = useState('');
   const [pdfEndPage, setPdfEndPage] = useState('');
 
-  // --- SESSION STATE (ÚLTIMO PDF) - AGORA VEM DO DB ---
+  // --- SESSION STATE ---
   const [lastSessionData, setLastSessionData] = useState(null);
 
   const processorRef = useRef(null); 
@@ -376,11 +385,9 @@ export default function App() {
   useEffect(() => { doubleCheckRef.current = isDoubleCheckEnabled; }, [isDoubleCheckEnabled]);
   useEffect(() => { webSearchRef.current = isWebSearchEnabled; }, [isWebSearchEnabled]);
   useEffect(() => { overridesRef.current = { overrideInst, overrideYear, overrideArea, overrideTopic }; }, [overrideInst, overrideYear, overrideArea, overrideTopic]);
-  
-  // SYNC REF DO INDEX
   useEffect(() => { currentChunkIndexRef.current = currentChunkIndex; }, [currentChunkIndex]);
 
-  // --- SYNC CHAVES API (GLOBAL SETTINGS) ---
+  // --- SYNC CHAVES API ---
   useEffect(() => {
       if (!user) return;
       const unsubscribe = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
@@ -392,10 +399,7 @@ export default function App() {
               } else if (data.geminiApiKey) {
                   newKeys = [data.geminiApiKey];
               }
-
-              // Normaliza chaves e remove duplicatas no carregamento também
               const uniqueKeys = [...new Set(newKeys.filter(k => k && k.trim().length > 0))];
-
               if (JSON.stringify(uniqueKeys) !== JSON.stringify(apiKeysRef.current)) {
                   setApiKeys(uniqueKeys);
                   localStorage.setItem('gemini_api_keys', JSON.stringify(uniqueKeys));
@@ -416,13 +420,12 @@ export default function App() {
       return () => unsubscribe();
   }, [user]);
 
-  // --- SYNC PROGRESSO DO PDF (POR USUÁRIO) ---
+  // --- SYNC PROGRESSO DO PDF ---
   useEffect(() => {
       if (!user) {
           setLastSessionData(null);
           return;
       }
-      // Escuta mudanças em tempo real no documento de progresso do usuário
       const unsubscribe = onSnapshot(doc(db, "users", user.uid, "progress", "pdf_session"), (docSnap) => {
           if (docSnap.exists()) {
               setLastSessionData(docSnap.data());
@@ -451,7 +454,7 @@ export default function App() {
               return await requestFn(currentKey);
           } catch (error) {
               const msg = error.message || "";
-              const isQuotaError = msg.includes("Quota exceeded") || msg.includes("429");
+              const isQuotaError = msg.includes("Quota exceeded") || msg.includes("429") || msg.includes("Resource has been exhausted");
               
               if (isQuotaError) {
                   const logFn = operationName.includes("Imagem") ? addBatchLog : addLog;
@@ -463,100 +466,153 @@ export default function App() {
               }
           }
       }
-      throw lastError || new Error("Todas as chaves falharam.");
+      throw lastError || new Error("Todas as chaves falharam. Aguardando recarga...");
   };
 
-  // --- NOVO: FUNÇÃO DE PESQUISA GOOGLE (BANCAS) ---
+  // --- FUNÇÃO DE PESQUISA OTIMIZADA (COM BLINDAGEM) ---
   const searchQuestionSource = async (questionText) => {
+      const searchPromptText = questionText.length > 400 
+        ? questionText.substring(0, 400) + "..." 
+        : questionText;
+
       return executeWithKeyRotation("Pesquisa Web", async (key) => {
-          const systemPrompt = `Você é um verificador de questões de residência médica.
-          Sua missão: Identificar a origem da questão usando a Pesquisa Google.
-          
-          CRITÉRIOS DE ESCOLHA:
-          - Se a questão apareceu em múltiplas provas, escolha a ORIGINAL ou a MAIS RECENTE (priorize a prova principal sobre simulados).
-
-          REGRAS DE FORMATAÇÃO DE NOME (CRÍTICO):
-          - Resuma nomes longos para o formato: "UF - Nome Curto / Sigla".
-          - Exemplo Ruim: "Secretaria da Saúde do Estado da Bahia (SESAB) - Processo Unificado"
-          - Exemplo Bom: "BA - SUS Bahia"
-          - Exemplo Bom: "SP - USP São Paulo"
-          - Exemplo Bom: "Nacional - ENARE"
-
-          SAÍDA OBRIGATÓRIA (JSON):
-          {
-            "institution": "Nome da Instituição Resumido (ou vazio se não achar)",
-            "year": "Ano (apenas números, ou vazio se não achar)"
-          }
-          `;
-
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${key}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: `QUESTÃO PARA IDENTIFICAR:\n${questionText}` }] }],
-                systemInstruction: { parts: [{ text: systemPrompt }] },
-                tools: [{ google_search: {} }] 
-              })
-            }
-          );
-
-          if (!response.ok) throw new Error("Erro na API Search");
-          
-          const data = await response.json();
-          let jsonString = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-          
-          // Tenta limpar e parsear
-          jsonString = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
           try {
-              return JSON.parse(jsonString);
-          } catch(e) {
-              // Fallback se não vier JSON: Tenta extrair linhas
-              console.warn("Search não retornou JSON, tentando extrair texto:", jsonString);
-              return { institution: "", year: "" };
+              const systemPrompt = `Você é um verificador de questões de residência médica.
+              Sua missão: Identificar a origem da questão usando a Pesquisa Google.
+              CRITÉRIOS DE ESCOLHA:
+              - Se a questão apareceu em múltiplas provas, escolha a ORIGINAL ou a MAIS RECENTE.
+              REGRAS DE FORMATAÇÃO DE NOME:
+              - Resuma nomes longos para o formato: "UF - Nome Curto / Sigla".
+              - Exemplo Ruim: "Secretaria da Saúde do Estado da Bahia (SESAB) - Processo Unificado"
+              - Exemplo Bom: "BA - SUS Bahia"
+              - Exemplo Bom: "SP - USP São Paulo"
+              - Exemplo Bom: "Nacional - ENARE"
+              {
+                "institution": "Nome da Instituição Resumido (ou vazio se não achar)",
+                "year": "Ano (apenas números, ou vazio se não achar)"
+              }`;
+
+              const response = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/${modelNameClean}:generateContent?key=${key}`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    contents: [{ parts: [{ text: `IDENTIFICAR ORIGEM:\n${searchPromptText}` }] }],
+                    systemInstruction: { parts: [{ text: systemPrompt }] },
+                    tools: [{ google_search: {} }] 
+                  })
+                }
+              );
+
+              if (!response.ok) {
+                  const errData = await response.json().catch(() => ({}));
+                  throw new Error(errData.error?.message || "Erro na API Search");
+              }
+              
+              const data = await response.json();
+              let jsonString = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+              
+              jsonString = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
+              try { return JSON.parse(jsonString); } 
+              catch(e) { return { institution: "", year: "" }; }
+              
+          } catch (err) {
+              const msg = err.message || "";
+              // BLINDAGEM: Se for cota, lança erro para cima para forçar retry
+              if (msg.includes("429") || msg.includes("Quota") || msg.includes("Resource has been exhausted")) {
+                  throw err;
+              }
+              return { institution: "", year: "" }; // Erro normal (ex: timeout), segue sem fonte
           }
       });
   };
 
-  // --- LOGIC: VERIFICATION AGENT (DOUBLE CHECK) ---
+  // --- LOGIC: VERIFICATION AGENT (COM BLINDAGEM) ---
   const verifyQuestionWithAI = async (questionData) => {
       return executeWithKeyRotation("Auditoria", async (key) => {
-          const verifyPrompt = `
-            Você é um Auditor Sênior de Questões Médicas.
-            Analise a questão abaixo gerada por uma IA.
-            
-            QUESTÃO:
-            Enunciado: ${questionData.text}
-            Alternativas: ${JSON.stringify(questionData.options)}
-            Gabarito Indicado: ${questionData.correctOptionId}
-            Comentário Gerado: ${questionData.explanation}
-            
-            TAREFA:
-            Verifique se a questão é medicamente correta, se o gabarito faz sentido e se não há alucinações graves.
-            
-            Retorne APENAS um JSON:
-            {
-                "isValid": boolean (true se aceitável, false se tiver erro grave/alucinação),
-                "reason": "Explicação curta se for false"
-            }
-          `;
+          try {
+              const verifyPrompt = `
+    Você é um Auditor Sênior de Questões Médicas.
+    Sua missão é validar se esta questão é SEGURA e COERENTE para um banco de dados de estudo.
+    ATENÇÃO: Você NÃO tem acesso à internet. Use exclusivamente seu conhecimento médico treinado.
 
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: verifyPrompt }] }] })
-          });
-          
-          const data = await response.json();
-          if (data.error) throw new Error(data.error.message);
+    DADOS DA QUESTÃO:
+    Banca: ${questionData.institution || "Não informada"}
+    Ano: ${questionData.year || "Não informado"}
+    Enunciado: "${questionData.text}"
+    Alternativas: ${JSON.stringify(questionData.options)}
+    Gabarito Proposto: ${questionData.correctOptionId}
+    Explicação Gerada: "${questionData.explanation}"
 
-          let jsonString = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-          return safeJsonParse(jsonString); // Usa o parser blindado
+    PASSO A PASSO DA AUDITORIA:
+    1. Analise se o gabarito faz sentido clinicamente.
+    2. Verifique se a "Explicação Gerada" realmente justifica o gabarito.
+    3. Aplique as REGRAS DE JULGAMENTO abaixo.
+
+    REGRAS DE JULGAMENTO (HIERARQUIA DE DECISÃO):
+
+    [NÍVEL 1: FATOS OBJETIVOS E ABSURDOS - TOLERÂNCIA ZERO]
+    - Se a questão contém ERROS GRAVES de números (Doses letais, Anatomia impossível).
+    - Se o gabarito é ABSURDAMENTE errado (ex: tratar parada cardíaca com dipirona).
+    - Se a Explicação contradiz o próprio Gabarito.
+    -> AÇÃO: REPROVE ("isValid": false).
+
+    [NÍVEL 2: ANACRONISMO (IMPORTANTE)]
+    - Se a questão parece "errada" hoje, mas estava CERTA no Ano da questão (mudança de diretriz/protocolo).
+    -> AÇÃO: APROVE com ressalva no motivo ("isValid": true, "reason": "Correto para a época").
+
+    [NÍVEL 3: ZONA CINZENTA E CONDUTAS]
+    - Se houver divergência na literatura médica.
+    - Se o gabarito for defendido por PELO MENOS UMA corrente bibliográfica (Harrison, Cecil, MS, UpToDate).
+    -> AÇÃO: APROVE ("isValid": true).
+
+    [NÍVEL 4: "NA DÚVIDA"]
+    - Se não for um erro médico grosseiro.
+    -> AÇÃO: APROVE ("isValid": true).
+
+    SAÍDA OBRIGATÓRIA (JSON):
+    {
+        "isValid": boolean, 
+        "reason": "Explicação breve e direta (máx 15 palavras)"
+    }
+`;
+
+              const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelNameClean}:generateContent?key=${key}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    contents: [{ parts: [{ text: verifyPrompt }] }], 
+                })
+              });
+              
+              if (!response.ok) {
+                   const errData = await response.json().catch(() => ({}));
+                   throw new Error(errData.error?.message || "Erro na API Audit");
+              }
+
+              const data = await response.json();
+              
+              let jsonString = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+              jsonString = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
+              const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
+              if (jsonMatch) jsonString = jsonMatch[0];
+
+              return safeJsonParse(jsonString);
+              
+          } catch (err) {
+              const msg = err.message || "";
+              // BLINDAGEM: Se for cota, lança erro para cima para forçar retry
+              if (msg.includes("429") || msg.includes("Quota") || msg.includes("Resource has been exhausted")) {
+                  throw err;
+              }
+              // Erro de lógica, segue como não checado
+              return { isValid: true, reason: "Falha na auditoria (ignorado)" };
+          }
       }).then(result => {
           return {
               status: result.isValid ? 'verified' : 'suspicious',
-              reason: result.reason || (result.isValid ? "Verificado por IA" : "Inconsistência detectada")
+              reason: result.reason || (result.isValid ? "Validado (Web/Lógica)" : "Erro Fatual ou Divergência Grave")
           };
       });
   };
@@ -567,13 +623,12 @@ export default function App() {
       setProcessingLogs(prev => [{ type, message, time }, ...prev].slice(0, 50)); 
   };
   
-  // --- BATCH LOGS (SEPARADO) ---
   const addBatchLog = (type, message) => {
       const time = new Date().toLocaleTimeString();
       setBatchLogs(prev => [{ type, message, time }, ...prev].slice(0, 50));
   };
 
-  // --- MUDANÇA 2: FUNÇÃO DE TOGGLE DO FILTRO ---
+  // --- FILTROS COM LÓGICA 'OR' (SOMA) ---
   const toggleFilter = (filterKey) => {
       setActiveFilters(prev => {
           if (filterKey === 'all') return ['all'];
@@ -590,32 +645,26 @@ export default function App() {
       });
   };
 
-  // --- MUDANÇA 3: FILTRO COM LÓGICA 'OR' (SOMA) ---
   const getFilteredQuestions = () => {
     if (activeFilters.includes('all')) return parsedQuestions;
     
     return parsedQuestions.filter(q => {
-      // Regra Global: Se for duplicata e o filtro de duplicata NÃO estiver ativo, esconde sempre
       if (!activeFilters.includes('duplicates') && q.isDuplicate) return false;
 
-      // Define as condições baseadas nos filtros ativos
-      // Mapeia cada filtro ativo para um booleano (se a questão atende aquele filtro específico)
       const results = activeFilters.map(filterKey => {
           if (filterKey === 'verified') return q.verificationStatus === 'verified';
           if (filterKey === 'suspicious') return q.verificationStatus === 'suspicious';
           if (filterKey === 'source') return !!q.sourceFound;
           if (filterKey === 'no_source') return !q.sourceFound;
           if (filterKey === 'duplicates') return !!q.isDuplicate;
-          if (filterKey === 'needs_image') return !!q.needsImage; // NOVO
-          return true; // Fallback
+          if (filterKey === 'needs_image') return !!q.needsImage; 
+          if (filterKey === 'text_only') return !q.needsImage; 
+          return true;
       });
 
-      // Aplica a Lógica Selecionada
       if (filterLogic === 'AND') {
-          // Lógica E: A questão precisa atender TODAS as condições dos filtros ativos
           return results.every(r => r === true);
       } else {
-          // Lógica OU (Padrão): A questão precisa atender PELO MENOS UMA condição
           return results.some(r => r === true);
       }
     });
@@ -629,10 +678,11 @@ export default function App() {
       'no_source': 'Sem Fonte', 
       'suspicious': 'Suspeitas',
       'duplicates': 'Duplicadas',
-      'needs_image': 'Requer Imagem' // NOVO LABEL
+      'needs_image': 'Requer Imagem',
+      'text_only': 'Texto Puro (Sem Imagem)' 
   };
 
-  // --- UPLOAD MANUAL DE IMAGEM PARA QUESTÃO INDIVIDUAL ---
+  // --- UPLOAD MULTI-IMAGEM ---
   const handleImageUploadToQuestion = async (e, idx, questionData) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -640,65 +690,54 @@ export default function App() {
       setUploadingImageId(questionData.id);
 
       try {
-          // 1. Otimizar Imagem
           const optimizedFile = await optimizeImageForWeb(file);
+          const timestamp = Date.now();
+          const fileName = `${questionData.id}_${timestamp}.webp`;
+          const storageRef = ref(storage, `questions_images/${fileName}`);
           
-          // 2. Definir caminho no Storage
-          const storageRef = ref(storage, `questions_images/${questionData.id}.webp`);
-          
-          // 3. Upload
           const snapshot = await uploadBytes(storageRef, optimizedFile);
-          
-          // 4. Obter URL
           const downloadURL = await getDownloadURL(snapshot.ref);
 
-          // 5. Atualizar Firestore
           await updateDoc(doc(db, "draft_questions", questionData.id), {
-              imageUrl: downloadURL,
-              hasImage: true,
-              needsImage: false
+              images: arrayUnion(downloadURL), 
+              hasImage: true
           });
 
-          // 6. Atualizar Estado Local
           const newQ = [...parsedQuestions];
-          // Garante que estamos atualizando o índice certo
           if (newQ[idx]) {
-              newQ[idx].imageUrl = downloadURL;
+              const currentImages = newQ[idx].images || [];
+              newQ[idx].images = [...currentImages, downloadURL];
               newQ[idx].hasImage = true;
-              newQ[idx].needsImage = false;
               setParsedQuestions(newQ);
           }
           
-          showNotification('success', 'Imagem anexada com sucesso!');
+          showNotification('success', 'Imagem adicionada à galeria!');
 
       } catch (error) {
           console.error(error);
-          showNotification('error', 'Erro ao enviar imagem: ' + error.message);
+          showNotification('error', 'Erro ao enviar: ' + error.message);
       } finally {
           setUploadingImageId(null);
       }
   };
-
-  const deleteImageFromQuestion = async (idx, questionData) => {
-      if (!questionData.imageUrl) return;
-      
-      if (!window.confirm("Tem certeza que deseja remover esta imagem?")) return;
+  
+  const deleteImageFromQuestion = async (idx, questionData, urlToDelete) => {
+      if (!window.confirm("Remover esta imagem específica?")) return;
 
       try {
           try {
-              const fileRef = ref(storage, questionData.imageUrl);
+              const fileRef = ref(storage, urlToDelete);
               await deleteObject(fileRef);
-          } catch (e) { console.warn("Erro ao deletar do storage:", e); }
+          } catch (e) { console.warn("Erro storage:", e); }
 
           await updateDoc(doc(db, "draft_questions", questionData.id), {
-              imageUrl: "",
-              hasImage: false
+              images: arrayRemove(urlToDelete)
           });
 
           const newQ = [...parsedQuestions];
           if (newQ[idx]) {
-              newQ[idx].imageUrl = "";
-              newQ[idx].hasImage = false;
+              newQ[idx].images = newQ[idx].images.filter(url => url !== urlToDelete);
+              if (newQ[idx].images.length === 0) newQ[idx].hasImage = false;
               setParsedQuestions(newQ);
           }
           showNotification('success', 'Imagem removida.');
@@ -762,13 +801,12 @@ export default function App() {
       const currentStatus = batchStatusRef.current;
       
       if (currentStatus === 'processing') {
-          // LÓGICA DE PAUSA SUAVE
           setBatchStatus('pausing');
           addBatchLog('warning', 'Solicitando pausa... Aguardando a imagem atual finalizar.');
       } else if (currentStatus === 'paused' || currentStatus === 'idle') {
           setBatchStatus('processing');
           addBatchLog('info', 'Iniciando processamento de imagens...');
-          batchProcessorRef.current = false; // Reset lock
+          batchProcessorRef.current = false;
           setTimeout(() => processNextBatchImage(), 100);
       }
   };
@@ -783,22 +821,16 @@ export default function App() {
   };
 
   const processNextBatchImage = async () => {
-      // Verifica Bloqueio
       if (batchProcessorRef.current) return;
 
-      // Verifica Status e Pausa Suave
       const currentStatus = batchStatusRef.current;
-      
-      // Se estava pausando, agora efetiva a pausa
       if (currentStatus === 'pausing') {
           setBatchStatus('paused');
           addBatchLog('warning', 'Processamento pausado com segurança.');
           return;
       }
-
       if (currentStatus !== 'processing') return;
 
-      // Encontra a próxima pendente
       const queue = batchImagesRef.current;
       const nextImg = queue.find(img => img.status === 'pending');
 
@@ -809,46 +841,58 @@ export default function App() {
           return;
       }
 
-      batchProcessorRef.current = true; // Lock
+      batchProcessorRef.current = true;
       const ovr = overridesRef.current;
-      const doDoubleCheck = doubleCheckRef.current; 
-      const doWebSearch = webSearchRef.current; // Ler status do Web Search
       addBatchLog('info', `Processando imagem: ${nextImg.name}...`);
 
       try {
-          // 1. Converter Base64
           const base64Data = await fileToBase64(nextImg.file);
           const activeThemesMap = ovr.overrideArea ? { [ovr.overrideArea]: themesMap[ovr.overrideArea] } : themesMap;
 
-          // 2. Chamar IA (Geração)
           const questions = await executeWithKeyRotation("Imagem Batch", async (key) => {
               const systemPrompt = `
-                Você é um especialista em banco de dados médicos (MedMaps).
-                Analise esta imagem (print de questão médica).
-                Extraia questões no formato JSON ESTRITO.
-                
-                CONTEXTO (Informacional):
-                - Instituição: ${ovr.overrideInst ? ovr.overrideInst : "Não informado (Detectar da imagem)"}
-                - Ano: ${ovr.overrideYear ? ovr.overrideYear : "Não informado (Detectar da imagem)"}
+              Você é um especialista em banco de dados médicos (MedMaps).
+              Analise o conteúdo e gere um JSON ESTRITO.
+              
+              CONTEXTO (Informacional):
+              - Instituição: ${ovr.overrideInst ? ovr.overrideInst : "Não informado (Detectar do texto)"}
+              - Ano: ${ovr.overrideYear ? ovr.overrideYear : "Não informado (Detectar do texto)"}
 
-                REGRAS:
-                1. Retorne APENAS o JSON (sem markdown).
-                2. CLASSIFICAÇÃO (OBRIGATÓRIO):
-                   - Classifique CADA questão usando a lista abaixo.
-                   - LISTA VÁLIDA: ${JSON.stringify(activeThemesMap)}
-                3. GABARITO E COMENTÁRIO: 
-                   - Tente encontrar o gabarito visual na imagem. Se não houver, RESOLVA a questão.
-                   - Gere sempre um campo "explanation".
-                
-                Formato Saída:
-                [
-                  {
-                    "institution": "String", "year": Number|String, "area": "String", "topic": "String",
-                    "text": "String", "options": [{"id": "a", "text": "String"}],
-                    "correctOptionId": "char", "explanation": "String"
-                  }
-                ]
-              `;
+              REGRAS DE EXTRAÇÃO E LIMPEZA:
+              1. LIMPEZA DE INÍCIO:
+                 - Remova APENAS índices/rótulos de questão (ex: "1)", "159048)", "05.", "Questão 1:", "Enunciado:").
+                 - MANTENHA números que fazem parte da frase (ex: "3 pacientes...", "40 anos...").
+                 - Comece o texto direto no conteúdo do caso clínico.
+
+              2. SEPARAÇÃO DAS ALTERNATIVAS:
+                 - O campo "text" DEVE TERMINAR antes das alternativas.
+                 - NUNCA inclua "A) ... B) ..." ou "a. ... b. ..." dentro do campo "text".
+                 - As alternativas DEVEM ser extraídas separadamente no array "options".
+
+              3. DETECÇÃO DE IMAGEM (LÓGICA CONTEXTUAL):
+                 - MARQUE "needsImage": true SE:
+                   * O texto MANDA olhar: "Vide figura", "Observe a imagem", "A figura abaixo", "Ver anexo".
+                   * O texto DEPENDE do visual: "De acordo com o exame de imagem", "Baseado no ECG apresentado".
+                   * O texto é vago sobre o resultado: "O Raio-X revela... (e não diz o que)".
+                 - MARQUE "needsImage": false SE:
+                   * O texto já DESCREVE o resultado: "ECG normal", "Raio-X evidenciando fratura".
+                   * Apenas cita que o exame foi feito: "Foi solicitada tomografia".
+
+              4. CLASSIFICAÇÃO E RESOLUÇÃO:
+                 - Classifique usando a lista: ${JSON.stringify(activeThemesMap)}
+                 - Tente encontrar o gabarito. Se não houver, RESOLVA a questão.
+                 - Gere sempre "explanation".
+
+              Formato Saída JSON:
+              [
+                {
+                  "institution": "String", "year": Number|String, "area": "String", "topic": "String",
+                  "text": "String", "options": [{"id": "a", "text": "String"}],
+                  "correctOptionId": "char", "explanation": "String",
+                  "needsImage": boolean
+                }
+              ]
+            `;
 
               const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel.replace('models/', '')}:generateContent?key=${key}`, {
                   method: 'POST',
@@ -863,83 +907,105 @@ export default function App() {
                   })
               });
 
-              const data = await response.json();
-              if (data.error) throw new Error(data.error.message);
+              if (!response.ok) {
+                   const errData = await response.json().catch(() => ({}));
+                   throw new Error(errData.error?.message || "Erro na API Gemini");
+              }
 
+              const data = await response.json();
               let jsonString = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-              
-              // --- ALTERAÇÃO AQUI: TRAVA ANTI-DISCURSIVA ---
               const parsed = safeJsonParse(jsonString);
-              // Só aceita se tiver options E se tiver 2 ou mais alternativas
               return parsed.filter(q => q.options && q.options.length >= 2);
           });
 
-          // 3. Pós-Processamento e Pesquisa Web (NOVO - AGORA PARALELO)
+          // Pós-Processamento Inteligente
           let processedQuestions = await Promise.all(questions.map(async (q) => {
-              // --- START PARALLEL TASKS ---
-              let finalInst = q.institution;
+              const hashId = await generateQuestionHash(q.text);
+              let isDuplicate = false;
+              let oldData = null;
+
+              if (hashId) {
+                  const existingDoc = await getDoc(doc(db, "questions", hashId));
+                  if (existingDoc.exists()) {
+                      isDuplicate = true;
+                      oldData = existingDoc.data();
+                  }
+              }
+
+              const shouldRunAPIs = !isDuplicate; 
+
+              // --- FIX: PRÉ-LIMPEZA DE INSTITUIÇÃO ---
+              // Limpa "Medcurso" ANTES de decidir se precisa pesquisar.
+              // Assim, se a IA extraiu lixo, vira "" e ativa o gatilho da pesquisa.
+              let preCleanedInst = cleanInstitutionText(q.institution);
+              
+              let finalInst = preCleanedInst;
               let finalYear = q.year;
               let sourceFound = false;
               let verificationStatus = 'unchecked';
               let verificationReason = '';
 
-              // TASK A: SEARCH WEB (if enabled)
-              const searchPromise = (async () => {
-                  if (doWebSearch && (!q.institution || !q.year)) {
-                      try {
-                          // Random delay to spread API hits
-                          await new Promise(r => setTimeout(r, Math.random() * 1000));
-                          const searchResult = await searchQuestionSource(q.text);
-                          return searchResult;
-                      } catch (err) {
-                          console.warn("Search failed:", err);
-                          return null;
+              if (shouldRunAPIs) {
+                  const doWebSearch = webSearchRef.current; 
+                  const doDoubleCheck = doubleCheckRef.current; 
+
+                  const searchPromise = (async () => {
+                      if (doWebSearch && (!preCleanedInst || !q.year)) { // USA O VALOR LIMPO
+                          try {
+                              await new Promise(r => setTimeout(r, Math.random() * 1000));
+                              return await searchQuestionSource(q.text);
+                          } catch (err) { 
+                              // BLINDAGEM: Se for cota, joga erro pra cima pra forçar retry do batch
+                              const msg = err.message || "";
+                              if (msg.includes("429") || msg.includes("Quota") || msg.includes("Resource has been exhausted")) throw err;
+                              return null; 
+                          }
                       }
-                  }
-                  return null;
-              })();
+                      return null;
+                  })();
 
-              // TASK B: AUDIT (Double Check) (if enabled)
-              const auditPromise = (async () => {
-                  if (doDoubleCheck) {
-                      try {
-                          // Random delay to spread API hits
-                          await new Promise(r => setTimeout(r, Math.random() * 500)); 
-                          return await verifyQuestionWithAI(q);
-                      } catch (err) {
-                          console.error("Audit failed:", err);
-                          return { status: 'unchecked', reason: 'Audit failed' };
+                  const auditPromise = (async () => {
+                      if (doDoubleCheck) {
+                          try {
+                              await new Promise(r => setTimeout(r, Math.random() * 500)); 
+                              return await verifyQuestionWithAI(q);
+                          } catch (err) { 
+                              // BLINDAGEM
+                              const msg = err.message || "";
+                              if (msg.includes("429") || msg.includes("Quota") || msg.includes("Resource has been exhausted")) throw err;
+                              return { status: 'unchecked', reason: 'Audit failed' }; 
+                          }
                       }
-                  }
-                  return { status: 'unchecked', reason: '' };
-              })();
+                      return { status: 'unchecked', reason: '' };
+                  })();
 
-              // WAIT FOR BOTH
-              const [searchResult, auditResult] = await Promise.all([searchPromise, auditPromise]);
+                  const [searchResult, auditResult] = await Promise.all([searchPromise, auditPromise]);
 
-              // --- MERGE RESULTS ---
-              
-              // 1. Apply Search Results
-              if (searchResult) {
-                  if (searchResult.institution) {
-                      finalInst = searchResult.institution;
-                      sourceFound = true;
+                  if (searchResult) {
+                      if (searchResult.institution) { finalInst = searchResult.institution; sourceFound = true; }
+                      if (searchResult.year) finalYear = searchResult.year;
                   }
-                  if (searchResult.year) finalYear = searchResult.year;
+                  verificationStatus = auditResult.status;
+                  verificationReason = auditResult.reason;
+
+              } else {
+                  if (oldData) {
+                      finalInst = oldData.institution || q.institution;
+                      finalYear = oldData.year || q.year;
+                      sourceFound = oldData.sourceFound || false; 
+                      verificationStatus = oldData.verificationStatus || 'unchecked';
+                      verificationReason = oldData.verificationReason || 'Duplicata recuperada';
+                  }
               }
 
-              // 2. Apply Overrides
+              // Limpeza final (garantia)
+              finalInst = cleanInstitutionText(finalInst);
+
+              const ovr = overridesRef.current || { overrideInst, overrideYear, overrideArea, overrideTopic };
               if (ovr.overrideInst) finalInst = ovr.overrideInst;
               if (ovr.overrideYear) finalYear = ovr.overrideYear;
 
-              // 3. Clean
-              finalInst = cleanInstitutionText(finalInst);
-
-              // 4. Verification Data
-              verificationStatus = auditResult.status;
-              verificationReason = auditResult.reason;
-
-              const finalQ = {
+              return {
                   ...q,
                   institution: finalInst,
                   year: finalYear,
@@ -947,27 +1013,16 @@ export default function App() {
                   topic: ovr.overrideTopic || q.topic,
                   sourceFound,
                   verificationStatus,
-                  verificationReason
+                  verificationReason,
+                  hashId,
+                  isDuplicate
               };
-
-              // 5. Hash & Duplicate Check
-              const hashId = await generateQuestionHash(finalQ.text);
-              let isDuplicate = false;
-              if (hashId) {
-                  const existingDoc = await getDoc(doc(db, "questions", hashId));
-                  if (existingDoc.exists()) isDuplicate = true;
-              }
-
-              return { ...finalQ, hashId, isDuplicate };
           }));
-
+        
           const batch = writeBatch(db);
           let savedCount = 0;
           
-          let newQuestionsForAudit = processedQuestions; 
-
-          // 5. Salvar no Firestore
-          for (const q of newQuestionsForAudit) {
+          for (const q of processedQuestions) {
               const docId = q.hashId || doc(collection(db, "draft_questions")).id;
               const docRef = doc(db, "draft_questions", docId);
               batch.set(docRef, {
@@ -995,12 +1050,15 @@ export default function App() {
           console.error(error);
           const errorMessage = error.message || "Erro desconhecido";
           
-          if (errorMessage.includes("Quota exceeded") || errorMessage.includes("429")) {
-              addBatchLog('warning', `Cota excedida. Aguardando 10s...`);
+          if (errorMessage.includes("Quota exceeded") || errorMessage.includes("429") || errorMessage.includes("Resource has been exhausted")) {
+              addBatchLog('warning', `Todas as chaves esgotadas. Aguardando recarga (60s)...`);
+              // MODO INFINITO: Não marca erro, tenta de novo a mesma imagem daqui a pouco
+              setConsecutiveErrors(0);
+              
               setTimeout(() => {
                   batchProcessorRef.current = false;
-                  processNextBatchImage(); // Tenta a mesma imagem de novo
-              }, 10000);
+                  processNextBatchImage();
+              }, 60000);
           } else {
               addBatchLog('error', `Falha em ${nextImg.name}: ${errorMessage}`);
               setBatchImages(prev => prev.map(img => img.id === nextImg.id ? { ...img, status: 'error', errorMsg: errorMessage } : img));
@@ -1013,7 +1071,7 @@ export default function App() {
       }
   };
 
-  // --- LOGIC: PDF HANDLING (ATUALIZADO COM DOUBLE OVERLAP) ---
+  // --- LOGIC: PDF HANDLING ---
   const handlePdfUpload = async (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -1031,7 +1089,6 @@ export default function App() {
           
           addLog('info', `PDF carregado. Total: ${pdf.numPages} págs.`);
           
-          // Lógica de Range de Páginas
           let startP = parseInt(pdfStartPage) || 1;
           let endP = parseInt(pdfEndPage) || pdf.numPages;
 
@@ -1050,25 +1107,22 @@ export default function App() {
           let chunks = [];
           let currentChunkText = "";
           let chunkStartPage = startP;
-          let lastPageContent = ""; // Variável para segurar o contexto da página anterior
+          let lastPageContent = "";
 
           for (let i = startP; i <= endP; i++) {
               const page = await pdf.getPage(i);
               const content = await page.getTextContent();
               const text = content.items.map(item => item.str).join(' ');
               
-              lastPageContent = text; // Guarda para ser o "passado" da próxima fatia
+              lastPageContent = text; 
 
               const pageTextFormatted = `\n--- PÁGINA ${i} ---\n${text}`;
               currentChunkText += pageTextFormatted;
 
-              // Verifica se é hora de fatiar OU se é a última página selecionada
               if ((i - startP + 1) % CHUNK_SIZE === 0 || i === endP) {
                   
                   let finalChunkText = currentChunkText;
 
-                  // --- OLHAR PARA O FUTURO (NEXT PAGE CONTEXT) ---
-                  // Se não for a última página do intervalo selecionado, espia a próxima
                   if (i < endP) {
                       try {
                           const nextPage = await pdf.getPage(i + 1);
@@ -1083,12 +1137,11 @@ export default function App() {
                   chunks.push({
                       id: `chunk_${chunkStartPage}_${i}`,
                       pages: `${chunkStartPage} a ${i}`,
-                      text: finalChunkText, // Usa o texto com o futuro anexado
+                      text: finalChunkText,
                       status: 'pending',
                       errorCount: 0
                   });
                   
-                  // --- PREPARAR A PRÓXIMA FATIA (PREVIOUS PAGE CONTEXT) ---
                   if (i < endP) {
                       currentChunkText = `\n--- CONTEXTO DA PÁGINA ANTERIOR (${i}) ---\n${lastPageContent}`;
                   } else {
@@ -1103,16 +1156,13 @@ export default function App() {
           setPdfStatus('ready');
           addLog('success', `Pronto! ${chunks.length} partes geradas (${startP}-${endP}).`);
 
-          // --- LOGICA DE RESTAURAÇÃO DE PROGRESSO (VIA DB) ---
-          // Verifica se o lastSessionData (vindo do DB) bate com o arquivo atual
           if (lastSessionData && lastSessionData.fileName === file.name) {
               const lastIdx = lastSessionData.lastChunkIndex;
-              const nextIndex = lastIdx + 1; // PULA PARA A PRÓXIMA FATIA APÓS A SUCESSO
+              const nextIndex = lastIdx + 1;
 
               if (nextIndex < chunks.length) {
                   setCurrentChunkIndex(nextIndex);
                   
-                  // --- VISUAL FEEDBACK: MARCA AS FATIAS ANTERIORES COMO RESTAURADAS ---
                   for(let i = 0; i < nextIndex; i++) {
                       chunks[i].status = 'restored';
                   }
@@ -1120,19 +1170,16 @@ export default function App() {
                   addLog('info', `Sessão encontrada no DB! Agulha movida para a fatia ${chunks[nextIndex].pages}.`);
                   showNotification('info', `Retomando ${file.name} a partir da fatia ${chunks[nextIndex].pages}.`);
               } else {
-                  // Se já acabou
                   setCurrentChunkIndex(chunks.length - 1);
-                  // Marca TUDO como restaurado
                   chunks.forEach(c => c.status = 'restored');
                   
                   addLog('success', `Este arquivo já foi finalizado na última sessão.`);
                   showNotification('success', 'Arquivo já finalizado anteriormente.');
               }
           } else {
-              // ARQUIVO NOVO -> RESETA O DB PARA O NOVO ARQUIVO
               const newSession = {
                   fileName: file.name,
-                  lastChunkIndex: -1, // Nada processado ainda
+                  lastChunkIndex: -1, 
                   lastChunkPages: 'Início',
                   timestamp: new Date().toISOString()
               };
@@ -1176,7 +1223,6 @@ export default function App() {
       setProcessingLogs([]);
       setConsecutiveErrors(0);
       
-      // Reseta progresso no DB para este arquivo
       const resetSession = {
           fileName: pdfFile.name,
           lastChunkIndex: -1,
@@ -1192,21 +1238,16 @@ export default function App() {
       addLog('info', 'Processamento reiniciado do zero.');
   };
 
-  // --- NOVA LÓGICA DE NAVEGAÇÃO ("SEEK") ---
   const handleJumpToChunk = (index) => {
       if (pdfStatus === 'processing' || pdfStatus === 'idle' || pdfStatus === 'pausing' || pdfStatus === 'reading') return;
       
       const chunk = pdfChunks[index];
       addLog('info', `Agulha movida para fatia ${chunk.pages} (Aguardando Início)...`);
       
-      // 1. Move a agulha para o índice clicado
       setCurrentChunkIndex(index);
 
-      // 2. Força o status da fatia clicada para 'pending' (para reprocessar se quiser)
-      //    Isso permite "tocar" o vídeo a partir daqui.
       setPdfChunks(prev => {
           const newChunks = [...prev];
-          // Reseta APENAS a fatia atual para garantir que ela rode
           newChunks[index] = { ...newChunks[index], status: 'pending', errorCount: 0 };
           return newChunks;
       });
@@ -1216,19 +1257,25 @@ export default function App() {
       const currentStatus = pdfStatusRef.current;
       const currentChunks = pdfChunksRef.current;
       const doDoubleCheck = doubleCheckRef.current;
-      const doWebSearch = webSearchRef.current; // LER CHAVE WEB SEARCH
+      const doWebSearch = webSearchRef.current; 
       const ovr = overridesRef.current; 
-      const currentFile = pdfFile; // Pega referência atual do arquivo
-      // USA O REF PARA EVITAR CLOSURE STALE
+      const currentFile = pdfFile; 
       const activeIndex = currentChunkIndexRef.current;
 
+      // --- FIX: CHECKPOINT DE PAUSA (O Guarda de Trânsito) ---
+      // Se o usuário clicou em Pausar enquanto o sistema esperava a cota, ele para AQUI.
+      if (currentStatus === 'pausing' || currentStatus === 'paused') {
+          if (currentStatus === 'pausing') {
+              setPdfStatus('paused');
+              addLog('warning', 'Pausa solicitada. Sistema parado com segurança.');
+          }
+          processorRef.current = false; // Libera o processador
+          return; // Aborta a execução
+      }
+      // -------------------------------------------------------
+
       if (processorRef.current) return; 
-      // Se estiver pausado ou erro e a função for chamada (ex: retry), ok.
-      // Se estiver 'completed', para.
       if (currentStatus === 'completed') return;
-      
-      // --- LÓGICA DE VÍDEO PLAYER (LINEAR) ---
-      // Não busca mais o "próximo pendente". Confia na agulha (activeIndex).
       
       if (activeIndex >= currentChunks.length) {
            setPdfStatus('completed');
@@ -1239,66 +1286,72 @@ export default function App() {
 
       const chunk = currentChunks[activeIndex];
 
-      // Se não estiver 'pausing', garante que está 'processing'
       if (currentStatus !== 'pausing' && currentStatus !== 'processing') setPdfStatus('processing');
       
       processorRef.current = true; 
-
-      // --- COMPORTAMENTO DE PLAYER: SEMPRE PROCESSA O QUE ESTIVER NA AGULHA ---
-      // Mesmo se já foi "success" ou "restored", se a agulha está lá, processa de novo.
       addLog('info', `Processando fatia ${chunk.pages}...`);
 
       try {
-          // --- CONSTRUÇÃO INTELIGENTE DO MAPA DE TEMAS E PROMPT ---
           const activeThemesMap = ovr.overrideArea ? { [ovr.overrideArea]: themesMap[ovr.overrideArea] } : themesMap;
 
-          // USANDO ROTAÇÃO DE CHAVES PARA A GERAÇÃO PRINCIPAL
           const questions = await executeWithKeyRotation("Geração", async (key) => {
               const systemPrompt = `
-                Você é um especialista em provas de Residência Médica (MedMaps).
-                Analise o texto extraído de um PDF.
-                
-                CONTEXTO (Informacional):
-                - Instituição: ${ovr.overrideInst ? ovr.overrideInst : "Não informado (Detectar do texto)"}
-                - Ano: ${ovr.overrideYear ? ovr.overrideYear : "Não informado (Detectar do texto)"}
+              Você é um especialista em banco de dados médicos (MedMaps).
+              Analise o conteúdo e gere um JSON ESTRITO.
+              
+              CONTEXTO (Informacional):
+              - Instituição: ${ovr.overrideInst ? ovr.overrideInst : "Não informado (Detectar do texto)"}
+              - Ano: ${ovr.overrideYear ? ovr.overrideYear : "Não informado (Detectar do texto)"}
 
-                SUA MISSÃO:
-                1. Identificar questões (Enunciado + Alternativas).
-                
-                2. DETECÇÃO DE IMAGEM (NOVO):
-                   - Analise se o enunciado cita ou DEPENDE de uma imagem, gráfico, ECG, Radiografia ou Tabela que não está no texto.
-                   - Termos comuns: "Vide figura", "A imagem mostra", "Observe o ECG", "Raio-X anexo".
-                   - Se precisar de imagem, marque "needsImage": true. Caso contrário, false.
+              OBSERVAÇÃO SOBRE CONTEXTO (CRÍTICO PARA PDF):
+              - O texto contém seções de 'CONTEXTO' (Anterior e Próxima). 
+              - Use essas seções APENAS para reconstruir questões quebradas nas bordas do conteúdo principal.
+              - Se uma questão estiver 100% contida dentro de uma área de contexto, ignore-a (ela será processada no outro lote).
 
-                3. CLASSIFICAÇÃO (OBRIGATÓRIO):
-                   - Classifique CADA questão em uma das Áreas e Tópicos da lista abaixo.
-                   - É CRUCIAL que a classificação esteja correta.
-                   - LISTA DE CLASSIFICAÇÃO VÁLIDA:
+              REGRAS DE EXTRAÇÃO E LIMPEZA:
+              1. LIMPEZA DE INÍCIO:
+                 - Remova APENAS índices/rótulos de questão (ex: "1)", "159048)", "05.", "Questão 1:", "Enunciado:").
+                 - MANTENHA números que fazem parte da frase (ex: "3 pacientes...", "40 anos...").
+                 - Comece o texto direto no conteúdo do caso clínico.
+                 
+              2. SEPARAÇÃO DAS ALTERNATIVAS:
+                 - O campo "text" DEVE TERMINAR antes das alternativas.
+                 - NUNCA inclua "A) ... B) ..." ou "a. ... b. ..." dentro do campo "text".
+                 - As alternativas DEVEM ser extraídas separadamente no array "options".
+
+              3. DETECÇÃO DE IMAGEM (LÓGICA CONTEXTUAL):
+                 - MARQUE "needsImage": true SE:
+                   * O texto MANDA olhar: "Vide figura", "Observe a imagem", "A figura abaixo", "Ver anexo".
+                   * O texto DEPENDE do visual: "De acordo com o exame de imagem", "Baseado no ECG apresentado".
+                   * O texto é vago sobre o resultado: "O Raio-X revela... (e não diz o que)".
+                 - MARQUE "needsImage": false SE:
+                   * O texto já DESCREVE o resultado: "ECG normal", "Raio-X evidenciando fratura".
+                   * Apenas cita que o exame foi feito: "Foi solicitada tomografia".
+
+              4. CLASSIFICAÇÃO E RESOLUÇÃO:
+                - Se o gabarito estiver no texto, use-o. Se NÃO, RESOLVA a questão.
+                - Gere sempre um campo "explanation".
+                 - Classifique CADA questão em uma das Áreas e Tópicos da lista abaixo.
+                  - É CRUCIAL que a classificação esteja correta.
+                  - LISTA DE CLASSIFICAÇÃO VÁLIDA:
                    ${JSON.stringify(activeThemesMap)}
 
-                4. GABARITO E COMENTÁRIO:
-                   - Se o gabarito estiver no texto, use-o. Se NÃO, RESOLVA a questão.
-                   - Gere sempre um campo "explanation".
-                
-                5. DADOS DE CABEÇALHO:
-                   - IGNORE nomes de cursos preparatórios (Medgrupo, Medcurso, Estratégia, etc) no campo "institution".
-                   - Procure pelo nome do HOSPITAL ou BANCA.
-                   - Se não encontrar, deixe "".
+              5. DADOS DE CABEÇALHO:
+                  - IGNORE nomes de cursos preparatórios (Medgrupo, Medcurso, Estratégia, etc) no campo "institution".
+                  - Procure pelo nome do HOSPITAL ou BANCA.
+                  - Se não encontrar, deixe "".
 
-                OBSERVAÇÃO SOBRE CONTEXTO:
-                - O texto contém seções de 'CONTEXTO' (Anterior e Próxima). 
-                - Use essas seções APENAS para reconstruir questões quebradas nas bordas do conteúdo principal.
-                - Se uma questão estiver 100% contida dentro de uma área de contexto, ignore-a (ela será processada no outro lote).
-                
-                Retorne JSON ESTRITO:
-                [{ 
-                    "institution": "String", "year": Number|"", "area": "String", "topic": "String", 
-                    "text": "String", "options": [{"id": "a", "text": "..."}], 
-                    "correctOptionId": "char", "explanation": "String",
-                    "needsImage": boolean
-                }]
-              `;
-
+              Formato Saída JSON:
+              [
+                {
+                  "institution": "String", "year": Number|String, "area": "String", "topic": "String",
+                  "text": "String", "options": [{"id": "a", "text": "String"}],
+                  "correctOptionId": "char", "explanation": "String",
+                  "needsImage": boolean
+                }
+              ]
+            `;
+            
               const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel.replace('models/', '')}:generateContent?key=${key}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1307,96 +1360,118 @@ export default function App() {
                 })
               });
 
-              const data = await response.json();
-              if (data.error) throw new Error(data.error.message);
+              if (!response.ok) {
+                  const errData = await response.json().catch(() => ({}));
+                  throw new Error(errData.error?.message || "Erro na API Geração");
+              }
 
+              const data = await response.json();
               let jsonString = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-              
-              // --- ALTERAÇÃO AQUI: TRAVA ANTI-DISCURSIVA ---
               const parsed = safeJsonParse(jsonString);
               return parsed.filter(q => q.options && q.options.length >= 2);
           });
 
-          // --- PÓS-PROCESSAMENTO (PESQUISA + LIMPEZA + AUDITORIA PARALELA) ---
           addLog('info', `Pós-processando ${questions.length} questões (Search + Audit)...`);
 
           let processedQuestions = await Promise.all(questions.map(async (q) => {
-              // --- START PARALLEL TASKS ---
-              let finalInst = q.institution;
+              const hashId = await generateQuestionHash(q.text);
+              let isDuplicate = false;
+              let oldData = null;
+
+              if (hashId) {
+                  const existingDoc = await getDoc(doc(db, "questions", hashId));
+                  if (existingDoc.exists()) {
+                      isDuplicate = true;
+                      oldData = existingDoc.data();
+                  }
+              }
+
+              const shouldRunAPIs = !isDuplicate; 
+
+              // --- FIX: PRÉ-LIMPEZA DE INSTITUIÇÃO ---
+              // Limpa "Medcurso" ANTES de decidir se precisa pesquisar.
+              // Assim, se a IA extraiu lixo, vira "" e ativa o gatilho da pesquisa.
+              let preCleanedInst = cleanInstitutionText(q.institution);
+
+              let finalInst = preCleanedInst;
               let finalYear = q.year;
               let sourceFound = false;
               let verificationStatus = 'unchecked';
               let verificationReason = '';
 
-              // TASK A: SEARCH WEB (if enabled)
-              const searchPromise = (async () => {
-                  if (doWebSearch && (!q.institution || !q.year)) {
-                      try {
-                          await new Promise(r => setTimeout(r, Math.random() * 1000));
-                          const searchResult = await searchQuestionSource(q.text);
-                          return searchResult;
-                      } catch (err) {
-                          return null;
+              if (shouldRunAPIs) {
+                  const doWebSearch = webSearchRef.current; 
+                  const doDoubleCheck = doubleCheckRef.current; 
+
+                  const searchPromise = (async () => {
+                      if (doWebSearch && (!preCleanedInst || !q.year)) { // USA O VALOR LIMPO
+                          try {
+                              await new Promise(r => setTimeout(r, Math.random() * 1000));
+                              return await searchQuestionSource(q.text);
+                          } catch (err) { 
+                              // BLINDAGEM: Throw erro se for cota
+                              const msg = err.message || "";
+                              if (msg.includes("429") || msg.includes("Quota") || msg.includes("Resource has been exhausted")) throw err;
+                              return null; 
+                          }
                       }
-                  }
-                  return null;
-              })();
+                      return null;
+                  })();
 
-              // TASK B: AUDIT (Double Check) (if enabled)
-              const auditPromise = (async () => {
-                  if (doDoubleCheck) {
-                      try {
-                          await new Promise(r => setTimeout(r, Math.random() * 500)); 
-                          return await verifyQuestionWithAI(q);
-                      } catch (err) {
-                          return { status: 'unchecked', reason: 'Audit failed' };
+                  const auditPromise = (async () => {
+                      if (doDoubleCheck) {
+                          try {
+                              await new Promise(r => setTimeout(r, Math.random() * 500)); 
+                              return await verifyQuestionWithAI(q);
+                          } catch (err) { 
+                              // BLINDAGEM: Throw erro se for cota
+                              const msg = err.message || "";
+                              if (msg.includes("429") || msg.includes("Quota") || msg.includes("Resource has been exhausted")) throw err;
+                              return { status: 'unchecked', reason: 'Audit failed' }; 
+                          }
                       }
-                  }
-                  return { status: 'unchecked', reason: '' };
-              })();
+                      return { status: 'unchecked', reason: '' };
+                  })();
 
-              // WAIT FOR BOTH
-              const [searchResult, auditResult] = await Promise.all([searchPromise, auditPromise]);
+                  const [searchResult, auditResult] = await Promise.all([searchPromise, auditPromise]);
 
-              // --- MERGE RESULTS ---
-              if (searchResult) {
-                  if (searchResult.institution) {
-                      finalInst = searchResult.institution;
-                      sourceFound = true;
+                  if (searchResult) {
+                      if (searchResult.institution) { finalInst = searchResult.institution; sourceFound = true; }
+                      if (searchResult.year) finalYear = searchResult.year;
                   }
-                  if (searchResult.year) finalYear = searchResult.year;
+                  verificationStatus = auditResult.status;
+                  verificationReason = auditResult.reason;
+
+              } else {
+                  if (oldData) {
+                      finalInst = oldData.institution || q.institution;
+                      finalYear = oldData.year || q.year;
+                      sourceFound = oldData.sourceFound || false; 
+                      
+                      verificationStatus = oldData.verificationStatus || 'unchecked';
+                      verificationReason = oldData.verificationReason || 'Duplicata recuperada';
+                  }
               }
 
+              // Limpeza final (garantia)
+              finalInst = cleanInstitutionText(finalInst);
+
+              const ovr = overridesRef.current || { overrideInst, overrideYear, overrideArea, overrideTopic }; 
               if (ovr.overrideInst) finalInst = ovr.overrideInst;
               if (ovr.overrideYear) finalYear = ovr.overrideYear;
 
-              finalInst = cleanInstitutionText(finalInst);
-
-              verificationStatus = auditResult.status;
-              verificationReason = auditResult.reason;
-
-              const finalQ = {
+              return {
                   ...q,
-                  institution: finalInst, 
+                  institution: finalInst,
                   year: finalYear,
                   area: ovr.overrideArea || q.area,
                   topic: ovr.overrideTopic || q.topic,
                   sourceFound,
                   verificationStatus,
-                  verificationReason
+                  verificationReason,
+                  hashId,
+                  isDuplicate
               };
-
-              // Hash & Duplicata
-              const hashId = await generateQuestionHash(finalQ.text);
-              let isDuplicate = false;
-              if (hashId) {
-                  const existingDoc = await getDoc(doc(db, "questions", hashId));
-                  if (existingDoc.exists()) {
-                      isDuplicate = true;
-                  }
-              }
-
-              return { ...finalQ, hashId, isDuplicate };
           }));
 
           const batch = writeBatch(db);
@@ -1425,11 +1500,10 @@ export default function App() {
           });
           setConsecutiveErrors(0); 
 
-          // --- SALVA O ÚLTIMO PROGRESSO NO DB (SOBRESCREVENDO SEMPRE) ---
           if (currentFile && currentFile.name && user) {
               const sessionData = {
                   fileName: currentFile.name,
-                  lastChunkIndex: activeIndex, // Salva o índice que acabou de ser sucesso
+                  lastChunkIndex: activeIndex, 
                   lastChunkPages: chunk.pages,
                   timestamp: new Date().toISOString()
               };
@@ -1437,21 +1511,18 @@ export default function App() {
                 .catch(err => console.error("Erro ao salvar progresso no DB:", err));
           }
 
-          // --- VERIFICAÇÃO DE PAUSA NO FINAL DO CICLO ---
           if (pdfStatusRef.current === 'pausing') {
               setPdfStatus('paused');
               addLog('warning', 'Pausa solicitada. Ciclo atual concluído e salvo.');
               processorRef.current = false;
-              return; // PARA A RECURSÃO AQUI
+              return; 
           }
 
-          // Se estiver pausado ou idle por outro motivo
           if (pdfStatusRef.current === 'paused' || pdfStatusRef.current === 'idle') {
               processorRef.current = false;
               return;
           }
 
-          // MOVER A AGULHA E CONTINUAR
           setCurrentChunkIndex(prev => prev + 1);
           setTimeout(() => {
               processorRef.current = false; 
@@ -1465,7 +1536,7 @@ export default function App() {
           
           let delay = 3000;
 
-          if (errorMessage.includes("Quota exceeded") || errorMessage.includes("429")) {
+          if (errorMessage.includes("Quota exceeded") || errorMessage.includes("429") || errorMessage.includes("Resource has been exhausted")) {
               if (retrySeconds) {
                   delay = (retrySeconds * 1000) + 2000; 
                   addLog('warning', `Todas as chaves esgotadas. Aguardando ${Math.ceil(retrySeconds)}s...`);
@@ -1473,7 +1544,27 @@ export default function App() {
                   delay = 60000; 
                   addLog('warning', `Todas as chaves esgotadas. Aguardando 60s...`);
               }
-          } else if (errorMessage.includes("API key expired")) {
+              
+              // --- TRUQUE DO MODO INFINITO ---
+              // Zera os erros consecutivos para impedir a pausa automática de segurança.
+              // O sistema ficará preso neste loop (tentando a mesma fatia) até conseguir.
+              setConsecutiveErrors(0);
+              
+              setPdfChunks(prev => {
+                  const newChunks = [...prev];
+                  newChunks[activeIndex] = { ...newChunks[activeIndex], status: 'pending' };
+                  return newChunks;
+              });
+
+              setTimeout(() => {
+                  processorRef.current = false;
+                  processNextChunk();
+              }, delay);
+
+              return; // Sai daqui para não rodar a lógica de erro comum abaixo
+          } 
+          
+          if (errorMessage.includes("API key expired")) {
               setPdfStatus('paused');
               addLog('error', `ERRO CRÍTICO: Chaves API Inválidas! Pausado.`);
               showNotification('error', 'Chaves API Inválidas.');
@@ -1493,8 +1584,6 @@ export default function App() {
                   setConsecutiveErrors(0);
                   processorRef.current = false;
                   
-                  // Tenta a próxima fatia mesmo com erro nesta?
-                  // O usuário pediu comportamento linear. Se falhar 3x, marca erro e avança.
                   setCurrentChunkIndex(prev => prev + 1);
                   setTimeout(() => processNextChunk(), 1000); 
                   return;
@@ -1506,12 +1595,11 @@ export default function App() {
 
           if (newConsecutiveErrors >= 10) { 
               setPdfStatus('paused'); 
-              addLog('error', 'PAUSADO: Muitos erros consecutivos.');
+              addLog('error', 'PAUSADO: Muitos erros consecutivos (não relacionados a cota).');
               processorRef.current = false;
               return; 
           }
 
-          // Se deu erro, mas o usuário pediu pausa, vamos respeitar a pausa
           if (pdfStatusRef.current === 'pausing') {
               setPdfStatus('paused');
               addLog('warning', 'Pausa solicitada durante erro. Sistema pausado.');
@@ -1525,7 +1613,6 @@ export default function App() {
               return newChunks;
           });
 
-          // Tenta a MESMA fatia de novo (retry)
           setTimeout(() => {
               processorRef.current = false;
               processNextChunk();
@@ -1536,11 +1623,9 @@ export default function App() {
   const togglePdfProcessing = () => {
       const currentStatus = pdfStatusRef.current;
       if (currentStatus === 'processing') {
-          // EM VEZ DE PAUSED DIRETO, VAI PARA PAUSING
           setPdfStatus('pausing');
           addLog('warning', 'Solicitando pausa... Aguardando conclusão da fatia atual.');
       } else if (currentStatus === 'paused' || currentStatus === 'ready') {
-          // ADICIONADO 'ready' PARA O BOTÃO INICIAR FUNCIONAR
           setPdfStatus('processing');
           addLog('info', currentStatus === 'ready' ? 'Iniciando processamento...' : 'Retomando...');
           processorRef.current = false; 
@@ -1588,9 +1673,6 @@ export default function App() {
   const closeNotification = () => { setNotification(null); };
   const handleLogout = () => { signOut(auth); setParsedQuestions([]); setActiveTab('input'); };
 
-  // --- IMAGEM ÚNICA (AGORA REDUNDANTE MAS NECESSÁRIA PARA O TAB INPUT)
-  // Mas como removemos a tab, podemos remover esses handlers ou adaptar se quiseres manter texto
-  
   const validateKeyAndFetchModels = async () => {
       const currentKey = apiKeysRef.current[0]; 
       if (!currentKey) return showNotification('error', 'Configure as chaves API primeiro.');
@@ -1621,40 +1703,45 @@ export default function App() {
     setIsProcessing(true);
 
     const ovr = { overrideInst, overrideYear, overrideArea, overrideTopic };
-    const doWebSearch = isWebSearchEnabled;
-
+    
     try {
         const activeThemesMap = ovr.overrideArea ? { [ovr.overrideArea]: themesMap[ovr.overrideArea] } : themesMap;
 
         const questions = await executeWithKeyRotation("Processamento Único", async (key) => {
             const systemPrompt = `
               Você é um especialista em banco de dados médicos (MedMaps).
-              Extraia questões no formato JSON ESTRITO.
+              Analise o conteúdo e gere um JSON ESTRITO.
               
               CONTEXTO (Informacional):
               - Instituição: ${ovr.overrideInst ? ovr.overrideInst : "Não informado (Detectar do texto)"}
               - Ano: ${ovr.overrideYear ? ovr.overrideYear : "Não informado (Detectar do texto)"}
 
-              REGRAS:
-              1. Identificar questões (Enunciado + Alternativas).
+              REGRAS DE EXTRAÇÃO E LIMPEZA:
+              1. LIMPEZA DE INÍCIO:
+                 - Remova APENAS índices/rótulos de questão (ex: "1)", "159048)", "05.", "Questão 1:", "Enunciado:").
+                 - MANTENHA números que fazem parte da frase (ex: "3 pacientes...", "40 anos...").
+                 - Comece o texto direto no conteúdo do caso clínico.
 
-              2. DETECÇÃO DE IMAGEM (NOVO):
-                 - Analise se o enunciado cita ou DEPENDE de uma imagem, gráfico, ECG, Radiografia ou Tabela que não está no texto.
-                 - Termos comuns: "Vide figura", "A imagem mostra", "Observe o ECG", "Raio-X anexo".
-                 - Se precisar de imagem, marque "needsImage": true. Caso contrário, false.
+              2. SEPARAÇÃO DAS ALTERNATIVAS:
+                 - O campo "text" DEVE TERMINAR antes das alternativas.
+                 - NUNCA inclua "A) ... B) ..." ou "a. ... b. ..." dentro do campo "text".
+                 - As alternativas DEVEM ser extraídas separadamente no array "options".
 
-              3. CLASSIFICAÇÃO (OBRIGATÓRIO):
-                 - Classifique CADA questão usando a lista abaixo.
-                 - LISTA VÁLIDA: ${JSON.stringify(activeThemesMap)}
+              3. DETECÇÃO DE IMAGEM (LÓGICA CONTEXTUAL):
+                 - MARQUE "needsImage": true SE:
+                   * O texto MANDA olhar: "Vide figura", "Observe a imagem", "A figura abaixo", "Ver anexo".
+                   * O texto DEPENDE do visual: "De acordo com o exame de imagem", "Baseado no ECG apresentado".
+                   * O texto é vago sobre o resultado: "O Raio-X revela... (e não diz o que)".
+                 - MARQUE "needsImage": false SE:
+                   * O texto já DESCREVE o resultado: "ECG normal", "Raio-X evidenciando fratura".
+                   * Apenas cita que o exame foi feito: "Foi solicitada tomografia".
 
-              4. GABARITO E COMENTÁRIO: 
+              4. CLASSIFICAÇÃO E RESOLUÇÃO:
+                 - Classifique usando a lista: ${JSON.stringify(activeThemesMap)}
                  - Tente encontrar o gabarito. Se não houver, RESOLVA a questão.
-                 - Gere sempre um campo "explanation".
+                 - Gere sempre "explanation".
 
-              5. DADOS DE CABEÇALHO:
-                 - IGNORE nomes de cursos preparatórios no campo "institution".
-              
-              Formato Saída:
+              Formato Saída JSON:
               [
                 {
                   "institution": "String", "year": Number|String, "area": "String", "topic": "String",
@@ -1674,94 +1761,122 @@ export default function App() {
                 body: JSON.stringify({ contents: contentsPayload })
             });
             
-            const data = await response.json();
-            if (data.error) throw new Error(data.error.message);
+            if (!response.ok) {
+                 const errData = await response.json().catch(() => ({}));
+                 throw new Error(errData.error?.message || "Erro na API Geração");
+            }
 
+            const data = await response.json();
             let jsonString = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-            
-            // --- ALTERAÇÃO AQUI: TRAVA ANTI-DISCURSIVA ---
             const parsed = safeJsonParse(jsonString);
             return parsed.filter(q => q.options && q.options.length >= 2);
         });
 
-        // --- PÓS-PROCESSAMENTO PARALELO (NOVO) ---
         showNotification('info', `Pós-processando ${questions.length} questões...`);
 
-        let processedQuestions = await Promise.all(questions.map(async (q) => {
-             // TASK A: SEARCH WEB (if enabled)
-             const searchPromise = (async () => {
-                if (doWebSearch && (!q.institution || !q.year)) {
-                    try {
-                        await new Promise(r => setTimeout(r, Math.random() * 1000));
-                        return await searchQuestionSource(q.text);
-                    } catch (err) {
-                        return null;
-                    }
-                }
-                return null;
-            })();
+          let processedQuestions = await Promise.all(questions.map(async (q) => {
+              const hashId = await generateQuestionHash(q.text);
+              let isDuplicate = false;
+              let oldData = null;
 
-            // TASK B: AUDIT (Double Check) (if enabled)
-            const auditPromise = (async () => {
-                if (isDoubleCheckEnabled) {
-                    try {
-                        await new Promise(r => setTimeout(r, Math.random() * 500)); 
-                        return await verifyQuestionWithAI(q);
-                    } catch (err) {
-                        return { status: 'unchecked', reason: 'Audit failed' };
-                    }
-                }
-                return { status: 'unchecked', reason: '' };
-            })();
+              if (hashId) {
+                  const existingDoc = await getDoc(doc(db, "questions", hashId));
+                  if (existingDoc.exists()) {
+                      isDuplicate = true;
+                      oldData = existingDoc.data();
+                  }
+              }
 
-            // WAIT FOR BOTH
-            const [searchResult, auditResult] = await Promise.all([searchPromise, auditPromise]);
+              const shouldRunAPIs = !isDuplicate; 
 
-             // --- MERGE RESULTS ---
-             let finalInst = q.institution;
-             let finalYear = q.year;
-             let sourceFound = false;
+              // --- FIX: PRÉ-LIMPEZA DE INSTITUIÇÃO ---
+              let preCleanedInst = cleanInstitutionText(q.institution);
 
-             if (searchResult) {
-                 if (searchResult.institution) {
-                     finalInst = searchResult.institution;
-                     sourceFound = true;
-                 }
-                 if (searchResult.year) finalYear = searchResult.year;
-             }
+              let finalInst = preCleanedInst;
+              let finalYear = q.year;
+              let sourceFound = false;
+              let verificationStatus = 'unchecked';
+              let verificationReason = '';
 
-             if (ovr.overrideInst) finalInst = ovr.overrideInst;
-             if (ovr.overrideYear) finalYear = ovr.overrideYear;
+              if (shouldRunAPIs) {
+                  const doWebSearch = webSearchRef.current; 
+                  const doDoubleCheck = doubleCheckRef.current; 
 
-             finalInst = cleanInstitutionText(finalInst);
+                  const searchPromise = (async () => {
+                      if (doWebSearch && (!preCleanedInst || !q.year)) { // VALOR LIMPO
+                          try {
+                              await new Promise(r => setTimeout(r, Math.random() * 1000));
+                              return await searchQuestionSource(q.text);
+                          } catch (err) { 
+                              // BLINDAGEM: Throw erro se for cota
+                              const msg = err.message || "";
+                              if (msg.includes("429") || msg.includes("Quota") || msg.includes("Resource has been exhausted")) throw err;
+                              return null; 
+                          }
+                      }
+                      return null;
+                  })();
 
-             const finalQ = {
-                 ...q,
-                 institution: finalInst,
-                 year: finalYear,
-                 area: ovr.overrideArea || q.area,
-                 topic: ovr.overrideTopic || q.topic,
-                 sourceFound,
-                 verificationStatus: auditResult.status,
-                 verificationReason: auditResult.reason
-             };
+                  const auditPromise = (async () => {
+                      if (doDoubleCheck) {
+                          try {
+                              await new Promise(r => setTimeout(r, Math.random() * 500)); 
+                              return await verifyQuestionWithAI(q);
+                          } catch (err) { 
+                              // BLINDAGEM: Throw erro se for cota
+                              const msg = err.message || "";
+                              if (msg.includes("429") || msg.includes("Quota") || msg.includes("Resource has been exhausted")) throw err;
+                              return { status: 'unchecked', reason: 'Audit failed' }; 
+                          }
+                      }
+                      return { status: 'unchecked', reason: '' };
+                  })();
 
-             // 4. Hash Check
-             const hashId = await generateQuestionHash(finalQ.text);
-             let isDuplicate = false;
-             if (hashId) {
-                 const existingDoc = await getDoc(doc(db, "questions", hashId));
-                 if (existingDoc.exists()) isDuplicate = true;
-             }
+                  const [searchResult, auditResult] = await Promise.all([searchPromise, auditPromise]);
 
-             return { ...finalQ, hashId, isDuplicate };
-        }));
+                  if (searchResult) {
+                      if (searchResult.institution) { finalInst = searchResult.institution; sourceFound = true; }
+                      if (searchResult.year) finalYear = searchResult.year;
+                  }
+                  verificationStatus = auditResult.status;
+                  verificationReason = auditResult.reason;
+
+              } else {
+                  if (oldData) {
+                      finalInst = oldData.institution || q.institution;
+                      finalYear = oldData.year || q.year;
+                      sourceFound = oldData.sourceFound || false; 
+                      
+                      verificationStatus = oldData.verificationStatus || 'unchecked';
+                      verificationReason = oldData.verificationReason || 'Duplicata recuperada';
+                  }
+              }
+
+              // Limpeza Final
+              finalInst = cleanInstitutionText(finalInst);
+
+              const ovr = overridesRef.current || { overrideInst, overrideYear, overrideArea, overrideTopic }; 
+              if (ovr.overrideInst) finalInst = ovr.overrideInst;
+              if (ovr.overrideYear) finalYear = ovr.overrideYear;
+
+              return {
+                  ...q,
+                  institution: finalInst,
+                  year: finalYear,
+                  area: ovr.overrideArea || q.area,
+                  topic: ovr.overrideTopic || q.topic,
+                  sourceFound,
+                  verificationStatus,
+                  verificationReason,
+                  hashId,
+                  isDuplicate
+              };
+          }));
 
         let savedCount = 0;
         const batch = writeBatch(db);
         
         for (const q of processedQuestions) {
-            // USA HASH COMO ID
             const docId = q.hashId || doc(collection(db, "draft_questions")).id;
             const docRef = doc(db, "draft_questions", docId);
             
@@ -1793,12 +1908,9 @@ export default function App() {
 
   // --- BULK METADATA CLEANING ---
   const clearAllField = (field) => {
-      // Aplica a TODOS os itens filtrados ou a lista completa? 
-      // Por consistência com a nova lógica, aplica aos filtrados.
       const targetQuestions = getFilteredQuestions();
       if (targetQuestions.length === 0) return;
       
-      // SUBSTITUIÇÃO DO WINDOW CONFIRM PELO MODAL
       setConfirmationModal({
           isOpen: true,
           type: field === 'institution' ? 'clear_institution' : 'clear_year',
@@ -1827,8 +1939,6 @@ export default function App() {
       const targetQuestions = getFilteredQuestions();
       if (targetQuestions.length === 0) return;
       
-      // --- ALTERAÇÃO AQUI: CONTA TUDO, INCLUINDO DUPLICATAS ---
-      // Antes: const count = targetQuestions.filter(q => !q.isDuplicate).length;
       const count = targetQuestions.length;
 
       const activeLabels = activeFilters.map(f => filterLabels[f]).join(' + ');
@@ -1865,14 +1975,11 @@ export default function App() {
       const { type, data } = confirmationModal;
       setConfirmationModal({ ...confirmationModal, isOpen: false }); 
 
-      // --- LOGICA PARA LIMPEZA DE CAMPOS (NOVO - FILTRADO) ---
       if (type === 'clear_institution' || type === 'clear_year') {
           const field = type === 'clear_institution' ? 'institution' : 'year';
           const targetQuestions = getFilteredQuestions();
           
-          // Atualiza localmente (apenas os filtrados)
           const updated = parsedQuestions.map(q => {
-              // Se a questão está no filtro, limpa. Se não, mantem.
               if (targetQuestions.some(t => t.id === q.id)) {
                   return { ...q, [field]: '' };
               }
@@ -1905,13 +2012,13 @@ export default function App() {
 
           try {
               for (const q of targetQuestions) {
-                  // --- ALTERAÇÃO AQUI: NÃO PULA MAIS AS DUPLICATAS ---
-                  // if (q.isDuplicate) continue; 
-
                   const { id, status, createdAt, createdBy, verificationStatus, verificationReason, isDuplicate, hashId, sourceFound, ...finalData } = q;
                   if (q.area && q.topic && q.text) {
-                     // setDoc vai SOBRESCREVER se já existir (id = hash)
-                     await setDoc(doc(db, "questions", id), { ...finalData, updatedAt: new Date().toISOString(), approvedBy: user.email, hasImage: false });
+                     await setDoc(doc(db, "questions", id), { 
+                         ...finalData, 
+                         updatedAt: new Date().toISOString(), 
+                         approvedBy: user.email
+                     });
                      await deleteDoc(doc(db, "draft_questions", id));
                      count++;
                   }
@@ -1932,25 +2039,16 @@ export default function App() {
   };
 
   const approveQuestion = async (q) => {
-    // --- ALTERAÇÃO AQUI: PERMITIR APROVAR INDIVIDUALMENTE DUPLICATAS ---
-    /*
-    if (q.isDuplicate) {
-        return showNotification('error', 'Esta questão já existe no banco de dados (Duplicata).');
-    }
-    */
-
     if (!q.area || !q.topic || !q.text || !q.options || q.options.length < 2) {
       return showNotification('error', 'Preencha os campos obrigatórios.');
     }
     try {
       const { id, status, createdAt, createdBy, verificationStatus, verificationReason, isDuplicate, hashId, sourceFound, ...finalData } = q;
       
-      // Garante o ID e Atualiza se existir
       await setDoc(doc(db, "questions", id), {
         ...finalData,
-        updatedAt: new Date().toISOString(), // Marca atualização
-        approvedBy: user.email,
-        hasImage: false
+        updatedAt: new Date().toISOString(), 
+        approvedBy: user.email
       });
       
       await deleteDoc(doc(db, "draft_questions", id));
@@ -1965,15 +2063,20 @@ export default function App() {
     }
   };
 
-  const updateQuestionField = (idx, field, val) => {
-      const newQ = [...parsedQuestions];
-      newQ[idx][field] = val;
-      setParsedQuestions(newQ);
+  // --- FUNÇÕES DE ATUALIZAÇÃO (CORRIGIDO PARA USAR ID) ---
+  const updateQuestionField = (id, field, val) => {
+      setParsedQuestions(prev => prev.map(q => q.id === id ? { ...q, [field]: val } : q));
   };
-  const updateOptionText = (qIdx, optIdx, val) => {
-      const newQ = [...parsedQuestions];
-      newQ[qIdx].options[optIdx].text = val;
-      setParsedQuestions(newQ);
+
+  const updateOptionText = (qId, optIdx, val) => {
+      setParsedQuestions(prev => prev.map(q => {
+          if (q.id === qId) {
+              const newOptions = [...q.options];
+              newOptions[optIdx].text = val;
+              return { ...q, options: newOptions };
+          }
+          return q;
+      }));
   };
 
   const currentFilteredList = getFilteredQuestions();
@@ -2012,7 +2115,6 @@ export default function App() {
           
           <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto items-center">
             
-            {/* TOGGLE WEB SEARCH */}
             <div 
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer transition-all border ${isWebSearchEnabled ? 'bg-teal-50 border-teal-200 text-teal-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}
                 onClick={() => setIsWebSearchEnabled(!isWebSearchEnabled)}
@@ -2025,7 +2127,6 @@ export default function App() {
                 </span>
             </div>
 
-            {/* TOGGLE DOUBLE CHECK */}
             <div 
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer transition-all border ${isDoubleCheckEnabled ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}
                 onClick={() => setIsDoubleCheckEnabled(!isDoubleCheckEnabled)}
@@ -2175,7 +2276,7 @@ export default function App() {
             </div>
         )}
 
-        {/* INPUT TABS (TEXTO ÚNICO) */}
+        {/* INPUT TABS */}
         {activeTab === 'input' && (
             <div className="max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-4">
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
@@ -2233,7 +2334,6 @@ export default function App() {
                     </div>
 
                     <div className="flex flex-col lg:flex-row gap-6">
-                        {/* QUEUE GRID */}
                         <div className="flex-1 bg-gray-50 rounded-xl p-4 border border-gray-200 h-[500px] overflow-y-auto">
                             <h3 className="text-xs font-bold text-gray-500 uppercase mb-3 flex justify-between">
                                 <span>Fila ({batchImages.length})</span>
@@ -2264,7 +2364,6 @@ export default function App() {
                             )}
                         </div>
 
-                        {/* CONSOLE / LOGS */}
                         <div className="w-full lg:w-1/3 flex flex-col h-[500px]">
                             <div className="bg-slate-900 rounded-xl overflow-hidden shadow-inner flex flex-col h-full">
                                 <div className="p-3 bg-slate-800 border-b border-slate-700 text-gray-400 text-xs font-bold flex items-center gap-2">
@@ -2313,10 +2412,8 @@ export default function App() {
                         )}
                     </div>
                     
-                    {/* DROPZONE PDF */}
                     {pdfStatus === 'idle' && (
                         <div className="space-y-4">
-                             {/* LAST SESSION INFO BOX */}
                              {lastSessionData && (
                                  <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-center gap-4 animate-in slide-in-from-top-2">
                                      <div className="bg-blue-200 text-blue-700 p-2 rounded-lg">
@@ -2333,7 +2430,6 @@ export default function App() {
                                  </div>
                              )}
 
-                             {/* RANGE INPUTS */}
                              <div className="flex items-end gap-3 p-4 bg-gray-50 rounded-xl border border-dashed border-gray-300">
                                 <div className="flex-1">
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1 flex items-center gap-1"><BookOpen size={12}/> De pg.</label>
@@ -2359,10 +2455,8 @@ export default function App() {
                         </div>
                     )}
 
-                    {/* PDF PROGRESS UI */}
                     {pdfStatus !== 'idle' && (
                         <div className="space-y-6">
-                            {/* STATUS BAR */}
                             <div className="bg-gray-100 rounded-xl p-4 flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <div className={`p-2 rounded-lg 
@@ -2391,7 +2485,6 @@ export default function App() {
                                 </div>
                             </div>
 
-                            {/* GRID DE CHUNKS */}
                             <div className="border border-gray-200 rounded-xl p-4 max-h-60 overflow-y-auto">
                                 <p className="text-xs font-bold text-gray-400 uppercase mb-2 flex justify-between">
                                     <span>Timeline (Navegação)</span>
@@ -2419,7 +2512,6 @@ export default function App() {
                                 </div>
                             </div>
 
-                            {/* TERMINAL DE LOGS DO PDF */}
                             <div className="bg-slate-900 rounded-xl p-4 font-mono text-xs text-gray-300 h-48 overflow-y-auto shadow-inner flex flex-col-reverse">
                                 {processingLogs.length === 0 && <span className="opacity-50">Aguardando logs...</span>}
                                 {processingLogs.map((log, i) => (
@@ -2436,60 +2528,82 @@ export default function App() {
             </div>
         )}
 
-        {/* REVIEW TAB (ATUALIZADA COM FILTROS MÚLTIPLOS) */}
+        {/* REVIEW TAB (ATUALIZADA) */}
         {activeTab === 'review' && (
             <div className="max-w-4xl mx-auto space-y-4">
                 {parsedQuestions.length > 0 && (
-                    /* --- BARRA DE FERRAMENTAS (NOVO LAYOUT) --- */
-                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col gap-4 sticky top-20 z-10">
+                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 flex flex-col gap-3 sticky top-20 z-10 animate-in slide-in-from-top-2">
                         
-                        {/* Linha 1: Filtros */}
-                        <div className="flex flex-col gap-2">
-                            <div className="flex justify-between items-center px-1">
-                                <span className="text-xs font-bold text-gray-400 uppercase flex items-center gap-1"><Filter size={12}/> Filtros Ativos</span>
+                        {/* CABEÇALHO: Título + Lógica + Contador */}
+                        <div className="flex justify-between items-center px-1">
+                            <div className="flex items-center gap-3">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1"><Filter size={10}/> Filtros</span>
                                 
-                                {/* --- NOVO: SWITCH DE LÓGICA --- */}
                                 <button 
                                     onClick={() => setFilterLogic(prev => prev === 'OR' ? 'AND' : 'OR')}
-                                    className={`text-[10px] font-bold px-2 py-1 rounded border flex items-center gap-1 transition-all ${filterLogic === 'AND' ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}
+                                    className={`text-[10px] font-bold px-2 py-0.5 rounded border flex items-center gap-1 transition-all ${filterLogic === 'AND' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}
                                     title={filterLogic === 'AND' ? "Mostra questões que têm TODAS as características" : "Mostra questões que têm QUALQUER uma das características"}
                                 >
-                                    {filterLogic === 'AND' ? <ToggleRight size={14}/> : <ToggleLeft size={14}/>}
-                                    Lógica: {filterLogic === 'AND' ? 'E (Restritivo)' : 'OU (Soma)'}
+                                    {filterLogic === 'AND' ? <ToggleRight size={12}/> : <ToggleLeft size={12}/>}
+                                    {filterLogic === 'AND' ? 'E (Restritivo)' : 'OU (Soma)'}
                                 </button>
-                                {/* ------------------------------ */}
-
-                                <span className="text-xs text-gray-400">{currentFilteredList.length} questões</span>
                             </div>
+                            <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100">{currentFilteredList.length} questões</span>
+                        </div>
+                        
+                        {/* --- ÁREA DOS BOTÕES (DIVIDIDA EM 2 LINHAS FIXAS) --- */}
+                        <div className="flex flex-col gap-1.5">
                             
-                            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                                {/* ... MANTENHA OS BOTÕES DE FILTRO EXISTENTES AQUI ... */}
-                                <button onClick={() => toggleFilter('all')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all border ${activeFilters.includes('all') ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100'}`}>Todas</button>
-                                <button onClick={() => toggleFilter('verified')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap border flex items-center gap-1 transition-all ${activeFilters.includes('verified') ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100'}`}><ShieldCheck size={14}/> Verificadas</button>
-                                <button onClick={() => toggleFilter('source')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap border flex items-center gap-1 transition-all ${activeFilters.includes('source') ? 'bg-teal-100 text-teal-700 border-teal-200' : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100'}`}><Globe size={14}/> Com Fonte</button>
-                                <button onClick={() => toggleFilter('no_source')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap border flex items-center gap-1 transition-all ${activeFilters.includes('no_source') ? 'bg-slate-100 text-slate-700 border-slate-300' : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100'}`}><AlertOctagon size={14}/> Sem Fonte</button>
-                                <button onClick={() => toggleFilter('suspicious')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap border flex items-center gap-1 transition-all ${activeFilters.includes('suspicious') ? 'bg-red-100 text-red-700 border-red-200' : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100'}`}><AlertTriangle size={14}/> Suspeitas</button>
-                                <button onClick={() => toggleFilter('duplicates')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap border flex items-center gap-1 transition-all ${activeFilters.includes('duplicates') ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100'}`}><Copy size={14}/> Duplicadas</button>
-                                <button onClick={() => toggleFilter('needs_image')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap border flex items-center gap-1 transition-all ${activeFilters.includes('needs_image') ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100'}`}><ImageIcon size={14}/> Requer Imagem</button>
+                            {/* LINHA 1: STATUS & VALIDAÇÃO */}
+                            <div className="flex flex-wrap items-center gap-1.5">
+                                <button onClick={() => toggleFilter('all')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold transition-all border ${activeFilters.includes('all') ? 'bg-blue-600 text-white border-blue-700 shadow-sm' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'}`}>
+                                    Todas
+                                </button>
+                                <div className="w-px h-4 bg-gray-200 mx-1"></div>
+                                <button onClick={() => toggleFilter('verified')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border flex items-center gap-1.5 transition-all ${activeFilters.includes('verified') ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
+                                    <ShieldCheck size={12}/> Verificadas
+                                </button>
+                                <button onClick={() => toggleFilter('suspicious')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border flex items-center gap-1.5 transition-all ${activeFilters.includes('suspicious') ? 'bg-red-100 text-red-700 border-red-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
+                                    <AlertTriangle size={12}/> Suspeitas
+                                </button>
+                                <button onClick={() => toggleFilter('duplicates')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border flex items-center gap-1.5 transition-all ${activeFilters.includes('duplicates') ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
+                                    <Copy size={12}/> Duplicadas
+                                </button>
+                            </div>
+
+                            {/* LINHA 2: CONTEÚDO & FONTE */}
+                            <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-[9px] font-bold text-gray-300 uppercase mr-1 select-none">Tipo:</span>
+                                <button onClick={() => toggleFilter('source')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border flex items-center gap-1.5 transition-all ${activeFilters.includes('source') ? 'bg-teal-100 text-teal-700 border-teal-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
+                                    <Globe size={12}/> Com Fonte
+                                </button>
+                                <button onClick={() => toggleFilter('no_source')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border flex items-center gap-1.5 transition-all ${activeFilters.includes('no_source') ? 'bg-slate-100 text-slate-700 border-slate-300' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
+                                    <AlertOctagon size={12}/> Sem Fonte
+                                </button>
+                                <button onClick={() => toggleFilter('needs_image')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border flex items-center gap-1.5 transition-all ${activeFilters.includes('needs_image') ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
+                                    <ImageIcon size={12}/> Requer Imagem
+                                </button>
+                                <button onClick={() => toggleFilter('text_only')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border flex items-center gap-1.5 transition-all ${activeFilters.includes('text_only') ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
+                                    <FileType size={12}/> Texto Puro
+                                </button>
                             </div>
                         </div>
 
                         <div className="h-px bg-gray-100 w-full"></div>
 
-                        {/* Linha 2: Ações */}
-                        <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                            <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
-                                <button onClick={() => clearAllField('institution')} className="text-xs bg-white border border-gray-200 text-slate-500 px-3 py-2 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all font-medium flex items-center gap-1 shadow-sm whitespace-nowrap"><Eraser size={14}/> Limpar Inst.</button>
-                                <button onClick={() => clearAllField('year')} className="text-xs bg-white border border-gray-200 text-slate-500 px-3 py-2 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all font-medium flex items-center gap-1 shadow-sm whitespace-nowrap"><Eraser size={14}/> Limpar Anos</button>
+                        <div className="flex justify-between items-center gap-2">
+                            <div className="flex items-center gap-1.5">
+                                <button onClick={() => clearAllField('institution')} className="text-[10px] bg-gray-50 border border-gray-200 text-slate-500 px-2 py-1.5 rounded hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all font-bold flex items-center gap-1 whitespace-nowrap"><Eraser size={10}/> Inst.</button>
+                                <button onClick={() => clearAllField('year')} className="text-[10px] bg-gray-50 border border-gray-200 text-slate-500 px-2 py-1.5 rounded hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all font-bold flex items-center gap-1 whitespace-nowrap"><Eraser size={10}/> Ano</button>
                             </div>
 
-                            <div className="flex items-center gap-2 w-full sm:w-auto">
-                                <button onClick={handleDiscardFilteredClick} disabled={isBatchAction || currentFilteredList.length === 0} className="flex-1 sm:flex-none bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold text-xs px-4 py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50 whitespace-nowrap shadow-sm">
-                                    <Trash2 size={16} /> Descartar {currentFilteredList.length}
+                            <div className="flex items-center gap-2">
+                                <button onClick={handleDiscardFilteredClick} disabled={isBatchAction || currentFilteredList.length === 0} className="bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold text-xs px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 whitespace-nowrap">
+                                    <Trash2 size={14} /> Descartar
                                 </button>
                                 
-                                <button onClick={handleApproveFilteredClick} disabled={isBatchAction || currentFilteredList.length === 0} className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-6 py-2.5 rounded-lg shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50 whitespace-nowrap hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0">
-                                    {isBatchAction ? <Loader2 className="animate-spin" size={16}/> : <CheckCircle size={16} />} 
+                                <button onClick={handleApproveFilteredClick} disabled={isBatchAction || currentFilteredList.length === 0} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-1.5 rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 whitespace-nowrap">
+                                    {isBatchAction ? <Loader2 className="animate-spin" size={14}/> : <CheckCircle size={14} />} 
                                     Aprovar {currentFilteredList.length}
                                 </button>
                             </div>
@@ -2497,7 +2611,7 @@ export default function App() {
                     </div>
                 )}
 
-               {/* --- LISTAGEM DAS QUESTÕES (MODIFICADO) --- */}
+                {/* --- LISTAGEM DAS QUESTÕES (CORRIGIDO: Passando q.id em vez de idx) --- */}
                 {currentFilteredList.length === 0 ? (
                     <div className="text-center py-20 opacity-50">
                         <Database size={64} className="mx-auto mb-4 text-gray-300" />
@@ -2508,110 +2622,70 @@ export default function App() {
                     currentFilteredList.map((q, idx) => (
                         <div key={q.id} className={`bg-white rounded-2xl shadow-sm border overflow-hidden relative group transition-colors ${q.isDuplicate ? 'border-amber-400 ring-2 ring-amber-100' : 'border-gray-200'}`}>
                             
-                            {/* Loading Bar Visual */}
                             <div className="h-1.5 w-full bg-gray-100"><div className="h-full bg-orange-400 w-full animate-pulse"></div></div>
                             
-                            {/* --- NOVA BARRA DE CABEÇALHO (SUBSTITUI AS TAGS FLUTUANTES) --- */}
-                            {/* Isso resolve o problema de sobreposição. As tags ficam numa linha dedicada. */}
                             <div className="bg-gray-50 px-4 py-2 border-b border-gray-100 flex justify-end items-center gap-2 flex-wrap min-h-[40px]">
-                                
-                                {/* Tag: Status de Verificação (Com TRUNCATE para não quebrar) */}
-                                <div 
-                                    className={`px-3 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 max-w-[250px] ${q.verificationStatus === 'verified' ? 'bg-emerald-100 text-emerald-700' : q.verificationStatus === 'suspicious' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}`}
-                                    title={q.verificationReason || "Status da verificação"}
-                                >
+                                <div className={`px-3 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 max-w-[250px] ${q.verificationStatus === 'verified' ? 'bg-emerald-100 text-emerald-700' : q.verificationStatus === 'suspicious' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}`} title={q.verificationReason || "Status da verificação"}>
                                     {q.verificationStatus === 'verified' && <><ShieldCheck size={12} className="flex-shrink-0"/> Double-Checked</>}
                                     {q.verificationStatus === 'suspicious' && <><ShieldAlert size={12} className="flex-shrink-0"/> <span className="truncate">Suspeita: {q.verificationReason}</span></>}
                                     {(!q.verificationStatus || q.verificationStatus === 'unchecked') && 'Não Verificada'}
                                 </div>
-                                
-                                {/* Tag: Fonte Encontrada */}
-                                {q.sourceFound && (
-                                    <div className="bg-teal-100 text-teal-800 px-3 py-1 rounded-full text-[11px] font-bold flex items-center gap-1">
-                                        <Globe size={12}/> FONTE OK
-                                    </div>
-                                )}
-
-                                {/* Tag: Duplicada */}
-                                {q.isDuplicate && (
-                                    <div className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 animate-pulse">
-                                        <Copy size={12}/> DUPLICADA
-                                    </div>
-                                )}
-
-                                {/* Tag: Precisa de Imagem (NOVO) */}
-                                {q.needsImage && (
-                                    <div className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 animate-pulse border border-purple-200">
-                                        <ImageIcon size={12}/> REQUER IMAGEM
-                                    </div>
-                                )}
+                                {q.sourceFound && <div className="bg-teal-100 text-teal-800 px-3 py-1 rounded-full text-[11px] font-bold flex items-center gap-1"><Globe size={12}/> FONTE OK</div>}
+                                {q.isDuplicate && <div className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 animate-pulse"><Copy size={12}/> DUPLICADA</div>}
+                                {q.needsImage && <div className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 animate-pulse border border-purple-200"><ImageIcon size={12}/> REQUER IMAGEM</div>}
                             </div>
 
                             <div className="p-6">
-                                {/* METADATA FIELDS */}
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Inst</label><input value={q.institution} onChange={e=>updateQuestionField(idx,'institution',e.target.value)} className="w-full p-2 bg-gray-50 border rounded-lg text-sm font-bold"/></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Ano</label><input type="number" value={q.year} onChange={e=>updateQuestionField(idx,'year',e.target.value)} className="w-full p-2 bg-gray-50 border rounded-lg text-sm font-bold"/></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Área</label><select value={q.area} onChange={e=>updateQuestionField(idx,'area',e.target.value)} className="w-full p-2 bg-blue-50 border border-blue-100 rounded-lg text-sm font-bold text-blue-800"><option value="">Selecione...</option>{areasBase.map(a=><option key={a} value={a}>{a}</option>)}</select></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Tópico</label><select value={q.topic} onChange={e=>updateQuestionField(idx,'topic',e.target.value)} className="w-full p-2 bg-gray-50 border rounded-lg text-sm font-bold"><option value="">Selecione...</option>{(themesMap[q.area]||[]).map(t=><option key={t} value={t}>{t}</option>)}</select></div>
+                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Inst</label><input value={q.institution} onChange={e=>updateQuestionField(q.id,'institution',e.target.value)} className="w-full p-2 bg-gray-50 border rounded-lg text-sm font-bold"/></div>
+                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Ano</label><input type="number" value={q.year} onChange={e=>updateQuestionField(q.id,'year',e.target.value)} className="w-full p-2 bg-gray-50 border rounded-lg text-sm font-bold"/></div>
+                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Área</label><select value={q.area} onChange={e=>updateQuestionField(q.id,'area',e.target.value)} className="w-full p-2 bg-blue-50 border border-blue-100 rounded-lg text-sm font-bold text-blue-800"><option value="">Selecione...</option>{areasBase.map(a=><option key={a} value={a}>{a}</option>)}</select></div>
+                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Tópico</label><select value={q.topic} onChange={e=>updateQuestionField(q.id,'topic',e.target.value)} className="w-full p-2 bg-gray-50 border rounded-lg text-sm font-bold"><option value="">Selecione...</option>{(themesMap[q.area]||[]).map(t=><option key={t} value={t}>{t}</option>)}</select></div>
                                 </div>
 
-                                {/* QUESTION CONTENT */}
-                                <div className="mb-6"><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Enunciado</label><textarea value={q.text} onChange={e=>updateQuestionField(idx,'text',e.target.value)} rows={4} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-slate-800 text-sm focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"/></div>
+                                <div className="mb-6"><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Enunciado</label><textarea value={q.text} onChange={e=>updateQuestionField(q.id,'text',e.target.value)} rows={4} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-slate-800 text-sm focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"/></div>
 
-                            {/* --- ÁREA DA IMAGEM (NOVA FUNCIONALIDADE) --- */}
-                            <div className="mb-6 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl">
-                                <div className="flex justify-between items-center mb-2">
-                                    <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">
-                                        <ImageIcon size={12}/> Imagem de Apoio (Raio-X, ECG, etc)
-                                    </label>
-                                    {uploadingImageId === q.id && <span className="text-xs text-blue-600 animate-pulse font-bold flex items-center gap-1"><Loader2 size={10} className="animate-spin"/> Otimizando e Enviando...</span>}
-                                </div>
-                                
-                                {q.imageUrl ? (
-                                    <div className="relative group w-fit">
-                                        <img src={q.imageUrl} alt="Questão" className="max-h-64 rounded-lg border border-gray-200 shadow-sm bg-white" />
-                                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <a href={q.imageUrl} target="_blank" rel="noreferrer" className="bg-white/90 text-blue-600 p-1.5 rounded-full hover:bg-white shadow-md"><ExternalLink size={14}/></a>
-                                            <button onClick={() => deleteImageFromQuestion(idx, q)} className="bg-red-600 text-white p-1.5 rounded-full hover:bg-red-700 shadow-md">
-                                                <Trash2 size={14}/>
-                                            </button>
-                                        </div>
+                                <div className="mb-6 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl">
+                                    <div className="flex justify-between items-center mb-3">
+                                        <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1"><ImageIcon size={12}/> Galeria de Imagens ({q.images?.length || 0})</label>
+                                        {uploadingImageId === q.id && <span className="text-xs text-blue-600 animate-pulse font-bold flex items-center gap-1"><Loader2 size={10} className="animate-spin"/> Enviando...</span>}
                                     </div>
-                                ) : (
-                                    <div className="flex gap-2">
-                                        <label className={`cursor-pointer bg-white hover:bg-blue-50 text-gray-600 hover:text-blue-600 border border-gray-200 hover:border-blue-200 px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${uploadingImageId === q.id ? 'opacity-50 pointer-events-none' : ''}`}>
-                                            <UploadCloud size={16}/> {uploadingImageId === q.id ? 'Enviando...' : 'Adicionar Imagem'}
+                                    <div className="flex flex-wrap gap-3 items-start">
+                                        {q.images?.map((imgUrl, i) => (
+                                            <div key={i} className="relative group w-24 h-24 sm:w-32 sm:h-32 bg-white rounded-lg border border-gray-200 shadow-sm flex-shrink-0">
+                                                <img src={imgUrl} alt={`Img ${i}`} className="w-full h-full object-cover rounded-lg" />
+                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 rounded-lg">
+                                                    <a href={imgUrl} target="_blank" rel="noreferrer" className="text-white hover:text-blue-300"><ExternalLink size={16}/></a>
+                                                    <button onClick={() => deleteImageFromQuestion(idx, q, imgUrl)} className="text-white hover:text-red-400"><Trash2 size={16}/></button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        <label className={`cursor-pointer w-24 h-24 sm:w-32 sm:h-32 bg-white hover:bg-blue-50 border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-lg flex flex-col items-center justify-center gap-2 text-gray-400 hover:text-blue-500 transition-all ${uploadingImageId === q.id ? 'opacity-50 pointer-events-none' : ''}`}>
+                                            <UploadCloud size={24}/> <span className="text-[10px] font-bold uppercase">Adicionar</span>
                                             <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUploadToQuestion(e, idx, q)} disabled={uploadingImageId === q.id}/>
                                         </label>
-                                        {q.needsImage && <span className="text-xs text-purple-600 flex items-center self-center animate-pulse">Esta questão pede imagem!</span>}
                                     </div>
-                                )}
-                            </div>
+                                    {q.needsImage && (!q.images || q.images.length === 0) && <p className="mt-2 text-xs text-purple-600 flex items-center gap-1 animate-pulse font-bold"><AlertCircle size={12}/> Esta questão pede imagem!</p>}
+                                </div>
                               
                                 <div className="space-y-2 mb-6">
                                     {q.options?.map((opt, optIdx) => (
                                         <div key={opt.id} className="flex items-center gap-3">
-                                            <div onClick={()=>updateQuestionField(idx,'correctOptionId',opt.id)} className={`w-8 h-8 rounded-full flex items-center justify-center cursor-pointer font-bold text-sm flex-shrink-0 ${q.correctOptionId===opt.id?'bg-emerald-500 text-white':'bg-gray-100 text-gray-400'}`}>{opt.id.toUpperCase()}</div>
-                                            <input value={opt.text} onChange={e=>updateOptionText(idx,optIdx,e.target.value)} className={`w-full p-2 border rounded-lg text-sm ${q.correctOptionId===opt.id?'border-emerald-200 bg-emerald-50':'bg-white'}`}/>
+                                            <div onClick={()=>updateQuestionField(q.id,'correctOptionId',opt.id)} className={`w-8 h-8 rounded-full flex items-center justify-center cursor-pointer font-bold text-sm flex-shrink-0 ${q.correctOptionId===opt.id?'bg-emerald-500 text-white':'bg-gray-100 text-gray-400'}`}>{opt.id.toUpperCase()}</div>
+                                            <input value={opt.text} onChange={e=>updateOptionText(q.id,optIdx,e.target.value)} className={`w-full p-2 border rounded-lg text-sm ${q.correctOptionId===opt.id?'border-emerald-200 bg-emerald-50':'bg-white'}`}/>
                                         </div>
                                     ))}
                                 </div>
                                 
                                 <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
                                     <label className="text-xs font-bold text-amber-700 uppercase flex items-center gap-1 mb-2"><Brain size={12}/> Comentário IA</label>
-                                    <textarea value={q.explanation} onChange={e=>updateQuestionField(idx,'explanation',e.target.value)} rows={3} className="w-full p-3 bg-white/50 border border-amber-200/50 rounded-lg text-slate-700 text-sm focus:bg-white focus:ring-2 focus:ring-amber-400 outline-none"/>
+                                    <textarea value={q.explanation} onChange={e=>updateQuestionField(q.id,'explanation',e.target.value)} rows={3} className="w-full p-3 bg-white/50 border border-amber-200/50 rounded-lg text-slate-700 text-sm focus:bg-white focus:ring-2 focus:ring-amber-400 outline-none"/>
                                 </div>
                             </div>
 
                             <div className="bg-gray-50 px-6 py-4 flex justify-between items-center border-t border-gray-100">
                                 <button onClick={()=>handleDiscardOneClick(q)} className="text-red-500 hover:text-red-700 font-bold text-sm flex items-center gap-1"><Trash2 size={16}/> Descartar</button>
-                                
-                                {/* --- BOTÃO DE APROVAÇÃO UNIFICADO (FIX: Desbloqueado para Duplicadas) --- */}
-                                <button 
-                                    onClick={()=>approveQuestion(q)} 
-                                    className={`font-bold text-sm px-6 py-2.5 rounded-lg shadow-lg flex items-center gap-2 transition-all ${q.isDuplicate ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}`}
-                                >
+                                <button onClick={()=>approveQuestion(q)} className={`font-bold text-sm px-6 py-2.5 rounded-lg shadow-lg flex items-center gap-2 transition-all ${q.isDuplicate ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}`}>
                                     {q.isDuplicate ? <Copy size={18}/> : <CheckCircle size={18}/>} 
                                     {q.isDuplicate ? 'Atualizar Duplicata' : 'Aprovar e Publicar'}
                                 </button>
