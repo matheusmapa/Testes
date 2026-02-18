@@ -1,2701 +1,1131 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
-  Map, Save, Trash2, Settings, CheckCircle, 
-  AlertCircle, FileText, Database, 
-  Loader2, Wand2, Cpu, RefreshCw, User, X,
-  LogOut, Send, Brain, Image as ImageIcon, UploadCloud, Lock, CloudLightning, ArrowLeft,
-  AlertTriangle, ExternalLink, Key, Play, Pause, AlertOctagon, Terminal, ShieldCheck, ShieldAlert, 
-  ToggleLeft, ToggleRight, Layers, Filter, Eraser, RefreshCcw, XCircle, RotateCcw, Copy,
-  SkipForward, BookOpen, Clock, Files, Info, History, FastForward, Globe, ListFilter,
-  FileType
+  Stethoscope, Scissors, Baby, HeartPulse, Activity, BarChart2, 
+  CheckCircle, Clock, ArrowRight, ArrowLeft, Play, Filter, CheckSquare, 
+  Square, Edit2, Check, RotateCcw, Home, List, Plus, 
+  ChevronDown, ChevronUp, Eye, Shield, Users, Calendar, Map, AlertTriangle, 
+  AlertCircle, Trash2, XCircle, User, CreditCard, Smartphone, Key, Database, ExternalLink,
+  RefreshCw, Loader2 
 } from 'lucide-react';
 
-// --- FIREBASE IMPORTS ---
-import { initializeApp } from "firebase/app";
+import { db, auth } from './firebase'; 
+import QuestionView from './QuestionView'; 
+import ReportModal from './components/ReportModal'; 
+import PerformanceView from './PerformanceView';
+import { GeneralExamSetupView, TopicSelectionView } from './ExamSetup';
+import LoginPage from './LoginPage';
+import HomeView, { AreaHubView } from './HomeView';
+import { Sidebar, MobileHeader, MobileMenu } from './components/Layout';
+import { ToastContainer, ExitConfirmationModal, NotificationModal, GoalModal, ChangePasswordModal, CopyButton } from './components/Modals';
+import FlashcardsView from './FlashcardsView'; // <--- ADICIONE ISSO
 
-// 1. Banco de Dados (Firestore)
 import { 
-  getFirestore, collection, addDoc, doc, getDoc, deleteDoc, onSnapshot, query, orderBy, setDoc, writeBatch, updateDoc, arrayUnion, arrayRemove 
+  collection, getDocs, doc, setDoc, addDoc, getDoc, onSnapshot, query, writeBatch, deleteDoc 
 } from "firebase/firestore";
-
-// 2. Autenticação (Auth)
 import { 
-  getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
+  signOut, onAuthStateChanged, updateProfile, updatePassword, reauthenticateWithCredential, EmailAuthProvider 
 } from "firebase/auth";
 
-// 3. Arquivos (Storage)
-import { 
-  getStorage, ref, uploadBytes, getDownloadURL, deleteObject 
-} from "firebase/storage";
-
-// --- PDF.JS IMPORT (Dynamic CDN) ---
-const loadPdfJs = async () => {
-    if (window.pdfjsLib) return window.pdfjsLib;
-    
-    return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-        script.onload = () => {
-            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-            resolve(window.pdfjsLib);
-        };
-        script.onerror = reject;
-        document.head.appendChild(script);
-    });
-};
-
-// --- CONFIGURAÇÃO FIREBASE ---
-const firebaseConfig = {
-  apiKey: "AIzaSyBhwtINeofqm97BzIE_s9DcG-l3v7zsAAY",
-  authDomain: "bancodequestoes-5cc34.firebaseapp.com",
-  projectId: "bancodequestoes-5cc34",
-  storageBucket: "bancodequestoes-5cc34.firebasestorage.app",
-  messagingSenderId: "174347052858",
-  appId: "1:174347052858:web:d54bbf3b193d30a5f69203",
-  measurementId: "G-XNHXB5BCGF"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-const storage = getStorage(app);
-
-// --- DADOS DE REFERÊNCIA ---
+// --- DADOS ESTÁTICOS DAS ÁREAS ---
 const areasBase = [
-  'Clínica Médica', 
-  'Cirurgia Geral', 
-  'Ginecologia e Obstetrícia', 
-  'Pediatria', 
-  'Preventiva'
+  { id: 'cirurgia', title: 'Cirurgia Geral', icon: Scissors, color: 'bg-emerald-50 text-emerald-600', borderColor: 'hover:border-emerald-200' },
+  { id: 'clinica', title: 'Clínica Médica', icon: Stethoscope, color: 'bg-blue-50 text-blue-600', borderColor: 'hover:border-blue-200' },
+  { id: 'go', title: 'Ginecologia e Obstetrícia', icon: HeartPulse, color: 'bg-rose-50 text-rose-600', borderColor: 'hover:border-rose-200' },
+  { id: 'pediatria', title: 'Pediatria', icon: Baby, color: 'bg-amber-50 text-amber-600', borderColor: 'hover:border-amber-200' },
+  { id: 'preventiva', title: 'Preventiva', icon: Shield, color: 'bg-violet-50 text-violet-600', borderColor: 'hover:border-violet-200' },
 ];
 
 const themesMap = {
-    'Clínica Médica': [
-        'Cardiologia', 'Dermatologia', 'Endocrinologia e Metabologia', 'Gastroenterologia', 'Hematologia', 'Hepatologia', 'Infectologia', 'Nefrologia', 'Neurologia', 'Pneumologia', 'Psiquiatria', 'Reumatologia'
-    ],
-    'Cirurgia Geral': [
-        'Abdome Agudo', 'Cirurgia Hepatobiliopancreática', 'Cirurgia Torácica e de Cabeça e Pescoço', 'Cirurgia Vascular', 'Cirurgia do Esôfago e Estômago', 'Coloproctologia', 'Hérnias e Parede Abdominal', 'Pré e Pós-Operatório', 'Queimaduras', 'Resposta Metabólica e Cicatrização', 'Trauma', 'Urologia'
-    ],
-    'Ginecologia e Obstetrícia': [
-        'Ciclo Menstrual e Anticoncepção', 'Climatério e Menopausa', 'Doenças Intercorrentes na Gestação', 'Infecções Congênitas e Gestacionais', 'Infecções Ginecológicas e ISTs', 'Mastologia', 'Obstetrícia Fisiológica e Pré-Natal', 'Oncologia Pélvica', 'Parto e Puerpério', 'Sangramentos da Gestação', 'Uroginecologia e Distopias', 'Vitalidade Fetal e Amniograma'
-    ],
-    'Pediatria': [
-        'Adolescência e Puberdade', 'Afecções Respiratórias', 'Aleitamento Materno e Nutrição', 'Cardiologia e Reumatologia Pediátrica', 'Crescimento e Desenvolvimento', 'Emergências e Acidentes', 'Gastroenterologia Pediátrica', 'Imunizações', 'Infectopediatria e Exantemáticas', 'Nefrologia Pediátrica', 'Neonatologia: Patologias', 'Neonatologia: Sala de Parto'
-    ],
-    'Preventiva': [
-        'Atenção Primária e Saúde da Família', 'Estudos Epidemiológicos', 'Financiamento e Gestão', 'História e Princípios do SUS', 'Indicadores de Saúde e Demografia', 'Medicina Baseada em Evidências', 'Medicina Legal', 'Medidas de Associação e Testes Diagnósticos', 'Políticas Nacionais de Saúde', 'Saúde do Trabalhador', 'Vigilância em Saúde', 'Ética Médica e Bioética'
-    ]
+    'clinica': ['Cardiologia', 'Dermatologia', 'Endocrinologia e Metabologia', 'Gastroenterologia', 'Hematologia', 'Hepatologia', 'Infectologia', 'Nefrologia', 'Neurologia', 'Pneumologia', 'Psiquiatria', 'Reumatologia'],
+    'cirurgia': ['Abdome Agudo', 'Cirurgia Hepatobiliopancreática', 'Cirurgia Torácica e de Cabeça e Pescoço', 'Cirurgia Vascular', 'Cirurgia do Esôfago e Estômago', 'Coloproctologia', 'Hérnias e Parede Abdominal', 'Pré e Pós-Operatório', 'Queimaduras', 'Resposta Metabólica e Cicatrização', 'Trauma', 'Urologia'],
+    'go': ['Ciclo Menstrual e Anticoncepção', 'Climatério e Menopausa', 'Doenças Intercorrentes na Gestação', 'Infecções Congênitas e Gestacionais', 'Infecções Ginecológicas e ISTs', 'Mastologia', 'Obstetrícia Fisiológica e Pré-Natal', 'Oncologia Pélvica', 'Parto e Puerpério', 'Sangramentos da Gestação', 'Uroginecologia e Distopias', 'Vitalidade Fetal e Amniograma'],
+    'pediatria': ['Adolescência e Puberdade', 'Afecções Respiratórias', 'Aleitamento Materno e Nutrição', 'Cardiologia e Reumatologia Pediátrica', 'Crescimento e Desenvolvimento', 'Emergências e Acidentes', 'Gastroenterologia Pediátrica', 'Imunizações', 'Infectopediatria e Exantemáticas', 'Nefrologia Pediátrica', 'Neonatologia: Patologias', 'Neonatologia: Sala de Parto'],
+    'preventiva': ['Atenção Primária e Saúde da Família', 'Estudos Epidemiológicos', 'Financiamento e Gestão', 'História e Princípios do SUS', 'Indicadores de Saúde e Demografia', 'Medicina Baseada em Evidências', 'Medicina Legal', 'Medidas de Associação e Testes Diagnósticos', 'Políticas Nacionais de Saúde', 'Saúde do Trabalhador', 'Vigilância em Saúde', 'Ética Médica e Bioética']
 };
 
-// --- HELPER: OTIMIZADOR DE IMAGEM (WEB CLIENT-SIDE) ---
-const optimizeImageForWeb = (file) => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = (event) => {
-            const img = new Image();
-            img.src = event.target.result;
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
-                const MAX_WIDTH = 1920; // Padrão HD
-                
-                if (width > MAX_WIDTH) {
-                    height = Math.round((height * MAX_WIDTH) / width);
-                    width = MAX_WIDTH;
-                }
-                
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-                
-                canvas.toBlob((blob) => {
-                    if (blob) {
-                        const newFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".webp", {
-                            type: "image/webp",
-                            lastModified: Date.now(),
-                        });
-                        resolve(newFile);
-                    } else {
-                        reject(new Error("Falha na conversão para WebP"));
-                    }
-                }, 'image/webp', 0.90);
-            };
-            img.onerror = (err) => reject(err);
-        };
-        reader.onerror = (err) => reject(err);
-    });
+const areaNameMap = {
+    'clinica': 'Clínica Médica',
+    'cirurgia': 'Cirurgia Geral',
+    'go': 'Ginecologia e Obstetrícia',
+    'pediatria': 'Pediatria',
+    'preventiva': 'Preventiva'
 };
 
-// --- HELPER: HASH ID GENERATOR (DEDUPLICATION) ---
-const generateQuestionHash = async (text) => {
-    if (!text) return null;
-    const normalized = text
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, "");
-    
-    const msgBuffer = new TextEncoder().encode(normalized);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 32);
+// --- HELPERS GLOBAIS ---
+const getAvailableQuestionCount = (questionIndex, areaTitle, topic = null, excludedIds = new Set()) => {
+  let filtered = questionIndex.filter(q => q.area === areaTitle);
+  if (topic) filtered = filtered.filter(q => q.topic === topic);
+  return filtered.filter(q => !excludedIds.has(q.id)).length;
 };
 
-// --- HELPER: CLEAN INSTITUTION (ATUALIZADO - ANTI-CURSINHO) ---
-const cleanInstitutionText = (inst) => {
-    if (!inst) return "";
-    let text = inst.toString().trim();
-    const lower = text.toLowerCase();
-
-    // 1. Lista Negra de Cursinhos (Meta-dados que não são bancas)
-    const blockList = [
-        "medcurso", "medgrupo", "medcel", "medcof", 
-        "sanar", "estrategia", "hardwork", "sic", "residencia médica", "medicina livre"
-    ];
-
-    // Se o texto for EXATAMENTE um desses, limpa.
-    if (blockList.includes(lower)) return "";
-    
-    // Se começar com termos de material de estudo
-    if (lower.startsWith("apostila") || lower.startsWith("simulado") || lower.includes("banco de questões")) return "";
-
-    // 2. Termos genéricos de erro da IA
-    if (
-        lower.includes("não informado") || 
-        lower.includes("nao informado") || 
-        lower.includes("detectar") ||
-        lower.includes("nao consta")
-    ) return "";
-
-    return text;
+const getRealQuestionCount = (questionIndex, areaTitle, topic = null) => {
+  let filtered = questionIndex.filter(q => q.area === areaTitle);
+  if (topic) filtered = filtered.filter(q => q.topic === topic);
+  return filtered.length;
 };
 
-// --- HELPER: EXTRAIR TEMPO DE ESPERA DA MENSAGEM DE ERRO ---
-const extractRetryTime = (message) => {
-    const match = message.match(/retry in ([0-9\.]+)s/);
-    return match ? parseFloat(match[1]) : null;
+const getThemesForArea = (areaId, excludedIds = new Set(), questionIndex) => {
+  const list = themesMap[areaId] || [];
+  const areaName = areaNameMap[areaId];
+  return list.map((theme, index) => ({
+    id: index + 1,
+    name: theme,
+    count: getAvailableQuestionCount(questionIndex, areaName, theme, excludedIds),
+    total: getRealQuestionCount(questionIndex, areaName, theme)
+  }));
 };
 
-// --- HELPER: PARSER JSON BLINDADO (RECUPERAÇÃO ITERATIVA) ---
-const safeJsonParse = (jsonString) => {
-    let clean = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
-    clean = clean.replace(/[\u0000-\u0019]+/g, ""); 
+const calculateDetailedStats = (simulations, questionIndex) => {
+  const stats = { totalQuestions: 0, totalCorrect: 0, byArea: {} };
+  areasBase.forEach(area => { stats.byArea[area.title] = { total: 0, correct: 0 }; });
+  stats.byArea['Geral'] = { total: 0, correct: 0 }; 
 
-    const startIndex = clean.indexOf('[');
-    if (startIndex === -1) {
-        try { return JSON.parse(clean); } catch(e) { 
-            throw new Error("Formato inválido: JSON não encontrado."); 
-        }
-    }
-    clean = clean.substring(startIndex);
-
-    try {
-        const parsed = JSON.parse(clean);
-        if (!Array.isArray(parsed) && typeof parsed === 'object') return [parsed];
-        return parsed;
-    } catch (e) {
-        console.warn("JSON quebrado detectado. Iniciando recuperação iterativa...", e.message);
-        
-        let currentString = clean;
-        let attempts = 0;
-        const maxAttempts = 50;
-
-        while (currentString.length > 2 && attempts < maxAttempts) {
-            attempts++;
-            const lastClose = currentString.lastIndexOf('}');
-            
-            if (lastClose === -1) {
-                console.error("Recuperação falhou: nenhum objeto válido encontrado.");
-                return []; 
-            }
-            
-            const candidate = currentString.substring(0, lastClose + 1) + ']';
-            
-            try {
-                const result = JSON.parse(candidate);
-                console.log(`Recuperação com sucesso na tentativa ${attempts}! ${result.length} itens salvos.`);
-                return result;
-            } catch (e2) {
-                currentString = currentString.substring(0, lastClose);
+  simulations.forEach(sim => {
+    if (sim.status === 'finished' && sim.answersData) {
+      const questionIds = sim.questionIds || [];
+      questionIds.forEach((qId, idx) => {
+        const qIndex = questionIndex.find(q => q.id === qId);
+        if (qIndex) {
+            const userAnswer = sim.answersData[idx];
+            if (userAnswer) {
+              const isCorrect = userAnswer === qIndex.correctOptionId;
+              stats.totalQuestions++;
+              if (isCorrect) stats.totalCorrect++;
+              const areaKey = qIndex.area || 'Geral';
+              if (!stats.byArea[areaKey]) stats.byArea[areaKey] = { total: 0, correct: 0 };
+              stats.byArea[areaKey].total++;
+              if (isCorrect) stats.byArea[areaKey].correct++;
             }
         }
-        
-        console.error("Falha total na recuperação do JSON.");
-        return [];
+      });
     }
+  });
+  return stats;
 };
 
-// --- COMPONENTE DE NOTIFICAÇÃO INTELIGENTE ---
-function NotificationToast({ notification, onClose, positionClass }) {
-  const [isHovered, setIsHovered] = useState(false);
+const getCorrectlyAnsweredIds = (simulations, questionIndex) => {
+  const ids = new Set();
+  simulations.forEach(sim => {
+    if (sim.status === 'finished' && sim.answersData) {
+      const questionIds = sim.questionIds || [];
+      questionIds.forEach((qId, idx) => {
+        const qIndex = questionIndex.find(q => q.id === qId);
+        if (qIndex && sim.answersData[idx] === qIndex.correctOptionId) {
+          ids.add(qId);
+        }
+      });
+    }
+  });
+  return ids;
+};
+
+const calculateTopicPerformance = (simulations, areaTitle, questionIndex) => {
+  const topicStats = {};
+  simulations.forEach(sim => {
+    if (sim.status === 'finished' && sim.answersData) {
+      const questionIds = sim.questionIds || [];
+      questionIds.forEach((qId, idx) => {
+        const q = questionIndex.find(qi => qi.id === qId);
+        if (q && q.area === areaTitle) {
+           const topic = q.topic;
+           const userAnswer = sim.answersData[idx];
+           const isCorrect = userAnswer === q.correctOptionId;
+           if (!topicStats[topic]) topicStats[topic] = { total: 0, correct: 0 };
+           if (userAnswer) {
+             topicStats[topic].total++;
+             if (isCorrect) topicStats[topic].correct++;
+           }
+        }
+      });
+    }
+  });
+  const topicsArray = Object.keys(topicStats).map(topic => {
+    const { total, correct } = topicStats[topic];
+    return { name: topic, total, correct, percentage: total === 0 ? 0 : Math.round((correct / total) * 100) };
+  });
+  const activeTopics = topicsArray.filter(t => t.total > 0);
+  activeTopics.sort((a, b) => a.percentage - b.percentage || b.total - a.total);
+  return activeTopics.slice(0, 3); 
+};
+
+const checkIsYesterday = (lastDateStr) => {
+    if (!lastDateStr) return false;
+    const parts = lastDateStr.split('/');
+    if (parts.length !== 3) return false;
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const year = parseInt(parts[2], 10);
+    const lastDate = new Date(year, month, day);
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return lastDate.getDate() === yesterday.getDate() && lastDate.getMonth() === yesterday.getMonth() && lastDate.getFullYear() === yesterday.getFullYear();
+};
+
+// --- APP COMPONENT ---
+export default function App() {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [globalLoginError, setGlobalLoginError] = useState('');
+  const [renewalLink, setRenewalLink] = useState('');
 
   useEffect(() => {
-    if (!notification || isHovered) return;
-    const timer = setTimeout(() => { onClose(); }, 6000);
-    return () => clearTimeout(timer);
-  }, [notification, isHovered, onClose]);
+    const fetchConfig = async () => {
+        try {
+            const configDoc = await getDoc(doc(db, "config", "general"));
+            if (configDoc.exists() && configDoc.data().renewalLink) {
+                setRenewalLink(configDoc.data().renewalLink);
+            }
+        } catch (error) {
+            console.error("Erro ao carregar configurações:", error);
+        }
+    };
+    fetchConfig();
+  }, []);
 
-  if (!notification) return null;
+  useEffect(() => {
+    let unsubscribeDoc = () => {};
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      unsubscribeDoc(); 
+
+      if (user) {
+        const docRef = doc(db, "users", user.uid);
+        
+        unsubscribeDoc = onSnapshot(docRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const userData = docSnap.data();
+                if (userData.role !== 'admin') {
+                    const subDate = userData.subscriptionUntil ? new Date(userData.subscriptionUntil) : null;
+                    const now = new Date();
+                    if (!subDate || subDate < now) {
+                        signOut(auth);
+                        setGlobalLoginError("Sua matrícula venceu, contate um administrador para efetivar novamente.");
+                        setCurrentUser(null);
+                        setIsLoading(false);
+                        return;
+                    }
+                }
+                setGlobalLoginError(''); 
+                setCurrentUser({ ...user, ...userData }); 
+            } else {
+                signOut(auth);
+                setGlobalLoginError("Conta não encontrada. Contate o suporte.");
+                setCurrentUser(null);
+            }
+            setIsLoading(false);
+        }, (error) => {
+            console.error("Erro ao buscar perfil:", error);
+            setGlobalLoginError("Erro ao verificar conta.");
+            setCurrentUser(null);
+            setIsLoading(false);
+        });
+      } else {
+        setCurrentUser(null);
+        setIsLoading(false);
+      }
+    });
+
+    return () => {
+        unsubscribeAuth();
+        unsubscribeDoc();
+    };
+  }, []);
+
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>;
+
+  return <>{currentUser ? <Dashboard user={currentUser} onLogout={() => signOut(auth)} /> : <LoginPage globalError={globalLoginError} renewalLink={renewalLink} />}</>;
+}
+
+// --- DASHBOARD ---
+function Dashboard({ user, onLogout }) {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [currentView, setCurrentView] = useState('home');
+  const [selectedArea, setSelectedArea] = useState(null);
+  const [activeExamData, setActiveExamData] = useState(null);
+  const [selectedSimulationId, setSelectedSimulationId] = useState(null); 
+  const [notification, setNotification] = useState(null);
+  const [dailyGoal, setDailyGoal] = useState(user.dailyGoal || 50);
+  const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
+  
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isExitModalOpen, setIsExitModalOpen] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState(null);
+  const [toasts, setToasts] = useState([]);
+  
+  const [questionsIndex, setQuestionsIndex] = useState([]);
+  const [isIndexLoading, setIsIndexLoading] = useState(true);
+
+  // NOVO: Estado para saber qual operação está em loading (Resume/Review)
+  const [loadingOp, setLoadingOp] = useState(null); 
+
+  const examStateRef = useRef(null);
+
+  const [mySimulations, setMySimulations] = useState([]);
+  const [lastExamResults, setLastExamResults] = useState(null);
+  const [userStats, setUserStats] = useState({ questionsToday: 0, correctAnswers: 0, totalAnswers: 0, streak: 0 });
+
+  const addToast = (title, message, type = 'info') => {
+      const id = Date.now();
+      setToasts(prev => [...prev, { id, title, message, type }]);
+      setTimeout(() => {
+          setToasts(prev => prev.filter(t => t.id !== id));
+      }, 3000); 
+  };
+
+  const removeToast = (id) => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+  };
+
+  // --- 1. CARREGAMENTO DO INDEX (FATIAMENTO / SHARDING) ---
+  useEffect(() => {
+    const loadMetadata = async () => {
+        try {
+            // Tenta buscar os fragmentos na coleção 'system_index'
+            const shardsQuery = query(collection(db, "system_index"));
+            const shardsSnapshot = await getDocs(shardsQuery);
+
+            if (!shardsSnapshot.empty) {
+                // Se achou fragmentos, junta todos em um único array
+                let fullIndex = [];
+                shardsSnapshot.forEach(doc => {
+                    const data = doc.data();
+                    if (data.items) {
+                        fullIndex = [...fullIndex, ...data.items];
+                    }
+                });
+                setQuestionsIndex(fullIndex);
+            } else {
+                // FALLBACK: Se não tiver index gerado, tenta o método antigo ou lê tudo (lento)
+                const oldConfigDoc = await getDoc(doc(db, "config", "questions_metadata"));
+                if (oldConfigDoc.exists()) {
+                     setQuestionsIndex(oldConfigDoc.data().index || []);
+                } else {
+                    // Fallback final: lê do banco (lento, mas funciona)
+                    if(user.role === 'admin') addToast('Aviso', 'Index não encontrado. Gere nas configurações.', 'warning');
+                    const q = query(collection(db, "questions"));
+                    const snapshot = await getDocs(q);
+                    const tempIndex = snapshot.docs.map(doc => ({
+                        id: doc.id,
+                        area: doc.data().area,
+                        topic: doc.data().topic,
+                        correctOptionId: doc.data().correctOptionId
+                    }));
+                    setQuestionsIndex(tempIndex);
+                }
+            }
+        } catch (error) {
+            console.error("Erro ao carregar index:", error);
+            // Mantém array vazio para não quebrar
+        } finally {
+            setIsIndexLoading(false);
+        }
+    };
+    loadMetadata();
+  }, [user.role]);
+
+  // --- 2. FUNÇÃO GERADORA (COM FATIAMENTO) ---
+  const generateMetadata = async () => {
+    if(user.role !== 'admin') return;
+    const loadingToast = Date.now();
+    addToast('Gerando Index...', 'Lendo banco e fatiando arquivos...', 'info');
+    
+    try {
+        const q = query(collection(db, "questions"));
+        const snapshot = await getDocs(q);
+        
+        const fullIndex = snapshot.docs.map(doc => ({
+            id: doc.id,
+            area: doc.data().area,
+            topic: doc.data().topic,
+            correctOptionId: doc.data().correctOptionId,
+        }));
+
+        const CHUNK_SIZE = 2000; 
+        const chunks = [];
+        
+        for (let i = 0; i < fullIndex.length; i += CHUNK_SIZE) {
+            chunks.push(fullIndex.slice(i, i + CHUNK_SIZE));
+        }
+
+        const batch = writeBatch(db);
+        
+        chunks.forEach((chunk, index) => {
+            const shardRef = doc(db, "system_index", `shard_${index}`);
+            batch.set(shardRef, { items: chunk, updatedAt: new Date().toISOString() });
+        });
+
+        await batch.commit();
+        
+        setQuestionsIndex(fullIndex);
+        
+        removeToast(loadingToast);
+        addToast('Sucesso', `Index gerado! (${fullIndex.length} questões em ${chunks.length} partes)`, 'success');
+
+    } catch (error) {
+        removeToast(loadingToast);
+        console.error(error);
+        addToast('Erro', 'Falha ao gerar index: ' + error.message, 'error');
+    }
+  };
+
+  const fetchFullQuestions = async (ids) => {
+    const promises = ids.map(id => getDoc(doc(db, "questions", id)));
+    const docs = await Promise.all(promises);
+    return docs.map(d => d.exists() ? { id: d.id, ...d.data() } : null).filter(Boolean);
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    const qSims = query(collection(db, `users/${user.uid}/simulations`));
+    const unsubSims = onSnapshot(qSims, (snapshot) => {
+       const sims = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+       sims.sort((a,b) => b.id - a.id); 
+       setMySimulations(sims);
+    });
+    
+    const docStats = doc(db, "users", user.uid, "stats", "main");
+    const unsubStats = onSnapshot(docStats, (docSnap) => {
+        if(docSnap.exists()) {
+            const data = docSnap.data();
+            const today = new Date().toLocaleDateString('pt-BR');
+            if (data.lastStudyDate !== today) {
+                setUserStats({ ...data, questionsToday: 0 });
+            } else {
+                setUserStats(data);
+            }
+        }
+    });
+    return () => { unsubSims(); unsubStats(); };
+  }, [user]);
+
+  const realStats = useMemo(() => calculateDetailedStats(mySimulations, questionsIndex), [mySimulations, questionsIndex]);
+  const excludedIds = useMemo(() => getCorrectlyAnsweredIds(mySimulations, questionsIndex), [mySimulations, questionsIndex]);
+  const accuracy = realStats.totalQuestions > 0 ? Math.round((realStats.totalCorrect / realStats.totalQuestions) * 100) : 0;
+  const streak = userStats.streak || 0;
+
+  const dynamicAreas = useMemo(() => {
+    return areasBase.map(area => {
+      const totalDB = getRealQuestionCount(questionsIndex, area.title);
+      const uniqueCompleted = questionsIndex.filter(q => q.area === area.title && excludedIds.has(q.id)).length;
+      const progress = totalDB > 0 ? Math.round((uniqueCompleted / totalDB) * 100) : 0;
+      return { ...area, count: `${getAvailableQuestionCount(questionsIndex, area.title, null, excludedIds)} Questões`, progress };
+    });
+  }, [questionsIndex, excludedIds]);
+
+  const handleViewSwitch = (newView) => {
+      if (currentView === 'question_mode' && newView !== 'question_mode') {
+          setPendingNavigation(newView);
+          setIsExitModalOpen(true);
+      } else {
+          setCurrentView(newView);
+          if (newView !== 'question_mode') {
+             examStateRef.current = null;
+          }
+      }
+  };
+
+  const confirmExitWithoutSaving = () => {
+      setIsExitModalOpen(false);
+      if (pendingNavigation) {
+          setCurrentView(pendingNavigation);
+          setPendingNavigation(null);
+          examStateRef.current = null;
+      }
+  };
+
+  const handleSaveAndExitFromModal = async () => {
+      setIsExitModalOpen(false);
+      if (examStateRef.current && pendingNavigation) {
+          const { questions, answers, index, id } = examStateRef.current;
+          await handleExamPause(questions, answers, index, id);
+          setCurrentView(pendingNavigation);
+          setPendingNavigation(null);
+          examStateRef.current = null;
+      } else {
+          confirmExitWithoutSaving();
+      }
+  };
+
+  const handleUpdateProgress = (questions, answers, index, id) => {
+      examStateRef.current = { questions, answers, index, id };
+  };
+
+  const handleSaveGoal = async (newGoal) => {
+    setDailyGoal(newGoal);
+    setIsGoalModalOpen(false);
+    if (user && user.uid) {
+        try {
+            const userRef = doc(db, "users", user.uid);
+            await setDoc(userRef, { dailyGoal: newGoal }, { merge: true });
+        } catch (error) {
+            console.error("Erro ao salvar meta:", error);
+        }
+    }
+  };
+
+  const handleLaunchExam = async (filters = {}, limit = 5) => {
+    if (limit <= 0) {
+        addToast('Atenção', 'A quantidade de questões deve ser maior que zero.', 'error');
+        return;
+    }
+    const validQuestionsPool = questionsIndex.filter(q => {
+        if (filters.areaId && q.area !== areaNameMap[filters.areaId]) return false;
+        if (filters.topics && filters.topics.length > 0 && !filters.topics.includes(q.topic)) return false;
+        return true;
+    });
+
+    if (validQuestionsPool.length === 0) {
+      setNotification({ title: "Sem questões", message: "Não encontramos questões com estes filtros.", type: "info" });
+      return;
+    }
+
+    let selectedIds = [];
+
+    if (filters.topics && filters.topics.length > 0) {
+        const questionsByTopic = {};
+        filters.topics.forEach(t => questionsByTopic[t] = { new: [], old: [] });
+
+        validQuestionsPool.forEach(q => {
+            if (questionsByTopic[q.topic]) {
+                if (excludedIds.has(q.id)) {
+                    questionsByTopic[q.topic].old.push(q);
+                } else {
+                    questionsByTopic[q.topic].new.push(q);
+                }
+            }
+        });
+
+        const targetPerTopic = Math.ceil(limit / filters.topics.length);
+        let backupPool = [];
+
+        Object.keys(questionsByTopic).forEach(topic => {
+            const { new: newQs, old: oldQs } = questionsByTopic[topic];
+            const shuffledNew = newQs.sort(() => 0.5 - Math.random());
+            const takeNew = shuffledNew.slice(0, targetPerTopic);
+            selectedIds.push(...takeNew.map(q => q.id));
+            const needed = targetPerTopic - takeNew.length;
+            if (needed > 0) {
+                const shuffledOld = oldQs.sort(() => 0.5 - Math.random());
+                const takeOld = shuffledOld.slice(0, needed);
+                selectedIds.push(...takeOld.map(q => q.id));
+                backupPool.push(...shuffledOld.slice(needed));
+            } else {
+                 backupPool.push(...oldQs);
+            }
+            backupPool.push(...shuffledNew.slice(targetPerTopic));
+        });
+
+        if (selectedIds.length < limit && backupPool.length > 0) {
+            const missing = limit - selectedIds.length;
+            backupPool.sort((a, b) => {
+                const aIsOld = excludedIds.has(a.id);
+                const bIsOld = excludedIds.has(b.id);
+                return aIsOld === bIsOld ? 0.5 - Math.random() : aIsOld ? 1 : -1;
+            });
+            selectedIds.push(...backupPool.slice(0, missing).map(q => q.id));
+        }
+        selectedIds = selectedIds.sort(() => 0.5 - Math.random()).slice(0, limit);
+    } else {
+        const newQs = validQuestionsPool.filter(q => !excludedIds.has(q.id));
+        const oldQs = validQuestionsPool.filter(q => excludedIds.has(q.id));
+        let selection = newQs.sort(() => 0.5 - Math.random()).slice(0, limit);
+        if (selection.length < limit) {
+            const missing = limit - selection.length;
+            selection.push(...oldQs.sort(() => 0.5 - Math.random()).slice(0, missing));
+        }
+        selectedIds = selection.sort(() => 0.5 - Math.random()).map(q => q.id);
+    }
+
+    try {
+        const fullQuestions = await fetchFullQuestions(selectedIds);
+        
+        if (fullQuestions.length === 0) {
+            addToast('Erro', 'Não foi possível carregar as questões.', 'error');
+            return;
+        }
+
+        setActiveExamData({ questionsData: fullQuestions, answersData: {}, currentIndex: 0, id: Date.now() });
+        handleViewSwitch('question_mode');
+    } catch (error) {
+        console.error("Erro no fetch lazy:", error);
+        addToast('Erro', 'Erro de conexão.', 'error');
+    }
+  };
+
+  const handleLaunchSmartExam = async (questionsListLite) => {
+    if (!questionsListLite || questionsListLite.length === 0) {
+        addToast('Erro', 'Lista de questões vazia.', 'error');
+        return;
+    }
+
+    try {
+        const ids = questionsListLite.map(q => q.id);
+        const fullQuestions = await fetchFullQuestions(ids);
+
+        setActiveExamData({ 
+            questionsData: fullQuestions, 
+            answersData: {}, 
+            currentIndex: 0, 
+            id: Date.now() 
+        });
+        handleViewSwitch('question_mode');
+    } catch (error) {
+        addToast('Erro', 'Erro ao baixar caderno de erros.', 'error');
+    }
+  };
+
+  const handleExamPause = async (questions, answers, currentIndex, originId = null) => {
+    const answeredCount = Object.keys(answers).length;
+    if(user) {
+        const simId = String(originId || Date.now());
+        const simData = { 
+            id: Number(simId), 
+            date: new Date().toLocaleDateString('pt-BR'), 
+            title: selectedArea ? `Simulado ${selectedArea.title}` : 'Simulado Misto',
+            type: selectedArea ? 'Área Específica' : 'Misto', 
+            status: 'open', 
+            total: questions.length, 
+            correct: 0, 
+            progress: answeredCount, 
+            areas: selectedArea ? [selectedArea.title] : ['Misto'], 
+            questionIds: questions.map(q => q.id), 
+            answersData: answers,
+            lastIndex: currentIndex
+        };
+        await setDoc(doc(db, `users/${user.uid}/simulations`, simId), simData);
+        addToast('Progresso Salvo', 'Você pode continuar depois em "Meus Simulados".', 'success');
+        setCurrentView('home'); 
+        examStateRef.current = null;
+    }
+  };
+
+  const handleExamFinish = async (results, questions, answers, originId = null) => {
+    const answeredCount = Object.keys(answers).length;
+    const simId = String(originId || Date.now());
+    setLastExamResults({ id: Number(simId), total: questions.length, correct: results.correct, answered: answeredCount });
+
+    if(user) {
+        const simData = { 
+            id: Number(simId), 
+            date: new Date().toLocaleDateString('pt-BR'), 
+            title: selectedArea ? `Simulado ${selectedArea.title}` : 'Simulado Misto',
+            type: selectedArea ? 'Área Específica' : 'Misto', 
+            status: 'finished', 
+            total: questions.length, 
+            correct: results.correct, 
+            progress: answeredCount, 
+            areas: selectedArea ? [selectedArea.title] : ['Misto'], 
+            questionIds: questions.map(q => q.id), 
+            answersData: answers 
+        };
+        await setDoc(doc(db, `users/${user.uid}/simulations`, simId), simData);
+
+        const today = new Date().toLocaleDateString('pt-BR');
+        const lastDate = userStats.lastStudyDate;
+        let newStreak = userStats.streak || 0;
+        let newQuestionsToday = userStats.questionsToday || 0;
+
+        if (lastDate !== today) newQuestionsToday = 0;
+        newQuestionsToday += answeredCount;
+
+        if (lastDate !== today) {
+            if (checkIsYesterday(lastDate)) newStreak += 1;
+            else newStreak = 1;
+        }
+
+        const newStats = {
+            questionsToday: newQuestionsToday,
+            totalAnswers: (userStats.totalAnswers || 0) + answeredCount,
+            correctAnswers: (userStats.correctAnswers || 0) + results.correct,
+            streak: newStreak,
+            lastStudyDate: today 
+        };
+        await setDoc(doc(db, "users", user.uid, "stats", "main"), newStats, { merge: true });
+    }
+    setCurrentView('simulation_summary');
+    examStateRef.current = null;
+  };
+
+  const handleDeleteSimulation = async (simId) => {
+    if (!user) return;
+    try {
+        await deleteDoc(doc(db, `users/${user.uid}/simulations`, String(simId)));
+        addToast('Excluído', 'Simulado removido com sucesso.', 'success');
+    } catch (error) {
+        console.error("Erro ao excluir simulado:", error);
+        addToast('Erro', 'Não foi possível excluir o simulado.', 'error');
+    }
+  };
+
+  const handleResumeExam = async (simId) => {
+    const sim = mySimulations.find(s => s.id === simId);
+    if (!sim) return;
+    
+    // ATIVA LOADING ESPECÍFICO PARA ESTE ID
+    setLoadingOp(simId);
+
+    let questions = [];
+    if (sim.questionsData) {
+        questions = sim.questionsData; 
+    } else if (sim.questionIds) {
+        // SEM TOAST AQUI, USANDO O BUTTON LOADING
+        try {
+            questions = await fetchFullQuestions(sim.questionIds);
+        } catch (e) {
+            addToast('Erro', 'Erro ao recuperar questões.', 'error');
+            setLoadingOp(null); // PARA O LOADING EM ERRO
+            return;
+        }
+    }
+    
+    if (questions.length === 0) {
+        addToast('Erro', 'Não foi possível carregar as questões. Tente novamente.', 'error');
+        setLoadingOp(null); // PARA O LOADING EM ERRO
+        return;
+    }
+    setActiveExamData({ questionsData: questions, answersData: sim.answersData || {}, currentIndex: sim.lastIndex || 0, id: sim.id });
+    handleViewSwitch('question_mode');
+    setLoadingOp(null); // RESETA APÓS MUDAR A VIEW
+  };
+
+  const handleResetQuestions = async () => {
+     if(!user) return;
+     const q = query(collection(db, `users/${user.uid}/simulations`));
+     const snapshot = await getDocs(q);
+     const batch = writeBatch(db);
+     snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+     await batch.commit();
+     await setDoc(doc(db, "users", user.uid, "stats", "main"), { totalAnswers: 0, correctAnswers: 0 }, { merge: true });
+     addToast('Resetado', 'Histórico de questões resetado.', 'success');
+  };
+
+  const handleResetHistory = async () => {
+    if(!user) return;
+    const q = query(collection(db, `users/${user.uid}/simulations`));
+    const snapshot = await getDocs(q);
+    const batch = writeBatch(db);
+    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+    await setDoc(doc(db, "users", user.uid, "stats", "main"), { questionsToday: 0, correctAnswers: 0, totalAnswers: 0, streak: 0, lastStudyDate: null });
+    addToast('Apagado', 'Todo o histórico foi apagado.', 'success');
+  };
+
+  const [reviewData, setReviewData] = useState(null);
+  
+  const handleReviewClick = async (simId) => {
+      const sim = mySimulations.find(s => s.id === simId);
+      if(!sim) return;
+      
+      setLoadingOp(simId); // LOADING NO BOTÃO
+
+      let fullSim = { ...sim };
+      if (!sim.questionsData && sim.questionIds) {
+          try {
+             const qs = await fetchFullQuestions(sim.questionIds);
+             fullSim.questionsData = qs;
+          } catch(e) {
+             addToast('Erro', 'Não foi possível carregar as questões.', 'error');
+             setLoadingOp(null);
+             return;
+          }
+      }
+      setReviewData(fullSim);
+      setSelectedSimulationId(simId);
+      handleViewSwitch('review_mode');
+      setLoadingOp(null);
+  };
+
+  const renderContent = () => {
+    switch (currentView) {
+      case 'home': return <HomeView user={user} userStats={userStats} dailyGoal={dailyGoal} accuracy={accuracy} streak={streak} dynamicAreas={dynamicAreas} setIsGoalModalOpen={setIsGoalModalOpen} setSelectedArea={setSelectedArea} setCurrentView={handleViewSwitch} realStats={realStats} isIndexLoading={isIndexLoading} />;
+      case 'flashcards': return <FlashcardsView user={user} onBack={() => handleViewSwitch('home')} />;
+      case 'my_simulations': return <MySimulationsView simulations={mySimulations} onCreateNew={() => handleViewSwitch('general_exam_setup')} onResume={handleResumeExam} onViewResults={handleReviewClick} onDelete={handleDeleteSimulation} loadingOp={loadingOp} />;
+      case 'review_mode': return <ReviewExamView simulation={reviewData} onBack={() => handleViewSwitch('my_simulations')} user={user} addToast={addToast} allQuestions={questionsIndex} />;
+      case 'general_exam_setup': return (
+          <GeneralExamSetupView 
+              user={user} // PASSANDO USER
+              onBack={() => handleViewSwitch('my_simulations')} 
+              onLaunchExam={(topics, count) => handleLaunchExam({ topics: topics }, count)} 
+              areasBase={areasBase} 
+              excludedIds={excludedIds} 
+              allQuestions={questionsIndex}
+              themesMap={themesMap}
+              areaNameMap={areaNameMap}
+              getThemesForArea={getThemesForArea}
+          />
+      );
+      case 'area_hub': return <AreaHubView area={selectedArea} stats={realStats.byArea[selectedArea.title] || { total: 0, correct: 0 }} worstTopics={calculateTopicPerformance(mySimulations, selectedArea.title, questionsIndex)} onBack={() => handleViewSwitch('home')} onStartTraining={() => handleViewSwitch('topic_selection')} user={user} />;
+      case 'topic_selection': return (
+          <TopicSelectionView 
+              user={user} // PASSANDO USER
+              area={selectedArea} 
+              onBack={() => handleViewSwitch('area_hub')} 
+              onLaunchExam={(topics, count) => handleLaunchExam({ areaId: selectedArea.id, topics: topics }, count)} 
+              excludedIds={excludedIds} 
+              allQuestions={questionsIndex} 
+              getThemesForArea={getThemesForArea} 
+          />
+      );
+      case 'question_mode': return <QuestionView area={selectedArea} initialData={activeExamData} user={user} onExit={() => handleViewSwitch('home')} onFinish={handleExamFinish} onPause={handleExamPause} onUpdateProgress={handleUpdateProgress} addToast={addToast} />;
+      case 'simulation_summary': return <SimulationSummaryView results={lastExamResults} onHome={() => handleViewSwitch('home')} onNewExam={() => handleViewSwitch('general_exam_setup')} onReview={() => handleReviewClick(lastExamResults?.id)} loadingReview={loadingOp === lastExamResults?.id} />;
+      case 'settings': return <SettingsView user={user} onBack={() => handleViewSwitch('home')} onResetQuestions={handleResetQuestions} onResetHistory={handleResetHistory} addToast={addToast} onGenerateMetadata={generateMetadata} />;
+      case 'performance': return <PerformanceView detailedStats={realStats} simulations={mySimulations} allQuestions={questionsIndex} onLaunchExam={(topics, count) => handleLaunchExam({ topics: topics }, count)} onLaunchSmartExam={handleLaunchSmartExam} onBack={() => handleViewSwitch('home')} areasBase={areasBase} />;
+      case 'add_question': return <AddQuestionView onBack={() => handleViewSwitch('home')} addToast={addToast} />;
+      default: return <div>Erro: View não encontrada</div>;
+    }
+  };
 
   return (
-    <div 
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        className={`${positionClass} z-[100] p-4 rounded-xl shadow-xl flex items-start gap-3 animate-in slide-in-from-right-10 duration-300 max-w-sm border transition-all ${notification.type === 'error' ? 'bg-white border-red-200 text-red-700' : notification.type === 'warning' ? 'bg-white border-amber-200 text-amber-700' : notification.type === 'info' ? 'bg-white border-blue-200 text-blue-700' : 'bg-white border-emerald-200 text-emerald-700'}`}
-    >
-        <div className={`mt-0.5 p-1 rounded-full ${notification.type === 'error' ? 'bg-red-100' : notification.type === 'warning' ? 'bg-amber-100' : notification.type === 'info' ? 'bg-blue-100' : 'bg-emerald-100'}`}>
-            {notification.type === 'error' ? <AlertCircle size={20} /> : notification.type === 'warning' ? <AlertTriangle size={20} /> : notification.type === 'info' ? <Info size={20}/> : <CheckCircle size={20} />}
-        </div>
-        <div className="flex-1">
-            <p className="font-bold text-sm mb-1">{notification.type === 'error' ? 'Erro' : notification.type === 'warning' ? 'Atenção' : notification.type === 'info' ? 'Info' : 'Sucesso'}</p>
-            <p className="text-sm opacity-90 leading-tight">{notification.text}</p>
-        </div>
-        <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
-            <X size={18}/>
-        </button>
+    <div className="min-h-screen bg-gray-50 flex font-sans text-slate-800 relative">
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      {isGoalModalOpen && <GoalModal currentGoal={dailyGoal} onSave={handleSaveGoal} onClose={() => setIsGoalModalOpen(false)} />}
+      {notification && <NotificationModal title={notification.title} message={notification.message} type={notification.type} onClose={() => setNotification(null)} />}
+      
+      {isExitModalOpen && (
+          <ExitConfirmationModal 
+              onClose={() => setIsExitModalOpen(false)} 
+              onConfirmExit={confirmExitWithoutSaving}
+              onSaveAndExit={handleSaveAndExitFromModal}
+          />
+      )}
+
+      {/* --- CORREÇÃO NA SIDEBAR --- */}
+      <Sidebar 
+          currentView={currentView} 
+          setCurrentView={handleViewSwitch} 
+          onLogout={onLogout} 
+          user={user} 
+          collapsed={isSidebarCollapsed}
+          toggleCollapsed={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+      />
+      <MobileHeader isMobileMenuOpen={isMobileMenuOpen} setIsMobileMenuOpen={setIsMobileMenuOpen} />
+      {isMobileMenuOpen && <MobileMenu currentView={currentView} setCurrentView={handleViewSwitch} onLogout={onLogout} user={user} setIsMobileMenuOpen={setIsMobileMenuOpen} />}
+      
+      {/* --- CORREÇÃO CRÍTICA NO PADDING --- */}
+      {/* Mudamos 'md:' para 'lg:' para respeitar o tablet portrait como mobile */}
+      <main className={`
+          flex-1 p-6 
+          pt-24 lg:pt-6 
+          transition-all duration-300 
+          ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'}
+      `}>
+        {renderContent()}
+      </main>
     </div>
   );
 }
 
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
-  
-  // Gestão de Chaves API
-  const [apiKeys, setApiKeys] = useState(() => JSON.parse(localStorage.getItem('gemini_api_keys') || '[]'));
-  
-  // Modelos
-  const [availableModels, setAvailableModels] = useState([
-      { name: 'models/gemini-2.5-pro', displayName: 'Gemini 2.5 Pro (Padrão)' },
-      { name: 'models/gemini-2.5-flash', displayName: 'Gemini 2.5 Flash' }
-  ]);
-  const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('gemini_model') || 'models/gemini-2.5-pro');
-  
-  // Estados UI Básicos
-  const [rawText, setRawText] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isBatchAction, setIsBatchAction] = useState(false); 
-  const [isSavingKey, setIsSavingKey] = useState(false);
-  const [parsedQuestions, setParsedQuestions] = useState([]);
-  const [activeTab, setActiveTab] = useState('input');
-  const [notification, setNotification] = useState(null);
-  const [isValidatingKey, setIsValidatingKey] = useState(false);
-  const [isDoubleCheckEnabled, setIsDoubleCheckEnabled] = useState(true); 
-  const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(true); 
-
-  // Estado para loading de imagem individual
-  const [uploadingImageId, setUploadingImageId] = useState(null);
-  
-  // --- Estado para Filtros Múltiplos (ATUALIZADO: text_only por padrão) ---
-  const [activeFilters, setActiveFilters] = useState(['verified', 'source', 'text_only']); 
-  const [filterLogic, setFilterLogic] = useState('AND'); 
-  
-  // Override States
-  const [overrideInst, setOverrideInst] = useState('');
-  const [overrideYear, setOverrideYear] = useState('');
-  const [overrideArea, setOverrideArea] = useState('');
-  const [overrideTopic, setOverrideTopic] = useState('');
-
-  // Modais
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-  const [tempApiKeysText, setTempApiKeysText] = useState('');
-  const [showTutorial, setShowTutorial] = useState(false);
-  
-  const [confirmationModal, setConfirmationModal] = useState({
-      isOpen: false, type: null, data: null, title: '', message: '', confirmText: '', confirmColor: ''
-  });
-  
-  // Login Inputs
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-
-  // --- BATCH IMAGE STATES ---
-  const [batchImages, setBatchImages] = useState([]); 
-  const [batchStatus, setBatchStatus] = useState('idle'); 
-  const [batchLogs, setBatchLogs] = useState([]);
-
-  // --- PDF PROCESSING STATES ---
-  const [pdfFile, setPdfFile] = useState(null);
-  const [pdfStatus, setPdfStatus] = useState('idle');
-  const [pdfChunks, setPdfChunks] = useState([]); 
-  const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
-  const [processingLogs, setProcessingLogs] = useState([]);
-  const [consecutiveErrors, setConsecutiveErrors] = useState(0);
-  
-  const [pdfStartPage, setPdfStartPage] = useState('');
-  const [pdfEndPage, setPdfEndPage] = useState('');
-
-  // --- SESSION STATE ---
-  const [lastSessionData, setLastSessionData] = useState(null);
-
-  const processorRef = useRef(null); 
-  const batchProcessorRef = useRef(null);
-  
-  // --- REFS ---
-  const pdfStatusRef = useRef(pdfStatus);
-  const pdfChunksRef = useRef(pdfChunks);
-  const batchImagesRef = useRef(batchImages);
-  const batchStatusRef = useRef(batchStatus);
-  const apiKeysRef = useRef(apiKeys);
-  const keyRotationIndex = useRef(0);
-  const doubleCheckRef = useRef(isDoubleCheckEnabled); 
-  const webSearchRef = useRef(isWebSearchEnabled); 
-  const overridesRef = useRef({ overrideInst, overrideYear, overrideArea, overrideTopic });
-  const currentChunkIndexRef = useRef(currentChunkIndex); 
-
-  const CHUNK_SIZE = 10; 
-
-  // --- AUTH CHECK ---
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (u) => {
-        if (u) {
-            try {
-                const userDocRef = doc(db, "users", u.uid);
-                const userDoc = await getDoc(userDocRef);
-                if (userDoc.exists() && userDoc.data().role === 'admin') {
-                    setUser(u);
-                } else {
-                    await signOut(auth);
-                    setUser(null);
-                    showNotification('error', 'Acesso negado: Usuário não é administrador.');
-                }
-            } catch (error) {
-                console.error("Erro ao verificar role:", error);
-                await signOut(auth);
-                setUser(null);
-            }
-        } else {
-            setUser(null);
-        }
-        setIsLoadingAuth(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // --- SYNC REFS ---
-  useEffect(() => { pdfStatusRef.current = pdfStatus; }, [pdfStatus]);
-  useEffect(() => { pdfChunksRef.current = pdfChunks; }, [pdfChunks]);
-  useEffect(() => { batchImagesRef.current = batchImages; }, [batchImages]);
-  useEffect(() => { batchStatusRef.current = batchStatus; }, [batchStatus]);
-  useEffect(() => { apiKeysRef.current = apiKeys; }, [apiKeys]);
-  useEffect(() => { doubleCheckRef.current = isDoubleCheckEnabled; }, [isDoubleCheckEnabled]);
-  useEffect(() => { webSearchRef.current = isWebSearchEnabled; }, [isWebSearchEnabled]);
-  useEffect(() => { overridesRef.current = { overrideInst, overrideYear, overrideArea, overrideTopic }; }, [overrideInst, overrideYear, overrideArea, overrideTopic]);
-  useEffect(() => { currentChunkIndexRef.current = currentChunkIndex; }, [currentChunkIndex]);
-
-  // --- SYNC CHAVES API ---
-  useEffect(() => {
-      if (!user) return;
-      const unsubscribe = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
-          if (docSnap.exists()) {
-              const data = docSnap.data();
-              let newKeys = [];
-              if (data.geminiApiKeys && Array.isArray(data.geminiApiKeys)) {
-                  newKeys = data.geminiApiKeys;
-              } else if (data.geminiApiKey) {
-                  newKeys = [data.geminiApiKey];
-              }
-              const uniqueKeys = [...new Set(newKeys.filter(k => k && k.trim().length > 0))];
-              if (JSON.stringify(uniqueKeys) !== JSON.stringify(apiKeysRef.current)) {
-                  setApiKeys(uniqueKeys);
-                  localStorage.setItem('gemini_api_keys', JSON.stringify(uniqueKeys));
-              }
-          }
-      }, (error) => console.error("Erro ao sincronizar chaves:", error));
-      return () => unsubscribe();
-  }, [user]);
-
-  // --- SYNC RASCUNHOS ---
-  useEffect(() => {
-      if (!user) { setParsedQuestions([]); return; }
-      const q = query(collection(db, "draft_questions"), orderBy("createdAt", "desc"));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-          const drafts = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, status: 'draft' }));
-          setParsedQuestions(drafts);
-      });
-      return () => unsubscribe();
-  }, [user]);
-
-  // --- SYNC PROGRESSO DO PDF ---
-  useEffect(() => {
-      if (!user) {
-          setLastSessionData(null);
-          return;
-      }
-      const unsubscribe = onSnapshot(doc(db, "users", user.uid, "progress", "pdf_session"), (docSnap) => {
-          if (docSnap.exists()) {
-              setLastSessionData(docSnap.data());
-          } else {
-              setLastSessionData(null);
-          }
-      });
-      return () => unsubscribe();
-  }, [user]);
-
-  // --- ROTATION HELPER ---
-  const executeWithKeyRotation = async (operationName, requestFn) => {
-      const keys = apiKeysRef.current;
-      if (!keys || keys.length === 0) throw new Error("Nenhuma chave API configurada.");
-
-      let lastError = null;
-      const startIndex = keyRotationIndex.current;
-
-      for (let i = 0; i < keys.length; i++) {
-          const currentIndex = (startIndex + i) % keys.length;
-          const currentKey = keys[currentIndex];
-          
-          keyRotationIndex.current = (currentIndex + 1) % keys.length;
-
-          try {
-              return await requestFn(currentKey);
-          } catch (error) {
-              const msg = error.message || "";
-              const isQuotaError = msg.includes("Quota exceeded") || msg.includes("429") || msg.includes("Resource has been exhausted");
-              
-              if (isQuotaError) {
-                  const logFn = operationName.includes("Imagem") ? addBatchLog : addLog;
-                  logFn('warning', `[${operationName}] Chave ...${currentKey.slice(-4)} no limite. Rotacionando...`);
-                  lastError = error;
-                  continue; 
-              } else {
-                  throw error; 
-              }
-          }
-      }
-      throw lastError || new Error("Todas as chaves falharam. Aguardando recarga...");
-  };
-
-  // --- FUNÇÃO DE PESQUISA OTIMIZADA (COM BLINDAGEM) ---
-  const searchQuestionSource = async (questionText) => {
-      const searchPromptText = questionText.length > 400 
-        ? questionText.substring(0, 400) + "..." 
-        : questionText;
-
-      return executeWithKeyRotation("Pesquisa Web", async (key) => {
-          try {
-              const systemPrompt = `Você é um verificador de questões de residência médica.
-              Sua missão: Identificar a origem da questão usando a Pesquisa Google.
-              CRITÉRIOS DE ESCOLHA:
-              - Se a questão apareceu em múltiplas provas, escolha a ORIGINAL ou a MAIS RECENTE.
-              REGRAS DE FORMATAÇÃO DE NOME:
-              - Resuma nomes longos para o formato: "UF - Nome Curto / Sigla".
-              - Exemplo Ruim: "Secretaria da Saúde do Estado da Bahia (SESAB) - Processo Unificado"
-              - Exemplo Bom: "BA - SUS Bahia"
-              - Exemplo Bom: "SP - USP São Paulo"
-              - Exemplo Bom: "Nacional - ENARE"
-              {
-                "institution": "Nome da Instituição Resumido (ou vazio se não achar)",
-                "year": "Ano (apenas números, ou vazio se não achar)"
-              }`;
-
-              const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/${modelNameClean}:generateContent?key=${key}`,
-                {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    contents: [{ parts: [{ text: `IDENTIFICAR ORIGEM:\n${searchPromptText}` }] }],
-                    systemInstruction: { parts: [{ text: systemPrompt }] },
-                    tools: [{ google_search: {} }] 
-                  })
-                }
-              );
-
-              if (!response.ok) {
-                  const errData = await response.json().catch(() => ({}));
-                  throw new Error(errData.error?.message || "Erro na API Search");
-              }
-              
-              const data = await response.json();
-              let jsonString = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-              
-              jsonString = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
-              try { return JSON.parse(jsonString); } 
-              catch(e) { return { institution: "", year: "" }; }
-              
-          } catch (err) {
-              const msg = err.message || "";
-              // BLINDAGEM: Se for cota, lança erro para cima para forçar retry
-              if (msg.includes("429") || msg.includes("Quota") || msg.includes("Resource has been exhausted")) {
-                  throw err;
-              }
-              return { institution: "", year: "" }; // Erro normal (ex: timeout), segue sem fonte
-          }
-      });
-  };
-
-  // --- LOGIC: VERIFICATION AGENT (COM BLINDAGEM) ---
-  const verifyQuestionWithAI = async (questionData) => {
-      return executeWithKeyRotation("Auditoria", async (key) => {
-          try {
-              const verifyPrompt = `
-    Você é um Auditor Sênior de Questões Médicas.
-    Sua missão é validar se esta questão é SEGURA e COERENTE para um banco de dados de estudo.
-    ATENÇÃO: Você NÃO tem acesso à internet. Use exclusivamente seu conhecimento médico treinado.
-
-    DADOS DA QUESTÃO:
-    Banca: ${questionData.institution || "Não informada"}
-    Ano: ${questionData.year || "Não informado"}
-    Enunciado: "${questionData.text}"
-    Alternativas: ${JSON.stringify(questionData.options)}
-    Gabarito Proposto: ${questionData.correctOptionId}
-    Explicação Gerada: "${questionData.explanation}"
-
-    PASSO A PASSO DA AUDITORIA:
-    1. Analise se o gabarito faz sentido clinicamente.
-    2. Verifique se a "Explicação Gerada" realmente justifica o gabarito.
-    3. Aplique as REGRAS DE JULGAMENTO abaixo.
-
-    REGRAS DE JULGAMENTO (HIERARQUIA DE DECISÃO):
-
-    [NÍVEL 1: FATOS OBJETIVOS E ABSURDOS - TOLERÂNCIA ZERO]
-    - Se a questão contém ERROS GRAVES de números (Doses letais, Anatomia impossível).
-    - Se o gabarito é ABSURDAMENTE errado (ex: tratar parada cardíaca com dipirona).
-    - Se a Explicação contradiz o próprio Gabarito.
-    -> AÇÃO: REPROVE ("isValid": false).
-
-    [NÍVEL 2: ANACRONISMO (IMPORTANTE)]
-    - Se a questão parece "errada" hoje, mas estava CERTA no Ano da questão (mudança de diretriz/protocolo).
-    -> AÇÃO: APROVE com ressalva no motivo ("isValid": true, "reason": "Correto para a época").
-
-    [NÍVEL 3: ZONA CINZENTA E CONDUTAS]
-    - Se houver divergência na literatura médica.
-    - Se o gabarito for defendido por PELO MENOS UMA corrente bibliográfica (Harrison, Cecil, MS, UpToDate).
-    -> AÇÃO: APROVE ("isValid": true).
-
-    [NÍVEL 4: "NA DÚVIDA"]
-    - Se não for um erro médico grosseiro.
-    -> AÇÃO: APROVE ("isValid": true).
-
-    SAÍDA OBRIGATÓRIA (JSON):
-    {
-        "isValid": boolean, 
-        "reason": "Explicação breve e direta (máx 15 palavras)"
-    }
-`;
-
-              const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelNameClean}:generateContent?key=${key}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    contents: [{ parts: [{ text: verifyPrompt }] }], 
-                })
-              });
-              
-              if (!response.ok) {
-                   const errData = await response.json().catch(() => ({}));
-                   throw new Error(errData.error?.message || "Erro na API Audit");
-              }
-
-              const data = await response.json();
-              
-              let jsonString = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-              jsonString = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
-              const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
-              if (jsonMatch) jsonString = jsonMatch[0];
-
-              return safeJsonParse(jsonString);
-              
-          } catch (err) {
-              const msg = err.message || "";
-              // BLINDAGEM: Se for cota, lança erro para cima para forçar retry
-              if (msg.includes("429") || msg.includes("Quota") || msg.includes("Resource has been exhausted")) {
-                  throw err;
-              }
-              // Erro de lógica, segue como não checado
-              return { isValid: true, reason: "Falha na auditoria (ignorado)" };
-          }
-      }).then(result => {
-          return {
-              status: result.isValid ? 'verified' : 'suspicious',
-              reason: result.reason || (result.isValid ? "Validado (Web/Lógica)" : "Erro Fatual ou Divergência Grave")
-          };
-      });
-  };
-
-  // --- COMMON: LOGS ---
-  const addLog = (type, message) => {
-      const time = new Date().toLocaleTimeString();
-      setProcessingLogs(prev => [{ type, message, time }, ...prev].slice(0, 50)); 
-  };
-  
-  const addBatchLog = (type, message) => {
-      const time = new Date().toLocaleTimeString();
-      setBatchLogs(prev => [{ type, message, time }, ...prev].slice(0, 50));
-  };
-
-  // --- FILTROS COM LÓGICA 'OR' (SOMA) ---
-  const toggleFilter = (filterKey) => {
-      setActiveFilters(prev => {
-          if (filterKey === 'all') return ['all'];
-          let newFilters = prev.filter(f => f !== 'all');
-          
-          if (newFilters.includes(filterKey)) {
-              newFilters = newFilters.filter(f => f !== filterKey);
-          } else {
-              newFilters.push(filterKey);
-          }
-          
-          if (newFilters.length === 0) return ['all'];
-          return newFilters;
-      });
-  };
-
-  const getFilteredQuestions = () => {
-    if (activeFilters.includes('all')) return parsedQuestions;
-    
-    return parsedQuestions.filter(q => {
-      if (!activeFilters.includes('duplicates') && q.isDuplicate) return false;
-
-      const results = activeFilters.map(filterKey => {
-          if (filterKey === 'verified') return q.verificationStatus === 'verified';
-          if (filterKey === 'suspicious') return q.verificationStatus === 'suspicious';
-          if (filterKey === 'source') return !!q.sourceFound;
-          if (filterKey === 'no_source') return !q.sourceFound;
-          if (filterKey === 'duplicates') return !!q.isDuplicate;
-          if (filterKey === 'needs_image') return !!q.needsImage; 
-          if (filterKey === 'text_only') return !q.needsImage; 
-          return true;
-      });
-
-      if (filterLogic === 'AND') {
-          return results.every(r => r === true);
-      } else {
-          return results.some(r => r === true);
-      }
-    });
-  };
-
-  // --- FILTER CONFIG (ATUALIZADA) ---
-  const filterLabels = {
-      'all': 'Todas',
-      'verified': 'Verificadas',
-      'source': 'Com Fonte',
-      'no_source': 'Sem Fonte', 
-      'suspicious': 'Suspeitas',
-      'duplicates': 'Duplicadas',
-      'needs_image': 'Requer Imagem',
-      'text_only': 'Texto Puro (Sem Imagem)' 
-  };
-
-  // --- UPLOAD MULTI-IMAGEM ---
-  const handleImageUploadToQuestion = async (e, idx, questionData) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      setUploadingImageId(questionData.id);
-
-      try {
-          const optimizedFile = await optimizeImageForWeb(file);
-          const timestamp = Date.now();
-          const fileName = `${questionData.id}_${timestamp}.webp`;
-          const storageRef = ref(storage, `questions_images/${fileName}`);
-          
-          const snapshot = await uploadBytes(storageRef, optimizedFile);
-          const downloadURL = await getDownloadURL(snapshot.ref);
-
-          await updateDoc(doc(db, "draft_questions", questionData.id), {
-              images: arrayUnion(downloadURL), 
-              hasImage: true
-          });
-
-          const newQ = [...parsedQuestions];
-          if (newQ[idx]) {
-              const currentImages = newQ[idx].images || [];
-              newQ[idx].images = [...currentImages, downloadURL];
-              newQ[idx].hasImage = true;
-              setParsedQuestions(newQ);
-          }
-          
-          showNotification('success', 'Imagem adicionada à galeria!');
-
-      } catch (error) {
-          console.error(error);
-          showNotification('error', 'Erro ao enviar: ' + error.message);
-      } finally {
-          setUploadingImageId(null);
-      }
-  };
-  
-  const deleteImageFromQuestion = async (idx, questionData, urlToDelete) => {
-      if (!window.confirm("Remover esta imagem específica?")) return;
-
-      try {
-          try {
-              const fileRef = ref(storage, urlToDelete);
-              await deleteObject(fileRef);
-          } catch (e) { console.warn("Erro storage:", e); }
-
-          await updateDoc(doc(db, "draft_questions", questionData.id), {
-              images: arrayRemove(urlToDelete)
-          });
-
-          const newQ = [...parsedQuestions];
-          if (newQ[idx]) {
-              newQ[idx].images = newQ[idx].images.filter(url => url !== urlToDelete);
-              if (newQ[idx].images.length === 0) newQ[idx].hasImage = false;
-              setParsedQuestions(newQ);
-          }
-          showNotification('success', 'Imagem removida.');
-      } catch (error) {
-          showNotification('error', 'Erro ao remover imagem.');
-      }
-  };
-
-  // --- LOGIC: BATCH IMAGE PROCESSING ---
-  const handleBatchImageUpload = (e) => {
-      const files = Array.from(e.target.files);
-      if (files.length === 0) return;
-
-      const newImages = files.map(file => ({
-          id: Math.random().toString(36).substr(2, 9),
-          file,
-          name: file.name,
-          preview: URL.createObjectURL(file),
-          status: 'pending',
-          errorMsg: ''
-      }));
-
-      setBatchImages(prev => [...prev, ...newImages]);
-      addBatchLog('info', `${files.length} imagens adicionadas à fila.`);
-  };
-
-  const handleBatchPaste = (e) => {
-      const items = e.clipboardData.items;
-      const newImages = [];
-      for (let i = 0; i < items.length; i++) {
-          if (items[i].type.indexOf("image") !== -1) {
-              const blob = items[i].getAsFile();
-              newImages.push({
-                  id: Math.random().toString(36).substr(2, 9),
-                  file: blob,
-                  name: `Colada_${new Date().getTime()}_${i}.png`,
-                  preview: URL.createObjectURL(blob),
-                  status: 'pending',
-                  errorMsg: ''
-              });
-          }
-      }
-      if (newImages.length > 0) {
-          setBatchImages(prev => [...prev, ...newImages]);
-          addBatchLog('info', `${newImages.length} imagens coladas (Ctrl+V) na fila.`);
-      }
-  };
-
-  const removeBatchImage = (id) => {
-      setBatchImages(prev => prev.filter(img => img.id !== id));
-  };
-
-  const clearBatchQueue = () => {
-      if (batchStatus === 'processing' || batchStatus === 'pausing') return;
-      setBatchImages([]);
-      addBatchLog('info', 'Fila de imagens limpa.');
-      setBatchLogs([]);
-  };
-
-  const toggleBatchProcessing = () => {
-      const currentStatus = batchStatusRef.current;
-      
-      if (currentStatus === 'processing') {
-          setBatchStatus('pausing');
-          addBatchLog('warning', 'Solicitando pausa... Aguardando a imagem atual finalizar.');
-      } else if (currentStatus === 'paused' || currentStatus === 'idle') {
-          setBatchStatus('processing');
-          addBatchLog('info', 'Iniciando processamento de imagens...');
-          batchProcessorRef.current = false;
-          setTimeout(() => processNextBatchImage(), 100);
-      }
-  };
-
-  const fileToBase64 = (file) => {
-      return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.readAsDataURL(file);
-          reader.onload = () => resolve(reader.result.split(',')[1]);
-          reader.onerror = error => reject(error);
-      });
-  };
-
-  const processNextBatchImage = async () => {
-      if (batchProcessorRef.current) return;
-
-      const currentStatus = batchStatusRef.current;
-      if (currentStatus === 'pausing') {
-          setBatchStatus('paused');
-          addBatchLog('warning', 'Processamento pausado com segurança.');
-          return;
-      }
-      if (currentStatus !== 'processing') return;
-
-      const queue = batchImagesRef.current;
-      const nextImg = queue.find(img => img.status === 'pending');
-
-      if (!nextImg) {
-          setBatchStatus('idle');
-          addBatchLog('success', 'Fila de imagens finalizada!');
-          showNotification('success', 'Todas as imagens foram processadas.');
-          return;
-      }
-
-      batchProcessorRef.current = true;
-      const ovr = overridesRef.current;
-      addBatchLog('info', `Processando imagem: ${nextImg.name}...`);
-
-      try {
-          const base64Data = await fileToBase64(nextImg.file);
-          const activeThemesMap = ovr.overrideArea ? { [ovr.overrideArea]: themesMap[ovr.overrideArea] } : themesMap;
-
-          const questions = await executeWithKeyRotation("Imagem Batch", async (key) => {
-              const systemPrompt = `
-              Você é um especialista em banco de dados médicos (MedMaps).
-              Analise o conteúdo e gere um JSON ESTRITO.
-              
-              CONTEXTO (Informacional):
-              - Instituição: ${ovr.overrideInst ? ovr.overrideInst : "Não informado (Detectar do texto)"}
-              - Ano: ${ovr.overrideYear ? ovr.overrideYear : "Não informado (Detectar do texto)"}
-
-              REGRAS DE EXTRAÇÃO E LIMPEZA:
-              1. LIMPEZA DE INÍCIO:
-                 - Remova APENAS índices/rótulos de questão (ex: "1)", "159048)", "05.", "Questão 1:", "Enunciado:").
-                 - MANTENHA números que fazem parte da frase (ex: "3 pacientes...", "40 anos...").
-                 - Comece o texto direto no conteúdo do caso clínico.
-
-              2. SEPARAÇÃO DAS ALTERNATIVAS:
-                 - O campo "text" DEVE TERMINAR antes das alternativas.
-                 - NUNCA inclua "A) ... B) ..." ou "a. ... b. ..." dentro do campo "text".
-                 - As alternativas DEVEM ser extraídas separadamente no array "options".
-
-              3. DETECÇÃO DE IMAGEM (LÓGICA CONTEXTUAL):
-                 - MARQUE "needsImage": true SE:
-                   * O texto MANDA olhar: "Vide figura", "Observe a imagem", "A figura abaixo", "Ver anexo".
-                   * O texto DEPENDE do visual: "De acordo com o exame de imagem", "Baseado no ECG apresentado".
-                   * O texto é vago sobre o resultado: "O Raio-X revela... (e não diz o que)".
-                 - MARQUE "needsImage": false SE:
-                   * O texto já DESCREVE o resultado: "ECG normal", "Raio-X evidenciando fratura".
-                   * Apenas cita que o exame foi feito: "Foi solicitada tomografia".
-
-              4. CLASSIFICAÇÃO E RESOLUÇÃO:
-                 - Classifique usando a lista: ${JSON.stringify(activeThemesMap)}
-                 - Tente encontrar o gabarito. Se não houver, RESOLVA a questão.
-                 - Gere sempre "explanation".
-
-              Formato Saída JSON:
-              [
-                {
-                  "institution": "String", "year": Number|String, "area": "String", "topic": "String",
-                  "text": "String", "options": [{"id": "a", "text": "String"}],
-                  "correctOptionId": "char", "explanation": "String",
-                  "needsImage": boolean
-                }
-              ]
-            `;
-
-              const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel.replace('models/', '')}:generateContent?key=${key}`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                      contents: [{
-                          parts: [
-                              { text: systemPrompt },
-                              { inline_data: { mime_type: nextImg.file.type, data: base64Data } }
-                          ]
-                      }]
-                  })
-              });
-
-              if (!response.ok) {
-                   const errData = await response.json().catch(() => ({}));
-                   throw new Error(errData.error?.message || "Erro na API Gemini");
-              }
-
-              const data = await response.json();
-              let jsonString = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-              const parsed = safeJsonParse(jsonString);
-              return parsed.filter(q => q.options && q.options.length >= 2);
-          });
-
-          // Pós-Processamento Inteligente
-          let processedQuestions = await Promise.all(questions.map(async (q) => {
-              const hashId = await generateQuestionHash(q.text);
-              let isDuplicate = false;
-              let oldData = null;
-
-              if (hashId) {
-                  const existingDoc = await getDoc(doc(db, "questions", hashId));
-                  if (existingDoc.exists()) {
-                      isDuplicate = true;
-                      oldData = existingDoc.data();
-                  }
-              }
-
-              const shouldRunAPIs = !isDuplicate; 
-
-              // --- FIX: PRÉ-LIMPEZA DE INSTITUIÇÃO ---
-              // Limpa "Medcurso" ANTES de decidir se precisa pesquisar.
-              // Assim, se a IA extraiu lixo, vira "" e ativa o gatilho da pesquisa.
-              let preCleanedInst = cleanInstitutionText(q.institution);
-              
-              let finalInst = preCleanedInst;
-              let finalYear = q.year;
-              let sourceFound = false;
-              let verificationStatus = 'unchecked';
-              let verificationReason = '';
-
-              if (shouldRunAPIs) {
-                  const doWebSearch = webSearchRef.current; 
-                  const doDoubleCheck = doubleCheckRef.current; 
-
-                  const searchPromise = (async () => {
-                      if (doWebSearch && (!preCleanedInst || !q.year)) { // USA O VALOR LIMPO
-                          try {
-                              await new Promise(r => setTimeout(r, Math.random() * 1000));
-                              return await searchQuestionSource(q.text);
-                          } catch (err) { 
-                              // BLINDAGEM: Se for cota, joga erro pra cima pra forçar retry do batch
-                              const msg = err.message || "";
-                              if (msg.includes("429") || msg.includes("Quota") || msg.includes("Resource has been exhausted")) throw err;
-                              return null; 
-                          }
-                      }
-                      return null;
-                  })();
-
-                  const auditPromise = (async () => {
-                      if (doDoubleCheck) {
-                          try {
-                              await new Promise(r => setTimeout(r, Math.random() * 500)); 
-                              return await verifyQuestionWithAI(q);
-                          } catch (err) { 
-                              // BLINDAGEM
-                              const msg = err.message || "";
-                              if (msg.includes("429") || msg.includes("Quota") || msg.includes("Resource has been exhausted")) throw err;
-                              return { status: 'unchecked', reason: 'Audit failed' }; 
-                          }
-                      }
-                      return { status: 'unchecked', reason: '' };
-                  })();
-
-                  const [searchResult, auditResult] = await Promise.all([searchPromise, auditPromise]);
-
-                  if (searchResult) {
-                      if (searchResult.institution) { finalInst = searchResult.institution; sourceFound = true; }
-                      if (searchResult.year) finalYear = searchResult.year;
-                  }
-                  verificationStatus = auditResult.status;
-                  verificationReason = auditResult.reason;
-
-              } else {
-                  if (oldData) {
-                      finalInst = oldData.institution || q.institution;
-                      finalYear = oldData.year || q.year;
-                      sourceFound = oldData.sourceFound || false; 
-                      verificationStatus = oldData.verificationStatus || 'unchecked';
-                      verificationReason = oldData.verificationReason || 'Duplicata recuperada';
-                  }
-              }
-
-              // Limpeza final (garantia)
-              finalInst = cleanInstitutionText(finalInst);
-
-              const ovr = overridesRef.current || { overrideInst, overrideYear, overrideArea, overrideTopic };
-              if (ovr.overrideInst) finalInst = ovr.overrideInst;
-              if (ovr.overrideYear) finalYear = ovr.overrideYear;
-
-              return {
-                  ...q,
-                  institution: finalInst,
-                  year: finalYear,
-                  area: ovr.overrideArea || q.area,
-                  topic: ovr.overrideTopic || q.topic,
-                  sourceFound,
-                  verificationStatus,
-                  verificationReason,
-                  hashId,
-                  isDuplicate
-              };
-          }));
-        
-          const batch = writeBatch(db);
-          let savedCount = 0;
-          
-          for (const q of processedQuestions) {
-              const docId = q.hashId || doc(collection(db, "draft_questions")).id;
-              const docRef = doc(db, "draft_questions", docId);
-              batch.set(docRef, {
-                  ...q,
-                  institution: q.institution || "", 
-                  year: q.year || "",
-                  createdAt: new Date().toISOString(),
-                  createdBy: user.email,
-                  sourceFile: nextImg.name,
-                  hasImage: true 
-              });
-              savedCount++;
-          }
-          await batch.commit();
-          
-          addBatchLog('success', `Sucesso em ${nextImg.name}: ${savedCount} questões salvas.`);
-          setBatchImages(prev => prev.filter(img => img.id !== nextImg.id));
-
-          setTimeout(() => {
-              batchProcessorRef.current = false;
-              processNextBatchImage();
-          }, 1000);
-
-      } catch (error) {
-          console.error(error);
-          const errorMessage = error.message || "Erro desconhecido";
-          
-          if (errorMessage.includes("Quota exceeded") || errorMessage.includes("429") || errorMessage.includes("Resource has been exhausted")) {
-              addBatchLog('warning', `Todas as chaves esgotadas. Aguardando recarga (60s)...`);
-              // MODO INFINITO: Não marca erro, tenta de novo a mesma imagem daqui a pouco
-              setConsecutiveErrors(0);
-              
-              setTimeout(() => {
-                  batchProcessorRef.current = false;
-                  processNextBatchImage();
-              }, 60000);
-          } else {
-              addBatchLog('error', `Falha em ${nextImg.name}: ${errorMessage}`);
-              setBatchImages(prev => prev.map(img => img.id === nextImg.id ? { ...img, status: 'error', errorMsg: errorMessage } : img));
-              
-              setTimeout(() => {
-                  batchProcessorRef.current = false;
-                  processNextBatchImage();
-              }, 1000);
-          }
-      }
-  };
-
-  // --- LOGIC: PDF HANDLING ---
-  const handlePdfUpload = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      if (file.type !== 'application/pdf') return showNotification('error', 'Por favor, envie um arquivo PDF.');
-      
-      setPdfFile(file);
-      setPdfStatus('reading');
-      setProcessingLogs([]);
-      addLog('info', `Iniciando leitura de: ${file.name}`);
-
-      try {
-          const pdfjs = await loadPdfJs();
-          const arrayBuffer = await file.arrayBuffer();
-          const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
-          
-          addLog('info', `PDF carregado. Total: ${pdf.numPages} págs.`);
-          
-          let startP = parseInt(pdfStartPage) || 1;
-          let endP = parseInt(pdfEndPage) || pdf.numPages;
-
-          if (startP < 1) startP = 1;
-          if (endP > pdf.numPages) endP = pdf.numPages;
-          if (startP > endP) {
-               startP = 1; 
-               endP = pdf.numPages;
-               showNotification('warning', 'Intervalo inválido. Usando PDF completo.');
-          } else {
-               if (startP !== 1 || endP !== pdf.numPages) {
-                   addLog('info', `Recortando páginas: ${startP} até ${endP}`);
-               }
-          }
-
-          let chunks = [];
-          let currentChunkText = "";
-          let chunkStartPage = startP;
-          let lastPageContent = "";
-
-          for (let i = startP; i <= endP; i++) {
-              const page = await pdf.getPage(i);
-              const content = await page.getTextContent();
-              const text = content.items.map(item => item.str).join(' ');
-              
-              lastPageContent = text; 
-
-              const pageTextFormatted = `\n--- PÁGINA ${i} ---\n${text}`;
-              currentChunkText += pageTextFormatted;
-
-              if ((i - startP + 1) % CHUNK_SIZE === 0 || i === endP) {
-                  
-                  let finalChunkText = currentChunkText;
-
-                  if (i < endP) {
-                      try {
-                          const nextPage = await pdf.getPage(i + 1);
-                          const nextContent = await nextPage.getTextContent();
-                          const nextText = nextContent.items.map(item => item.str).join(' ');
-                          finalChunkText += `\n\n--- CONTEXTO DA PRÓXIMA PÁGINA (${i+1}) ---\n${nextText}`;
-                      } catch (err) {
-                          console.warn("Não foi possível buscar o contexto da próxima página:", err);
-                      }
-                  }
-
-                  chunks.push({
-                      id: `chunk_${chunkStartPage}_${i}`,
-                      pages: `${chunkStartPage} a ${i}`,
-                      text: finalChunkText,
-                      status: 'pending',
-                      errorCount: 0
-                  });
-                  
-                  if (i < endP) {
-                      currentChunkText = `\n--- CONTEXTO DA PÁGINA ANTERIOR (${i}) ---\n${lastPageContent}`;
-                  } else {
-                      currentChunkText = "";
-                  }
-                  
-                  chunkStartPage = i + 1;
-              }
-          }
-
-          setPdfChunks(chunks);
-          setPdfStatus('ready');
-          addLog('success', `Pronto! ${chunks.length} partes geradas (${startP}-${endP}).`);
-
-          if (lastSessionData && lastSessionData.fileName === file.name) {
-              const lastIdx = lastSessionData.lastChunkIndex;
-              const nextIndex = lastIdx + 1;
-
-              if (nextIndex < chunks.length) {
-                  setCurrentChunkIndex(nextIndex);
-                  
-                  for(let i = 0; i < nextIndex; i++) {
-                      chunks[i].status = 'restored';
-                  }
-
-                  addLog('info', `Sessão encontrada no DB! Agulha movida para a fatia ${chunks[nextIndex].pages}.`);
-                  showNotification('info', `Retomando ${file.name} a partir da fatia ${chunks[nextIndex].pages}.`);
-              } else {
-                  setCurrentChunkIndex(chunks.length - 1);
-                  chunks.forEach(c => c.status = 'restored');
-                  
-                  addLog('success', `Este arquivo já foi finalizado na última sessão.`);
-                  showNotification('success', 'Arquivo já finalizado anteriormente.');
-              }
-          } else {
-              const newSession = {
-                  fileName: file.name,
-                  lastChunkIndex: -1, 
-                  lastChunkPages: 'Início',
-                  timestamp: new Date().toISOString()
-              };
-              
-              if (user) {
-                  try {
-                      await setDoc(doc(db, "users", user.uid, "progress", "pdf_session"), newSession);
-                      addLog('info', 'Novo arquivo detectado. Progresso resetado no banco.');
-                  } catch (e) {
-                      console.error("Erro ao salvar inicio de sessão:", e);
-                  }
-              }
-          }
-
-      } catch (error) {
-          console.error(error);
-          setPdfStatus('error');
-          addLog('error', `Erro crítico ao ler PDF: ${error.message}`);
-          showNotification('error', 'Erro ao ler PDF.');
-      }
-  };
-
-  const handleResetPdf = () => {
-      if (pdfStatus === 'processing' || pdfStatus === 'pausing') return; 
-      setPdfFile(null);
-      setPdfChunks([]);
-      setPdfStatus('idle');
-      setCurrentChunkIndex(0);
-      setProcessingLogs([]);
-      setConsecutiveErrors(0);
-      setPdfStartPage('');
-      setPdfEndPage('');
-  };
-
-  const handleRestartPdf = () => {
-      if (!pdfFile || pdfStatus === 'processing' || pdfStatus === 'pausing') return;
-      const resetChunks = pdfChunks.map(c => ({ ...c, status: 'pending', errorCount: 0 }));
-      setPdfChunks(resetChunks);
-      setCurrentChunkIndex(0);
-      setPdfStatus('ready');
-      setProcessingLogs([]);
-      setConsecutiveErrors(0);
-      
-      const resetSession = {
-          fileName: pdfFile.name,
-          lastChunkIndex: -1,
-          lastChunkPages: 'Início',
-          timestamp: new Date().toISOString()
-      };
-      
-      if (user) {
-          setDoc(doc(db, "users", user.uid, "progress", "pdf_session"), resetSession)
-            .catch(e => console.error("Erro ao resetar sessão:", e));
-      }
-      
-      addLog('info', 'Processamento reiniciado do zero.');
-  };
-
-  const handleJumpToChunk = (index) => {
-      if (pdfStatus === 'processing' || pdfStatus === 'idle' || pdfStatus === 'pausing' || pdfStatus === 'reading') return;
-      
-      const chunk = pdfChunks[index];
-      addLog('info', `Agulha movida para fatia ${chunk.pages} (Aguardando Início)...`);
-      
-      setCurrentChunkIndex(index);
-
-      setPdfChunks(prev => {
-          const newChunks = [...prev];
-          newChunks[index] = { ...newChunks[index], status: 'pending', errorCount: 0 };
-          return newChunks;
-      });
-  };
-
-  const processNextChunk = async () => {
-      const currentStatus = pdfStatusRef.current;
-      const currentChunks = pdfChunksRef.current;
-      const doDoubleCheck = doubleCheckRef.current;
-      const doWebSearch = webSearchRef.current; 
-      const ovr = overridesRef.current; 
-      const currentFile = pdfFile; 
-      const activeIndex = currentChunkIndexRef.current;
-
-      // --- FIX: CHECKPOINT DE PAUSA (O Guarda de Trânsito) ---
-      // Se o usuário clicou em Pausar enquanto o sistema esperava a cota, ele para AQUI.
-      if (currentStatus === 'pausing' || currentStatus === 'paused') {
-          if (currentStatus === 'pausing') {
-              setPdfStatus('paused');
-              addLog('warning', 'Pausa solicitada. Sistema parado com segurança.');
-          }
-          processorRef.current = false; // Libera o processador
-          return; // Aborta a execução
-      }
-      // -------------------------------------------------------
-
-      if (processorRef.current) return; 
-      if (currentStatus === 'completed') return;
-      
-      if (activeIndex >= currentChunks.length) {
-           setPdfStatus('completed');
-           addLog('success', 'Processamento Completo!');
-           showNotification('success', 'Todas as partes selecionadas foram processadas.');
-           return;
-      }
-
-      const chunk = currentChunks[activeIndex];
-
-      if (currentStatus !== 'pausing' && currentStatus !== 'processing') setPdfStatus('processing');
-      
-      processorRef.current = true; 
-      addLog('info', `Processando fatia ${chunk.pages}...`);
-
-      try {
-          const activeThemesMap = ovr.overrideArea ? { [ovr.overrideArea]: themesMap[ovr.overrideArea] } : themesMap;
-
-          const questions = await executeWithKeyRotation("Geração", async (key) => {
-              const systemPrompt = `
-              Você é um especialista em banco de dados médicos (MedMaps).
-              Analise o conteúdo e gere um JSON ESTRITO.
-              
-              CONTEXTO (Informacional):
-              - Instituição: ${ovr.overrideInst ? ovr.overrideInst : "Não informado (Detectar do texto)"}
-              - Ano: ${ovr.overrideYear ? ovr.overrideYear : "Não informado (Detectar do texto)"}
-
-              OBSERVAÇÃO SOBRE CONTEXTO (CRÍTICO PARA PDF):
-              - O texto contém seções de 'CONTEXTO' (Anterior e Próxima). 
-              - Use essas seções APENAS para reconstruir questões quebradas nas bordas do conteúdo principal.
-              - Se uma questão estiver 100% contida dentro de uma área de contexto, ignore-a (ela será processada no outro lote).
-
-              REGRAS DE EXTRAÇÃO E LIMPEZA:
-              1. LIMPEZA DE INÍCIO:
-                 - Remova APENAS índices/rótulos de questão (ex: "1)", "159048)", "05.", "Questão 1:", "Enunciado:").
-                 - MANTENHA números que fazem parte da frase (ex: "3 pacientes...", "40 anos...").
-                 - Comece o texto direto no conteúdo do caso clínico.
-                 
-              2. SEPARAÇÃO DAS ALTERNATIVAS:
-                 - O campo "text" DEVE TERMINAR antes das alternativas.
-                 - NUNCA inclua "A) ... B) ..." ou "a. ... b. ..." dentro do campo "text".
-                 - As alternativas DEVEM ser extraídas separadamente no array "options".
-
-              3. DETECÇÃO DE IMAGEM (LÓGICA CONTEXTUAL):
-                 - MARQUE "needsImage": true SE:
-                   * O texto MANDA olhar: "Vide figura", "Observe a imagem", "A figura abaixo", "Ver anexo".
-                   * O texto DEPENDE do visual: "De acordo com o exame de imagem", "Baseado no ECG apresentado".
-                   * O texto é vago sobre o resultado: "O Raio-X revela... (e não diz o que)".
-                 - MARQUE "needsImage": false SE:
-                   * O texto já DESCREVE o resultado: "ECG normal", "Raio-X evidenciando fratura".
-                   * Apenas cita que o exame foi feito: "Foi solicitada tomografia".
-
-              4. CLASSIFICAÇÃO E RESOLUÇÃO:
-                - Se o gabarito estiver no texto, use-o. Se NÃO, RESOLVA a questão.
-                - Gere sempre um campo "explanation".
-                 - Classifique CADA questão em uma das Áreas e Tópicos da lista abaixo.
-                  - É CRUCIAL que a classificação esteja correta.
-                  - LISTA DE CLASSIFICAÇÃO VÁLIDA:
-                   ${JSON.stringify(activeThemesMap)}
-
-              5. DADOS DE CABEÇALHO:
-                  - IGNORE nomes de cursos preparatórios (Medgrupo, Medcurso, Estratégia, etc) no campo "institution".
-                  - Procure pelo nome do HOSPITAL ou BANCA.
-                  - Se não encontrar, deixe "".
-
-              Formato Saída JSON:
-              [
-                {
-                  "institution": "String", "year": Number|String, "area": "String", "topic": "String",
-                  "text": "String", "options": [{"id": "a", "text": "String"}],
-                  "correctOptionId": "char", "explanation": "String",
-                  "needsImage": boolean
-                }
-              ]
-            `;
-            
-              const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel.replace('models/', '')}:generateContent?key=${key}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: systemPrompt + "\n\nTEXTO DO PDF:\n" + chunk.text }] }]
-                })
-              });
-
-              if (!response.ok) {
-                  const errData = await response.json().catch(() => ({}));
-                  throw new Error(errData.error?.message || "Erro na API Geração");
-              }
-
-              const data = await response.json();
-              let jsonString = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-              const parsed = safeJsonParse(jsonString);
-              return parsed.filter(q => q.options && q.options.length >= 2);
-          });
-
-          addLog('info', `Pós-processando ${questions.length} questões (Search + Audit)...`);
-
-          let processedQuestions = await Promise.all(questions.map(async (q) => {
-              const hashId = await generateQuestionHash(q.text);
-              let isDuplicate = false;
-              let oldData = null;
-
-              if (hashId) {
-                  const existingDoc = await getDoc(doc(db, "questions", hashId));
-                  if (existingDoc.exists()) {
-                      isDuplicate = true;
-                      oldData = existingDoc.data();
-                  }
-              }
-
-              const shouldRunAPIs = !isDuplicate; 
-
-              // --- FIX: PRÉ-LIMPEZA DE INSTITUIÇÃO ---
-              // Limpa "Medcurso" ANTES de decidir se precisa pesquisar.
-              // Assim, se a IA extraiu lixo, vira "" e ativa o gatilho da pesquisa.
-              let preCleanedInst = cleanInstitutionText(q.institution);
-
-              let finalInst = preCleanedInst;
-              let finalYear = q.year;
-              let sourceFound = false;
-              let verificationStatus = 'unchecked';
-              let verificationReason = '';
-
-              if (shouldRunAPIs) {
-                  const doWebSearch = webSearchRef.current; 
-                  const doDoubleCheck = doubleCheckRef.current; 
-
-                  const searchPromise = (async () => {
-                      if (doWebSearch && (!preCleanedInst || !q.year)) { // USA O VALOR LIMPO
-                          try {
-                              await new Promise(r => setTimeout(r, Math.random() * 1000));
-                              return await searchQuestionSource(q.text);
-                          } catch (err) { 
-                              // BLINDAGEM: Throw erro se for cota
-                              const msg = err.message || "";
-                              if (msg.includes("429") || msg.includes("Quota") || msg.includes("Resource has been exhausted")) throw err;
-                              return null; 
-                          }
-                      }
-                      return null;
-                  })();
-
-                  const auditPromise = (async () => {
-                      if (doDoubleCheck) {
-                          try {
-                              await new Promise(r => setTimeout(r, Math.random() * 500)); 
-                              return await verifyQuestionWithAI(q);
-                          } catch (err) { 
-                              // BLINDAGEM: Throw erro se for cota
-                              const msg = err.message || "";
-                              if (msg.includes("429") || msg.includes("Quota") || msg.includes("Resource has been exhausted")) throw err;
-                              return { status: 'unchecked', reason: 'Audit failed' }; 
-                          }
-                      }
-                      return { status: 'unchecked', reason: '' };
-                  })();
-
-                  const [searchResult, auditResult] = await Promise.all([searchPromise, auditPromise]);
-
-                  if (searchResult) {
-                      if (searchResult.institution) { finalInst = searchResult.institution; sourceFound = true; }
-                      if (searchResult.year) finalYear = searchResult.year;
-                  }
-                  verificationStatus = auditResult.status;
-                  verificationReason = auditResult.reason;
-
-              } else {
-                  if (oldData) {
-                      finalInst = oldData.institution || q.institution;
-                      finalYear = oldData.year || q.year;
-                      sourceFound = oldData.sourceFound || false; 
-                      
-                      verificationStatus = oldData.verificationStatus || 'unchecked';
-                      verificationReason = oldData.verificationReason || 'Duplicata recuperada';
-                  }
-              }
-
-              // Limpeza final (garantia)
-              finalInst = cleanInstitutionText(finalInst);
-
-              const ovr = overridesRef.current || { overrideInst, overrideYear, overrideArea, overrideTopic }; 
-              if (ovr.overrideInst) finalInst = ovr.overrideInst;
-              if (ovr.overrideYear) finalYear = ovr.overrideYear;
-
-              return {
-                  ...q,
-                  institution: finalInst,
-                  year: finalYear,
-                  area: ovr.overrideArea || q.area,
-                  topic: ovr.overrideTopic || q.topic,
-                  sourceFound,
-                  verificationStatus,
-                  verificationReason,
-                  hashId,
-                  isDuplicate
-              };
-          }));
-
-          const batch = writeBatch(db);
-          processedQuestions.forEach(q => {
-              const docId = q.hashId || doc(collection(db, "draft_questions")).id;
-              const docRef = doc(db, "draft_questions", docId);
-              
-              batch.set(docRef, {
-                  ...q,
-                  institution: q.institution || "", 
-                  year: q.year || "",
-                  createdAt: new Date().toISOString(),
-                  createdBy: user.email,
-                  sourceFile: pdfFile.name,
-                  sourcePages: chunk.pages,
-                  hasImage: false
-              });
-          });
-          await batch.commit();
-
-          addLog('success', `Sucesso fatia ${chunk.pages}: ${processedQuestions.length} questões salvas.`);
-          setPdfChunks(prev => {
-              const newChunks = [...prev];
-              newChunks[activeIndex] = { ...newChunks[activeIndex], status: 'success' };
-              return newChunks;
-          });
-          setConsecutiveErrors(0); 
-
-          if (currentFile && currentFile.name && user) {
-              const sessionData = {
-                  fileName: currentFile.name,
-                  lastChunkIndex: activeIndex, 
-                  lastChunkPages: chunk.pages,
-                  timestamp: new Date().toISOString()
-              };
-              setDoc(doc(db, "users", user.uid, "progress", "pdf_session"), sessionData)
-                .catch(err => console.error("Erro ao salvar progresso no DB:", err));
-          }
-
-          if (pdfStatusRef.current === 'pausing') {
-              setPdfStatus('paused');
-              addLog('warning', 'Pausa solicitada. Ciclo atual concluído e salvo.');
-              processorRef.current = false;
-              return; 
-          }
-
-          if (pdfStatusRef.current === 'paused' || pdfStatusRef.current === 'idle') {
-              processorRef.current = false;
-              return;
-          }
-
-          setCurrentChunkIndex(prev => prev + 1);
-          setTimeout(() => {
-              processorRef.current = false; 
-              processNextChunk(); 
-          }, 500); 
-
-      } catch (error) {
-          console.error(error);
-          const errorMessage = error.message || "";
-          const retrySeconds = extractRetryTime(errorMessage);
-          
-          let delay = 3000;
-
-          if (errorMessage.includes("Quota exceeded") || errorMessage.includes("429") || errorMessage.includes("Resource has been exhausted")) {
-              if (retrySeconds) {
-                  delay = (retrySeconds * 1000) + 2000; 
-                  addLog('warning', `Todas as chaves esgotadas. Aguardando ${Math.ceil(retrySeconds)}s...`);
-              } else {
-                  delay = 60000; 
-                  addLog('warning', `Todas as chaves esgotadas. Aguardando 60s...`);
-              }
-              
-              // --- TRUQUE DO MODO INFINITO ---
-              // Zera os erros consecutivos para impedir a pausa automática de segurança.
-              // O sistema ficará preso neste loop (tentando a mesma fatia) até conseguir.
-              setConsecutiveErrors(0);
-              
-              setPdfChunks(prev => {
-                  const newChunks = [...prev];
-                  newChunks[activeIndex] = { ...newChunks[activeIndex], status: 'pending' };
-                  return newChunks;
-              });
-
-              setTimeout(() => {
-                  processorRef.current = false;
-                  processNextChunk();
-              }, delay);
-
-              return; // Sai daqui para não rodar a lógica de erro comum abaixo
-          } 
-          
-          if (errorMessage.includes("API key expired")) {
-              setPdfStatus('paused');
-              addLog('error', `ERRO CRÍTICO: Chaves API Inválidas! Pausado.`);
-              showNotification('error', 'Chaves API Inválidas.');
-              processorRef.current = false;
-              return; 
-          } else {
-              const newErrorCount = chunk.errorCount + 1;
-              delay = 3000 * Math.pow(2, newErrorCount);
-              
-              if (newErrorCount >= 3) {
-                  addLog('error', `Fatia ${chunk.pages} marcada com ERRO APÓS 3 TENTATIVAS.`);
-                  setPdfChunks(prev => {
-                      const newChunks = [...prev];
-                      newChunks[activeIndex] = { ...newChunks[activeIndex], status: 'error', errorCount: newErrorCount };
-                      return newChunks;
-                  });
-                  setConsecutiveErrors(0);
-                  processorRef.current = false;
-                  
-                  setCurrentChunkIndex(prev => prev + 1);
-                  setTimeout(() => processNextChunk(), 1000); 
-                  return;
-              }
-          }
-
-          const newConsecutiveErrors = consecutiveErrors + 1;
-          setConsecutiveErrors(newConsecutiveErrors);
-
-          if (newConsecutiveErrors >= 10) { 
-              setPdfStatus('paused'); 
-              addLog('error', 'PAUSADO: Muitos erros consecutivos (não relacionados a cota).');
-              processorRef.current = false;
-              return; 
-          }
-
-          if (pdfStatusRef.current === 'pausing') {
-              setPdfStatus('paused');
-              addLog('warning', 'Pausa solicitada durante erro. Sistema pausado.');
-              processorRef.current = false;
-              return;
-          }
-
-          setPdfChunks(prev => {
-              const newChunks = [...prev];
-              newChunks[activeIndex] = { ...newChunks[activeIndex], status: 'pending' };
-              return newChunks;
-          });
-
-          setTimeout(() => {
-              processorRef.current = false;
-              processNextChunk();
-          }, delay);
-      }
-  };
-
-  const togglePdfProcessing = () => {
-      const currentStatus = pdfStatusRef.current;
-      if (currentStatus === 'processing') {
-          setPdfStatus('pausing');
-          addLog('warning', 'Solicitando pausa... Aguardando conclusão da fatia atual.');
-      } else if (currentStatus === 'paused' || currentStatus === 'ready') {
-          setPdfStatus('processing');
-          addLog('info', currentStatus === 'ready' ? 'Iniciando processamento...' : 'Retomando...');
-          processorRef.current = false; 
-          setTimeout(() => processNextChunk(), 100);
-      }
-  };
-
-  // --- HELPER FUNCTIONS ---
-  const saveApiKeyFromModal = async () => {
-      const rawKeys = tempApiKeysText.split('\n').map(k => k.trim()).filter(k => k.length > 0);
-      const uniqueKeys = [...new Set(rawKeys)];
-
-      if (uniqueKeys.length === 0) return showNotification('error', 'Adicione pelo menos uma chave.');
-      
-      setIsSavingKey(true);
-      try {
-          setApiKeys(uniqueKeys);
-          localStorage.setItem('gemini_api_keys', JSON.stringify(uniqueKeys));
-          apiKeysRef.current = uniqueKeys;
-          keyRotationIndex.current = 0; 
-
-          await setDoc(doc(db, "settings", "global"), {
-              geminiApiKeys: uniqueKeys, 
-              geminiApiKey: uniqueKeys[0], 
-              updatedBy: user.email,
-              updatedAt: new Date().toISOString()
-          }, { merge: true });
-          
-          setShowApiKeyModal(false);
-          setShowTutorial(false);
-          showNotification('success', `${uniqueKeys.length} Chaves API Salvas!`);
-          
-          if (pdfStatus === 'paused') addLog('success', 'Novas chaves detectadas! Clique em "Continuar".');
-
-      } catch (error) {
-          showNotification('error', 'Erro ao salvar: ' + error.message);
-      } finally {
-          setIsSavingKey(false);
-      }
-  };
-
-  const handleGetKey = () => { window.open('https://aistudio.google.com/app/api-keys', '_blank'); setShowTutorial(true); };
-  const handleModelChange = (modelName) => { setSelectedModel(modelName); localStorage.setItem('gemini_model', modelName); };
-  const showNotification = (type, text) => { setNotification({ type, text }); };
-  const closeNotification = () => { setNotification(null); };
-  const handleLogout = () => { signOut(auth); setParsedQuestions([]); setActiveTab('input'); };
-
-  const validateKeyAndFetchModels = async () => {
-      const currentKey = apiKeysRef.current[0]; 
-      if (!currentKey) return showNotification('error', 'Configure as chaves API primeiro.');
-      setIsValidatingKey(true);
-      try {
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${currentKey}`);
-          const data = await response.json();
-          if (data.error) throw new Error(data.error.message);
-          if (!data.models) throw new Error("Sem acesso a modelos.");
-          const genModels = data.models.filter(m => m.supportedGenerationMethods?.includes("generateContent") && (m.name.includes("gemini")));
-          if (genModels.length > 0) {
-              setAvailableModels(genModels);
-              showNotification('success', `${genModels.length} modelos liberados!`);
-          } else {
-              showNotification('error', 'Chave válida mas sem modelos.');
-          }
-      } catch (error) {
-          showNotification('error', `Erro na chave principal: ${error.message}`);
-      } finally {
-          setIsValidatingKey(false);
-      }
-  };
-
-  // --- PROCESSAMENTO IA (Texto Único) ---
-  const processWithAI = async () => {
-    if (activeTab === 'input' && !rawText.trim()) return showNotification('error', 'Cole o texto.');
-    
-    setIsProcessing(true);
-
-    const ovr = { overrideInst, overrideYear, overrideArea, overrideTopic };
-    
-    try {
-        const activeThemesMap = ovr.overrideArea ? { [ovr.overrideArea]: themesMap[ovr.overrideArea] } : themesMap;
-
-        const questions = await executeWithKeyRotation("Processamento Único", async (key) => {
-            const systemPrompt = `
-              Você é um especialista em banco de dados médicos (MedMaps).
-              Analise o conteúdo e gere um JSON ESTRITO.
-              
-              CONTEXTO (Informacional):
-              - Instituição: ${ovr.overrideInst ? ovr.overrideInst : "Não informado (Detectar do texto)"}
-              - Ano: ${ovr.overrideYear ? ovr.overrideYear : "Não informado (Detectar do texto)"}
-
-              REGRAS DE EXTRAÇÃO E LIMPEZA:
-              1. LIMPEZA DE INÍCIO:
-                 - Remova APENAS índices/rótulos de questão (ex: "1)", "159048)", "05.", "Questão 1:", "Enunciado:").
-                 - MANTENHA números que fazem parte da frase (ex: "3 pacientes...", "40 anos...").
-                 - Comece o texto direto no conteúdo do caso clínico.
-
-              2. SEPARAÇÃO DAS ALTERNATIVAS:
-                 - O campo "text" DEVE TERMINAR antes das alternativas.
-                 - NUNCA inclua "A) ... B) ..." ou "a. ... b. ..." dentro do campo "text".
-                 - As alternativas DEVEM ser extraídas separadamente no array "options".
-
-              3. DETECÇÃO DE IMAGEM (LÓGICA CONTEXTUAL):
-                 - MARQUE "needsImage": true SE:
-                   * O texto MANDA olhar: "Vide figura", "Observe a imagem", "A figura abaixo", "Ver anexo".
-                   * O texto DEPENDE do visual: "De acordo com o exame de imagem", "Baseado no ECG apresentado".
-                   * O texto é vago sobre o resultado: "O Raio-X revela... (e não diz o que)".
-                 - MARQUE "needsImage": false SE:
-                   * O texto já DESCREVE o resultado: "ECG normal", "Raio-X evidenciando fratura".
-                   * Apenas cita que o exame foi feito: "Foi solicitada tomografia".
-
-              4. CLASSIFICAÇÃO E RESOLUÇÃO:
-                 - Classifique usando a lista: ${JSON.stringify(activeThemesMap)}
-                 - Tente encontrar o gabarito. Se não houver, RESOLVA a questão.
-                 - Gere sempre "explanation".
-
-              Formato Saída JSON:
-              [
-                {
-                  "institution": "String", "year": Number|String, "area": "String", "topic": "String",
-                  "text": "String", "options": [{"id": "a", "text": "String"}],
-                  "correctOptionId": "char", "explanation": "String",
-                  "needsImage": boolean
-                }
-              ]
-            `;
-
-            let contentsPayload = [{ parts: [{ text: systemPrompt + "\n\nCONTEÚDO:\n" + rawText }] }];
-            
-            const modelNameClean = selectedModel.startsWith('models/') ? selectedModel.replace('models/', '') : selectedModel;
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelNameClean}:generateContent?key=${key}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: contentsPayload })
-            });
-            
-            if (!response.ok) {
-                 const errData = await response.json().catch(() => ({}));
-                 throw new Error(errData.error?.message || "Erro na API Geração");
-            }
-
-            const data = await response.json();
-            let jsonString = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-            const parsed = safeJsonParse(jsonString);
-            return parsed.filter(q => q.options && q.options.length >= 2);
-        });
-
-        showNotification('info', `Pós-processando ${questions.length} questões...`);
-
-          let processedQuestions = await Promise.all(questions.map(async (q) => {
-              const hashId = await generateQuestionHash(q.text);
-              let isDuplicate = false;
-              let oldData = null;
-
-              if (hashId) {
-                  const existingDoc = await getDoc(doc(db, "questions", hashId));
-                  if (existingDoc.exists()) {
-                      isDuplicate = true;
-                      oldData = existingDoc.data();
-                  }
-              }
-
-              const shouldRunAPIs = !isDuplicate; 
-
-              // --- FIX: PRÉ-LIMPEZA DE INSTITUIÇÃO ---
-              let preCleanedInst = cleanInstitutionText(q.institution);
-
-              let finalInst = preCleanedInst;
-              let finalYear = q.year;
-              let sourceFound = false;
-              let verificationStatus = 'unchecked';
-              let verificationReason = '';
-
-              if (shouldRunAPIs) {
-                  const doWebSearch = webSearchRef.current; 
-                  const doDoubleCheck = doubleCheckRef.current; 
-
-                  const searchPromise = (async () => {
-                      if (doWebSearch && (!preCleanedInst || !q.year)) { // VALOR LIMPO
-                          try {
-                              await new Promise(r => setTimeout(r, Math.random() * 1000));
-                              return await searchQuestionSource(q.text);
-                          } catch (err) { 
-                              // BLINDAGEM: Throw erro se for cota
-                              const msg = err.message || "";
-                              if (msg.includes("429") || msg.includes("Quota") || msg.includes("Resource has been exhausted")) throw err;
-                              return null; 
-                          }
-                      }
-                      return null;
-                  })();
-
-                  const auditPromise = (async () => {
-                      if (doDoubleCheck) {
-                          try {
-                              await new Promise(r => setTimeout(r, Math.random() * 500)); 
-                              return await verifyQuestionWithAI(q);
-                          } catch (err) { 
-                              // BLINDAGEM: Throw erro se for cota
-                              const msg = err.message || "";
-                              if (msg.includes("429") || msg.includes("Quota") || msg.includes("Resource has been exhausted")) throw err;
-                              return { status: 'unchecked', reason: 'Audit failed' }; 
-                          }
-                      }
-                      return { status: 'unchecked', reason: '' };
-                  })();
-
-                  const [searchResult, auditResult] = await Promise.all([searchPromise, auditPromise]);
-
-                  if (searchResult) {
-                      if (searchResult.institution) { finalInst = searchResult.institution; sourceFound = true; }
-                      if (searchResult.year) finalYear = searchResult.year;
-                  }
-                  verificationStatus = auditResult.status;
-                  verificationReason = auditResult.reason;
-
-              } else {
-                  if (oldData) {
-                      finalInst = oldData.institution || q.institution;
-                      finalYear = oldData.year || q.year;
-                      sourceFound = oldData.sourceFound || false; 
-                      
-                      verificationStatus = oldData.verificationStatus || 'unchecked';
-                      verificationReason = oldData.verificationReason || 'Duplicata recuperada';
-                  }
-              }
-
-              // Limpeza Final
-              finalInst = cleanInstitutionText(finalInst);
-
-              const ovr = overridesRef.current || { overrideInst, overrideYear, overrideArea, overrideTopic }; 
-              if (ovr.overrideInst) finalInst = ovr.overrideInst;
-              if (ovr.overrideYear) finalYear = ovr.overrideYear;
-
-              return {
-                  ...q,
-                  institution: finalInst,
-                  year: finalYear,
-                  area: ovr.overrideArea || q.area,
-                  topic: ovr.overrideTopic || q.topic,
-                  sourceFound,
-                  verificationStatus,
-                  verificationReason,
-                  hashId,
-                  isDuplicate
-              };
-          }));
-
-        let savedCount = 0;
-        const batch = writeBatch(db);
-        
-        for (const q of processedQuestions) {
-            const docId = q.hashId || doc(collection(db, "draft_questions")).id;
-            const docRef = doc(db, "draft_questions", docId);
-            
-            batch.set(docRef, {
-                ...q,
-                institution: q.institution || "", 
-                year: q.year || "",
-                createdAt: new Date().toISOString(),
-                createdBy: user.email,
-                hasImage: false
-            });
-            savedCount++;
-        }
-        
-        if (savedCount > 0) await batch.commit();
-
-        setRawText('');
-        setActiveTab('review');
-        
-        showNotification('success', `${savedCount} questões enviadas para fila (inclusive duplicatas)!`);
-
-    } catch (error) {
-        console.error(error);
-        showNotification('error', 'Erro: ' + error.message);
-    } finally {
-        setIsProcessing(false);
-    }
-  };
-
-  // --- BULK METADATA CLEANING ---
-  const clearAllField = (field) => {
-      const targetQuestions = getFilteredQuestions();
-      if (targetQuestions.length === 0) return;
-      
-      setConfirmationModal({
-          isOpen: true,
-          type: field === 'institution' ? 'clear_institution' : 'clear_year',
-          data: null,
-          title: `Limpar ${field === 'institution' ? 'Instituições' : 'Anos'}?`,
-          message: `Deseja limpar o campo "${field === 'institution' ? 'Instituição' : 'Ano'}" de ${targetQuestions.length} questões exibidas?`,
-          confirmText: 'Sim, Limpar',
-          confirmColor: 'red'
-      });
-  };
-
-  // --- FUNÇÕES DE MODAL DE CONFIRMAÇÃO ---
-  const handleDiscardOneClick = (q) => {
-      setConfirmationModal({
-          isOpen: true,
-          type: 'delete_one',
-          data: q,
-          title: 'Excluir Rascunho?',
-          message: 'Tem certeza que deseja excluir esta questão?',
-          confirmText: 'Sim, Excluir',
-          confirmColor: 'red'
-      });
-  };
-
-  const handleApproveFilteredClick = () => {
-      const targetQuestions = getFilteredQuestions();
-      if (targetQuestions.length === 0) return;
-      
-      const count = targetQuestions.length;
-
-      const activeLabels = activeFilters.map(f => filterLabels[f]).join(' + ');
-
-      setConfirmationModal({
-          isOpen: true,
-          type: 'approve_filtered',
-          data: null,
-          title: `Aprovar ${count} Questões?`,
-          message: `Você está prestes a publicar (ou atualizar) ${count} questões dos filtros: ${activeLabels}.`,
-          confirmText: 'Sim, Publicar/Atualizar',
-          confirmColor: 'emerald'
-      });
-  };
-
-  const handleDiscardFilteredClick = () => {
-      const targetQuestions = getFilteredQuestions();
-      if (targetQuestions.length === 0) return;
-
-      const activeLabels = activeFilters.map(f => filterLabels[f]).join(' + ');
-
-      setConfirmationModal({
-          isOpen: true,
-          type: 'delete_filtered',
-          data: null,
-          title: `Excluir ${targetQuestions.length} Questões?`,
-          message: `Isso excluirá permanentemente as questões dos filtros: ${activeLabels}.`,
-          confirmText: 'Sim, Excluir',
-          confirmColor: 'red'
-      });
-  };
-
-  const executeConfirmationAction = async () => {
-      const { type, data } = confirmationModal;
-      setConfirmationModal({ ...confirmationModal, isOpen: false }); 
-
-      if (type === 'clear_institution' || type === 'clear_year') {
-          const field = type === 'clear_institution' ? 'institution' : 'year';
-          const targetQuestions = getFilteredQuestions();
-          
-          const updated = parsedQuestions.map(q => {
-              if (targetQuestions.some(t => t.id === q.id)) {
-                  return { ...q, [field]: '' };
-              }
-              return q;
-          });
-          setParsedQuestions(updated);
-
-          const batch = writeBatch(db);
-          targetQuestions.forEach(q => {
-              const docRef = doc(db, "draft_questions", q.id);
-              batch.update(docRef, { [field]: '' });
-          });
-          batch.commit().then(() => {
-              showNotification('success', `Campo ${field === 'institution' ? 'Instituição' : 'Ano'} limpo em ${targetQuestions.length} questões.`);
-          }).catch(err => {
-              console.error(err);
-              showNotification('error', 'Erro ao salvar limpeza no banco.');
-          });
-          return;
-      }
-
-      if (type === 'delete_one') {
-          if (!data || !data.id) return;
-          try { await deleteDoc(doc(db, "draft_questions", data.id)); showNotification('success', 'Excluído.'); } catch (e) { showNotification('error', e.message); }
-      } 
-      else if (type === 'approve_filtered') {
-          setIsBatchAction(true);
-          let count = 0;
-          const targetQuestions = getFilteredQuestions();
-
-          try {
-              for (const q of targetQuestions) {
-                  const { id, status, createdAt, createdBy, verificationStatus, verificationReason, isDuplicate, hashId, sourceFound, ...finalData } = q;
-                  if (q.area && q.topic && q.text) {
-                     await setDoc(doc(db, "questions", id), { 
-                         ...finalData, 
-                         updatedAt: new Date().toISOString(), 
-                         approvedBy: user.email
-                     });
-                     await deleteDoc(doc(db, "draft_questions", id));
-                     count++;
-                  }
-              }
-              showNotification('success', `${count} questões processadas (criadas ou atualizadas)!`);
-          } catch (e) { showNotification('error', e.message); } finally { setIsBatchAction(false); }
-      }
-      else if (type === 'delete_filtered') {
-          setIsBatchAction(true);
-          const targetQuestions = getFilteredQuestions();
-          try {
-              const batch = writeBatch(db);
-              targetQuestions.forEach(q => batch.delete(doc(db, "draft_questions", q.id)));
-              await batch.commit();
-              showNotification('success', 'Fila limpa.');
-          } catch (e) { showNotification('error', e.message); } finally { setIsBatchAction(false); }
-      }
-  };
-
-  const approveQuestion = async (q) => {
-    if (!q.area || !q.topic || !q.text || !q.options || q.options.length < 2) {
-      return showNotification('error', 'Preencha os campos obrigatórios.');
-    }
-    try {
-      const { id, status, createdAt, createdBy, verificationStatus, verificationReason, isDuplicate, hashId, sourceFound, ...finalData } = q;
-      
-      await setDoc(doc(db, "questions", id), {
-        ...finalData,
-        updatedAt: new Date().toISOString(), 
-        approvedBy: user.email
-      });
-      
-      await deleteDoc(doc(db, "draft_questions", id));
-      
-      if (q.isDuplicate) {
-          showNotification('success', 'Questão original ATUALIZADA com sucesso!');
-      } else {
-          showNotification('success', 'Publicada!');
-      }
-    } catch (error) {
-      showNotification('error', 'Erro: ' + error.message);
-    }
-  };
-
-  // --- FUNÇÕES DE ATUALIZAÇÃO (CORRIGIDO PARA USAR ID) ---
-  const updateQuestionField = (id, field, val) => {
-      setParsedQuestions(prev => prev.map(q => q.id === id ? { ...q, [field]: val } : q));
-  };
-
-  const updateOptionText = (qId, optIdx, val) => {
-      setParsedQuestions(prev => prev.map(q => {
-          if (q.id === qId) {
-              const newOptions = [...q.options];
-              newOptions[optIdx].text = val;
-              return { ...q, options: newOptions };
-          }
-          return q;
-      }));
-  };
-
-  const currentFilteredList = getFilteredQuestions();
-
-  // --- RENDER LOGIN ---
-  if (isLoadingAuth) return <div className="min-h-screen bg-slate-900 flex items-center justify-center"><Loader2 className="text-white animate-spin" size={48} /></div>;
-  
-  if (!user) return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans">
-        <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300">
-          <div className="flex items-center gap-3 mb-6 justify-center">
-             <div className="bg-blue-600 p-3 rounded-xl shadow-lg shadow-blue-900/20"><Brain className="text-white" size={32} /></div>
-             <h1 className="text-2xl font-bold text-slate-800">MedImporter Admin</h1>
-          </div>
-          <p className="text-slate-500 text-center mb-6">Acesso restrito a administradores.</p>
-          <form onSubmit={(e) => { e.preventDefault(); signInWithEmailAndPassword(auth, email, password).catch(err => showNotification('error', err.message)); }} className="space-y-4">
-            <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition-all"/>
-            <input type="password" placeholder="Senha" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition-all"/>
-            <button className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center gap-2"><Lock size={18} /> Acessar Sistema</button>
-          </form>
+// ... Resto dos componentes (ReviewExamView, MySimulationsView, etc.) MANTIDOS IGUAIS ...
+
+function ReviewExamView({ simulation, onBack, allQuestions, user, addToast }) { 
+    if (!simulation) return <div>Carregando...</div>;
+    const questions = simulation.questionsData || [];
+    const userAnswers = simulation.answersData || {};
+    const [reportModalConfig, setReportModalConfig] = useState({ isOpen: false, type: 'error', questionId: null });
+    const openReportModal = (questionId, type) => { setReportModalConfig({ isOpen: true, type, questionId }); };
+    return (
+        <div className="animate-in fade-in slide-in-from-right-8 duration-500 max-w-5xl mx-auto">
+          {reportModalConfig.isOpen && (<ReportModal isOpen={true} onClose={() => setReportModalConfig({ ...reportModalConfig, isOpen: false })} questionId={reportModalConfig.questionId} userId={user?.uid} type={reportModalConfig.type} addToast={addToast} />)}
+          <div className="flex items-center justify-between mb-8"><button onClick={onBack} className="flex items-center text-gray-500 hover:text-blue-600 transition-colors font-medium"><ArrowLeft size={20} className="mr-2" /> Voltar para Meus Simulados</button><div className="text-right"><span className="text-sm font-bold text-slate-500 bg-gray-100 px-3 py-1 rounded-full">Revisão: {simulation.title}</span></div></div>
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 mb-8 flex justify-between items-center"><div><h2 className="text-2xl font-bold text-slate-900">Resumo do Desempenho</h2><p className="text-slate-500">Data: {simulation.date}</p></div><div className="text-right"><div className="text-3xl font-bold text-blue-600">{simulation.correct}/{simulation.total}</div><div className="text-sm font-medium text-gray-400">Acertos</div></div></div>
+          <div className="space-y-6">{questions.map((q, index) => { 
+              const userAnswer = userAnswers[index]; 
+              const isCorrect = userAnswer === q.correctOptionId; 
+              return (
+                <div key={q.id} className={`bg-white rounded-2xl border overflow-hidden ${isCorrect ? 'border-emerald-200' : 'border-red-200'}`}>
+                    <div className={`p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 ${isCorrect ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                        <div className="flex items-center gap-2"><h3 className={`font-bold flex items-center gap-2 ${isCorrect ? 'text-emerald-800' : 'text-red-800'}`}>{isCorrect ? <CheckCircle size={20} /> : <XCircle size={20} />} Questão {index + 1}</h3><span className="text-sm font-medium opacity-70">{q.topic}</span></div>
+                        <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 text-[10px] md:text-xs text-gray-500 bg-white/50 px-2 py-1 rounded-lg border border-black/5 font-bold uppercase tracking-wider"><span>ID</span><CopyButton text={q.id} className="text-gray-400 hover:text-blue-600" /></div>
+                             <button onClick={() => openReportModal(q.id, 'suggestion')} className="p-1.5 text-blue-500 hover:text-blue-700 hover:bg-blue-100 rounded-lg transition-colors" title="Sugerir Edição"><Edit2 size={16} /></button>
+                            <button onClick={() => openReportModal(q.id, 'error')} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-100 rounded-lg transition-colors" title="Reportar Erro"><AlertTriangle size={16} /></button>
+                        </div>
+                    </div>
+                    <div className="p-6">
+                        <p className="text-slate-800 mb-4">{q.text}</p>
+                        <div className="space-y-2 mb-4">{q.options.map(opt => { let optClass = "p-3 rounded-lg border border-gray-100 text-gray-600"; if (opt.id === q.correctOptionId) optClass = "p-3 rounded-lg border border-emerald-500 bg-emerald-50 text-emerald-800 font-bold"; else if (opt.id === userAnswer && !isCorrect) optClass = "p-3 rounded-lg border border-red-500 bg-red-50 text-red-800 font-bold"; return (<div key={opt.id} className={optClass}><span className="uppercase mr-2">{opt.id})</span> {opt.text}</div>); })}</div>
+                        <div className="bg-gray-50 p-4 rounded-xl text-sm text-slate-600"><span className="font-bold block mb-1">Comentário:</span>{q.explanation}</div>
+                    </div>
+                </div>
+              ); 
+          })}</div>
         </div>
-        <NotificationToast notification={notification} onClose={closeNotification} positionClass="fixed bottom-4 right-4" />
-      </div>
-  );
+    );
+}
+
+function MySimulationsView({ simulations, onCreateNew, onResume, onViewResults, onDelete, loadingOp }) {
+    const [activeTab, setActiveTab] = useState('finished');
+    const [simToDelete, setSimToDelete] = useState(null);
+    const openSims = simulations.filter(s => s.status === 'open');
+    const finishedSims = simulations.filter(s => s.status === 'finished');
+    const confirmDelete = () => { if(simToDelete && onDelete) { onDelete(simToDelete.id); setSimToDelete(null); } };
+    return (
+        <div className="animate-in fade-in slide-in-from-right-8 duration-500 max-w-5xl mx-auto">
+          {simToDelete && (<NotificationModal title="Excluir Simulado?" message="Todo o progresso será perdido." type="error" isDangerous={true} confirmText="Sim, Excluir" cancelText="Cancelar" onClose={() => setSimToDelete(null)} onConfirm={confirmDelete} />)}
+          <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4"><div><h1 className="text-3xl font-bold text-slate-900 mb-2">Meus Simulados</h1><p className="text-slate-500">Gerencie seus treinos e acompanhe seu histórico.</p></div><button onClick={onCreateNew} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-200 transition-all"><Plus size={20} /> Novo Simulado</button></div>
+          <div className="flex border-b border-gray-200 mb-6"><button onClick={() => setActiveTab('open')} className={`pb-3 px-6 font-medium text-sm transition-colors relative ${activeTab === 'open' ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>Em Andamento ({openSims.length}){activeTab === 'open' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-t-full"></div>}</button><button onClick={() => setActiveTab('finished')} className={`pb-3 px-6 font-medium text-sm transition-colors relative ${activeTab === 'finished' ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>Concluídos ({finishedSims.length}){activeTab === 'finished' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-t-full"></div>}</button></div>
+          <div className="space-y-4">
+            {activeTab === 'open' ? (openSims.length > 0 ? (openSims.map(sim => (<div key={sim.id} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between gap-4"><div className="flex items-center gap-4"><div className="w-12 h-12 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center"><Clock size={24} /></div><div><h3 className="font-bold text-slate-900">{sim.title}</h3><div className="flex items-center gap-2 text-sm text-gray-500"><span>{sim.date}</span><span>•</span><span>{sim.type}</span></div></div></div><div className="flex items-center gap-4 md:gap-6"><div className="text-right hidden md:block"><p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Progresso</p><p className="font-bold text-slate-700">{sim.progress} / {sim.total}</p></div><button onClick={() => onResume(sim.id)} disabled={loadingOp === sim.id} className="bg-slate-800 hover:bg-slate-900 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition-colors">{loadingOp === sim.id ? <Loader2 className="animate-spin" size={16} /> : <>Continuar <ArrowRight size={16} /></>}</button><button onClick={() => setSimToDelete(sim)} className="p-2.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={20} /></button></div></div>))) : <div className="text-center py-16 bg-gray-50 rounded-2xl border border-dashed border-gray-200">Nenhum simulado em aberto</div>) : (finishedSims.length > 0 ? (finishedSims.map(sim => (<div key={sim.id} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4"><div className="flex items-center gap-4 w-full md:w-auto"><div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><CheckCircle size={24} /></div><div><h3 className="font-bold text-slate-900">{sim.title}</h3><div className="flex items-center gap-2 text-sm text-gray-500"><span>{sim.date}</span><span>•</span><span>{sim.type}</span></div></div></div><div className="flex items-center gap-4 md:gap-6 w-full md:w-auto justify-between md:justify-end"><div className="text-right md:mr-4"><p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Nota</p><p className="font-bold text-emerald-600">{sim.correct} / {sim.total} ({Math.round((sim.correct/sim.total)*100)}%)</p></div><div className="flex gap-2"><button onClick={() => onViewResults(sim.id)} disabled={loadingOp === sim.id} className="bg-white border border-gray-200 hover:bg-gray-50 text-slate-600 px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition-colors">{loadingOp === sim.id ? <Loader2 className="animate-spin" size={18} /> : <><Eye size={18} /> Detalhes</>}</button><button onClick={() => setSimToDelete(sim)} className="p-2.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-gray-200"><Trash2 size={20} /></button></div></div></div>))) : <div className="text-center py-16 bg-gray-50 rounded-2xl border border-dashed border-gray-200">Nenhum simulado concluído</div>)}
+          </div>
+        </div>
+    );
+}
+
+function SimulationSummaryView({ results, onHome, onNewExam, onReview, loadingReview }) {
+  if (!results) return null;
+  const totalQuestions = results.total;
+  const answeredCount = results.answered;
+  const correctCount = results.correct;
+  const wrongCount = answeredCount - correctCount;
+  const unansweredCount = totalQuestions - answeredCount;
+  const percentage = answeredCount > 0 ? Math.round((correctCount / answeredCount) * 100) : 0;
+  let message = "Bom começo!"; let colorClass = "text-blue-600";
+  if (percentage >= 80) { message = "Excelente Desempenho!"; colorClass = "text-emerald-600"; } 
+  else if (percentage < 50 && answeredCount > 0) { message = "Vamos reforçar os estudos?"; colorClass = "text-orange-600"; }
+  else if (answeredCount === 0) { message = "Nenhuma questão respondida."; colorClass = "text-gray-500"; }
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans text-slate-800 pb-20">
+    <div className="max-w-3xl mx-auto pt-10 animate-in fade-in slide-in-from-bottom-8 duration-500">
+      <div className="bg-white rounded-3xl shadow-xl p-8 md:p-12 text-center border border-gray-100">
+        <div className="inline-flex p-4 rounded-full bg-gray-50 mb-6"><Activity size={48} className={colorClass} /></div>
+        <h2 className="text-3xl font-bold text-slate-900 mb-2">Simulado Finalizado</h2>
+        <p className="text-slate-500 text-lg mb-8">{message}</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
+            <div className="p-4 bg-gray-50 rounded-2xl"><div className="text-sm text-gray-500 mb-1 font-bold">Total</div><div className="text-2xl font-bold text-slate-800">{totalQuestions}</div></div>
+            <div className="p-4 bg-emerald-50 rounded-2xl"><div className="text-sm text-emerald-600 mb-1 font-bold">Acertos</div><div className="text-2xl font-bold text-emerald-700">{correctCount}</div></div>
+            <div className="p-4 bg-red-50 rounded-2xl"><div className="text-sm text-red-600 mb-1 font-bold">Erros</div><div className="text-2xl font-bold text-red-700">{wrongCount}</div></div>
+            <div className="p-4 bg-yellow-50 rounded-2xl"><div className="text-sm text-yellow-600 mb-1 font-bold">Nulas</div><div className="text-2xl font-bold text-yellow-700">{unansweredCount}</div></div>
+        </div>
+        <div className="w-full bg-gray-100 rounded-full h-4 mb-2 overflow-hidden"><div className={`h-4 rounded-full transition-all duration-1000 ${percentage >= 80 ? 'bg-emerald-500' : percentage >= 50 ? 'bg-blue-500' : 'bg-orange-500'}`} style={{ width: `${percentage}%` }}></div></div>
+        <p className="text-sm text-gray-400 font-medium mb-10 text-right">Aproveitamento (Respondidas): {percentage}%</p>
+        <div className="flex flex-col md:flex-row gap-4 justify-center">
+            <button onClick={onHome} className="px-8 py-3.5 rounded-xl font-bold text-slate-600 bg-gray-100 hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"><Home size={20} /> Voltar ao Início</button>
+            <button onClick={onReview} disabled={loadingReview} className="px-8 py-3.5 rounded-xl font-bold text-blue-600 border border-blue-200 hover:bg-blue-50 transition-colors flex items-center justify-center gap-2">{loadingReview ? <Loader2 className="animate-spin" size={20} /> : <><List size={20} /> Revisar Questões</>}</button>
+            <button onClick={onNewExam} className="px-8 py-3.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200 flex items-center justify-center gap-2"><Play size={20} fill="currentColor" /> Novo Simulado</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SettingsView({ user, onBack, onResetQuestions, onResetHistory, addToast, onGenerateMetadata }) {
+  const [modalConfig, setModalConfig] = useState({ isOpen: false, type: null });
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const openModal = (type) => setModalConfig({ isOpen: true, type });
+  const handleConfirm = () => { if (modalConfig.type === 'questions') onResetQuestions(); else if (modalConfig.type === 'history') onResetHistory(); setModalConfig({ ...modalConfig, isOpen: false }); };
+  const [name, setName] = useState(user.name || '');
+  const [whatsapp, setWhatsapp] = useState(user.whatsapp || ''); 
+  const [isSaving, setIsSaving] = useState(false);
+  const [adminRenewalLink, setAdminRenewalLink] = useState('');
+  const [activeRenewalLink, setActiveRenewalLink] = useState('');
+  const [isAdminSaving, setIsAdminSaving] = useState(false);
+  const subDate = user.subscriptionUntil ? new Date(user.subscriptionUntil) : null;
+  const daysLeft = subDate ? Math.ceil((subDate - new Date()) / (1000 * 60 * 60 * 24)) : 0;
+  const formattedDate = subDate ? subDate.toLocaleDateString('pt-BR') : 'N/A';
+  const isExpired = subDate && new Date() > subDate;
+
+  useEffect(() => {
+    const fetchRenewalLink = async () => {
+        try {
+            const configDoc = await getDoc(doc(db, "config", "general"));
+            if (configDoc.exists() && configDoc.data().renewalLink) {
+                const link = configDoc.data().renewalLink;
+                setActiveRenewalLink(link);
+                if (user.role === 'admin') setAdminRenewalLink(link);
+            }
+        } catch (error) {
+            console.error("Erro ao buscar link de renovação:", error);
+        }
+    };
+    fetchRenewalLink();
+  }, [user.role]);
+
+  const handleSaveProfile = async () => {
+    setIsSaving(true);
+    try {
+        if(auth.currentUser) {
+            await updateProfile(auth.currentUser, { displayName: name });
+            await setDoc(doc(db, "users", user.uid), { name: name, whatsapp: whatsapp }, { merge: true });
+            addToast('Sucesso', 'Perfil atualizado com sucesso!', 'success');
+        }
+    } catch (error) { 
+        console.error(error); 
+        addToast('Erro', 'Erro ao atualizar perfil.', 'error');
+    } finally { 
+        setIsSaving(false); 
+    }
+  };
+
+  const handleSavePassword = async (currentPassword, newPassword) => {
+      setIsSaving(true);
+      try {
+          if (auth.currentUser) {
+              const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+              await reauthenticateWithCredential(auth.currentUser, credential);
+              await updatePassword(auth.currentUser, newPassword);
+              addToast('Sucesso', 'Senha alterada com sucesso!', 'success');
+              setIsPasswordModalOpen(false); 
+          }
+      } catch (error) { 
+          console.error(error); 
+          addToast('Erro', 'Erro ao alterar senha. Verifique a senha atual.', 'error');
+      } finally { 
+          setIsSaving(false); 
+      }
+  };
+
+  const handleSaveAdminLink = async () => {
+    setIsAdminSaving(true);
+    try {
+        await setDoc(doc(db, "config", "general"), { renewalLink: adminRenewalLink }, { merge: true });
+        setActiveRenewalLink(adminRenewalLink);
+        addToast('Sucesso', 'Link de renovação atualizado.', 'success');
+    } catch (error) {
+        console.error(error);
+        addToast('Erro', 'Erro ao atualizar link.', 'error');
+    } finally {
+        setIsAdminSaving(false);
+    }
+  };
+
+  return (
+    <div className="animate-in fade-in slide-in-from-right-8 duration-500 max-w-4xl mx-auto pb-10">
+      <div className="flex items-center justify-between mb-8"><button onClick={onBack} className="flex items-center text-gray-500 hover:text-blue-600 transition-colors font-medium"><ArrowLeft size={20} className="mr-2"/> Voltar</button><h1 className="text-3xl font-bold text-slate-900">Configurações</h1></div>
+      {modalConfig.isOpen && (<NotificationModal title={modalConfig.type === 'questions' ? "Resetar Questões?" : "Apagar Tudo?"} message={modalConfig.type === 'questions' ? "Todas as questões voltarão a ser 'novas'. Seu histórico de acertos será apagado, mas sua sequência de dias (streak) será mantida." : "CUIDADO: Isso apagará TODO o seu histórico, incluindo sua sequência de dias (streak)."} isDangerous={true} confirmText={modalConfig.type === 'questions' ? "Sim, Resetar Questões" : "Sim, Apagar Tudo"} type="error" onClose={() => setModalConfig({ ...modalConfig, isOpen: false })} onConfirm={handleConfirm} />)}
+      {isPasswordModalOpen && (<ChangePasswordModal onClose={() => setIsPasswordModalOpen(false)} onSave={handleSavePassword} isLoading={isSaving} />)}
       
-      {/* HEADER */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <button onClick={() => window.location.href = '/'} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Voltar para o App Principal"><ArrowLeft size={24} /></button>
-            <div className="flex items-center gap-2"><Brain className="text-blue-600" size={28} /><h1 className="text-xl font-bold text-slate-800">MedImporter</h1></div>
-          </div>
-          
-          <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto items-center">
-            
-            <div 
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer transition-all border ${isWebSearchEnabled ? 'bg-teal-50 border-teal-200 text-teal-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}
-                onClick={() => setIsWebSearchEnabled(!isWebSearchEnabled)}
-                title="A IA vai pesquisar no Google a origem de cada questão"
-            >
-                {isWebSearchEnabled ? <ToggleRight size={24} className="text-teal-600"/> : <ToggleLeft size={24}/>}
-                <span className="text-sm font-bold whitespace-nowrap flex items-center gap-1">
-                    {isWebSearchEnabled ? <Globe size={16}/> : null}
-                    Busca Web (Bancas)
-                </span>
+      <div className="space-y-6">
+        
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm relative overflow-hidden">
+            <div className={`absolute top-0 right-0 p-4 opacity-10 ${isExpired ? 'text-red-500' : 'text-emerald-500'}`}><CreditCard size={120} /></div>
+            <div className="flex items-center gap-4 mb-6 relative z-10"><div className={`p-3 rounded-full ${isExpired ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}><Calendar size={24} /></div><div><h2 className="text-xl font-bold text-slate-900">Minha Assinatura</h2><p className="text-slate-500 text-sm">Detalhes do seu plano atual</p></div></div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10 mb-4">
+                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100"><p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Status</p><div className={`text-lg font-bold flex items-center gap-2 ${isExpired ? 'text-red-600' : 'text-emerald-600'}`}>{isExpired ? <XCircle size={20} /> : <CheckCircle size={20} />}{isExpired ? 'Expirada' : 'Ativa'}</div></div>
+                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100"><p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Vencimento</p><p className="text-lg font-bold text-slate-700">{formattedDate}</p></div>
+                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100"><p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Tempo Restante</p><p className={`text-lg font-bold ${daysLeft < 5 ? 'text-orange-600' : 'text-slate-700'}`}>{daysLeft > 0 ? `${daysLeft} dias` : '0 dias'}</p></div>
             </div>
-
-            <div 
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer transition-all border ${isDoubleCheckEnabled ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}
-                onClick={() => setIsDoubleCheckEnabled(!isDoubleCheckEnabled)}
-                title="A IA vai auditar cada questão gerada (Double Check)"
-            >
-                {isDoubleCheckEnabled ? <ToggleRight size={24} className="text-indigo-600"/> : <ToggleLeft size={24}/>}
-                <span className="text-sm font-bold whitespace-nowrap flex items-center gap-1">
-                    {isDoubleCheckEnabled ? <ShieldCheck size={16}/> : null}
-                    Auditoria IA {isDoubleCheckEnabled ? 'ON' : 'OFF'}
-                </span>
-            </div>
-
-            <button onClick={() => { 
-                setTempApiKeysText(apiKeys.join('\n')); 
-                setShowApiKeyModal(true); 
-                setShowTutorial(false); 
-            }} className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2 text-sm font-medium"><Settings size={18} /><span className="hidden md:inline">API</span></button>
             
-            <div className="relative group flex-1 md:flex-none w-full md:w-auto flex items-center gap-2">
-                <div className="relative">
-                    <Cpu size={16} className="absolute left-3 top-3 text-gray-500" />
-                    <select value={selectedModel} onChange={(e) => handleModelChange(e.target.value)} className="w-full md:w-56 pl-9 pr-3 py-2 text-sm bg-gray-100 border-none rounded-lg font-medium text-slate-700 focus:ring-2 focus:ring-blue-500 cursor-pointer appearance-none">
-                        {availableModels.map(model => (<option key={model.name} value={model.name}>{model.displayName || model.name}</option>))}
-                    </select>
+            {activeRenewalLink && (
+                <div className="relative z-10 text-right">
+                    <button 
+                        onClick={() => window.open(activeRenewalLink, '_blank')}
+                        className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-lg shadow-emerald-200 transition-colors flex items-center justify-center gap-2 md:inline-flex w-full md:w-auto"
+                    >
+                        Renovar Assinatura Agora <ExternalLink size={16} />
+                    </button>
                 </div>
-                <button onClick={validateKeyAndFetchModels} disabled={isValidatingKey || apiKeys.length === 0} className="p-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors disabled:opacity-50" title="Sincronizar Modelos">
-                    {isValidatingKey ? <Loader2 size={18} className="animate-spin"/> : <RefreshCw size={18} />}
-                </button>
-            </div>
-            <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Sair"><LogOut size={20} /></button>
-          </div>
-        </div>
-      </header>
-
-      {/* NOTIFICATION */}
-      <NotificationToast notification={notification} onClose={closeNotification} positionClass="fixed top-24 right-4" />
-
-      {/* API KEY MODAL */}
-      {showApiKeyModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-xl shadow-2xl relative flex flex-col max-h-[90vh] overflow-y-auto">
-                  <button onClick={() => setShowApiKeyModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={20}/></button>
-                  <h2 className="text-xl font-bold mb-4 text-slate-800 flex items-center gap-2"><Settings size={20} className="text-blue-600"/> Configurar API Gemini</h2>
-                  <div className="mb-4">
-                      <label className="block text-sm font-bold text-gray-600 mb-2">Chaves da API (Uma por linha)</label>
-                      <div className="flex flex-col gap-2">
-                        <textarea 
-                            value={tempApiKeysText} 
-                            onChange={e => setTempApiKeysText(e.target.value)} 
-                            className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-800 font-mono text-sm h-32 resize-y" 
-                            placeholder="AIza...&#10;AIza...&#10;AIza..."
-                        />
-                        <button onClick={handleGetKey} className="self-end px-4 py-2 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-xl hover:bg-indigo-100 font-bold whitespace-nowrap flex items-center gap-2 transition-colors text-sm"><Key size={16} /> Gerar Nova Chave</button>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-2 flex items-center gap-1"><Layers size={14}/> Dica: Adicione múltiplas chaves para evitar limites de uso (Erro 429). O sistema fará o rodízio automático.</p>
-                  </div>
-                  {showTutorial && (
-                      <div className="mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100 animate-in slide-in-from-top-2">
-                          <h3 className="font-bold text-blue-800 mb-2 flex items-center gap-2"><ExternalLink size={16}/> Como gerar chaves extras:</h3>
-                          <ol className="text-sm text-blue-800/80 space-y-1.5 list-decimal list-inside">
-                              <li>Clique em "Gerar Nova Chave" para abrir o Google AI Studio.</li>
-                              <li>Clique em "Create API key".</li>
-                              <li>Escolha <strong>"Create API key in new project"</strong>.</li>
-                              <li>Copie a chave e cole uma em cada linha acima.</li>
-                              <li>Repita para criar quantos projetos quiser (cada projeto tem sua cota).</li>
-                          </ol>
-                      </div>
-                  )}
-                  <div className="flex justify-end gap-3 mt-auto pt-2">
-                      <button onClick={() => setShowApiKeyModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg font-bold">Cancelar</button>
-                      <button onClick={saveApiKeyFromModal} disabled={isSavingKey} className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 shadow-lg flex items-center gap-2">{isSavingKey ? <Loader2 size={16} className="animate-spin" /> : null} Salvar Chaves</button>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* CONFIRMATION MODAL */}
-      {confirmationModal.isOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl relative animate-in zoom-in-95 duration-200">
-                  <div className="flex flex-col items-center text-center">
-                    <div className={`p-3 rounded-full mb-4 ${confirmationModal.confirmColor === 'red' ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}><AlertTriangle size={32} /></div>
-                    <h2 className="text-xl font-bold mb-2 text-slate-800">{confirmationModal.title}</h2>
-                    <p className="text-gray-600 mb-6 text-sm">{confirmationModal.message}</p>
-                    <div className="flex gap-3 w-full">
-                        <button onClick={() => setConfirmationModal({ ...confirmationModal, isOpen: false })} className="flex-1 py-3 border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50 transition-colors">Cancelar</button>
-                        <button onClick={executeConfirmationAction} className={`flex-1 py-3 rounded-xl font-bold text-white shadow-lg transition-colors ${confirmationModal.confirmColor === 'red' ? 'bg-red-600 hover:bg-red-700 shadow-red-200' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'}`}>{confirmationModal.confirmText}</button>
-                    </div>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      <main className="max-w-7xl mx-auto p-4 md:p-6">
-        <div className="flex justify-center mb-8">
-            <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-200 inline-flex overflow-x-auto max-w-full">
-                <button onClick={() => setActiveTab('input')} className={`whitespace-nowrap px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${activeTab === 'input' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:text-gray-700'}`}><FileText size={18} /> Texto</button>
-                <button onClick={() => setActiveTab('batch_images')} className={`whitespace-nowrap px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${activeTab === 'batch_images' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:text-gray-700'}`}><Files size={18} /> Imagens (Lote)</button>
-                <button onClick={() => setActiveTab('pdf')} className={`whitespace-nowrap px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${activeTab === 'pdf' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:text-gray-700'}`}><Database size={18} /> PDF Massivo</button>
-                <button onClick={() => setActiveTab('review')} className={`whitespace-nowrap px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${activeTab === 'review' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:text-gray-700'}`}>
-                    <CloudLightning size={18} /> Fila de Aprovação 
-                    {parsedQuestions.length > 0 && <span className="ml-2 bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full">{parsedQuestions.length}</span>}
-                </button>
-            </div>
+            )}
         </div>
 
-        {/* OVERRIDES SECTION */}
-        {(activeTab === 'input' || activeTab === 'pdf' || activeTab === 'batch_images') && (
-            <div className="max-w-4xl mx-auto mb-6 animate-in slide-in-from-top-4">
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center gap-2">
-                        <Filter size={16} className="text-gray-500"/>
-                        <span className="text-sm font-bold text-slate-700">Filtros de Pré-definição (Forçar Dados)</span>
-                        <span className="text-xs text-gray-400 font-normal ml-auto">Opcional • Se preenchido, a IA será obrigada a usar</span>
+        {user.role === 'admin' && (
+            <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl">
+                <div className="flex items-center gap-4 mb-6">
+                    <div className="bg-slate-800 p-3 rounded-full text-blue-400"><Database size={24} /></div>
+                    <div>
+                        <h2 className="text-xl font-bold text-white">Administração do Sistema</h2>
+                        <p className="text-slate-400 text-sm">Configurações globais da plataforma</p>
                     </div>
-                    <div className="p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Instituição</label>
-                            <input value={overrideInst} onChange={e=>setOverrideInst(e.target.value)} placeholder="Ex: ENARE" className="w-full p-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Ano</label>
-                            <input type="number" value={overrideYear} onChange={e=>setOverrideYear(e.target.value)} placeholder="Ex: 2026" className="w-full p-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Área Forçada</label>
-                            <select value={overrideArea} onChange={e=>{setOverrideArea(e.target.value); setOverrideTopic('');}} className="w-full p-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
-                                <option value="">Automático (IA)</option>
-                                {areasBase.map(a => <option key={a} value={a}>{a}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Tópico Forçado</label>
-                            <select value={overrideTopic} onChange={e=>setOverrideTopic(e.target.value)} disabled={!overrideArea} className="w-full p-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white disabled:bg-gray-50 disabled:text-gray-400">
-                                <option value="">Automático (IA)</option>
-                                {(themesMap[overrideArea] || []).map(t => <option key={t} value={t}>{t}</option>)}
-                            </select>
-                        </div>
-                    </div>
-                    {(overrideInst || overrideYear || overrideArea) && (
-                        <div className="bg-blue-50 px-4 py-2 border-t border-blue-100 flex justify-between items-center">
-                            <span className="text-xs text-blue-700 font-medium">As próximas questões serão geradas com esses dados fixos.</span>
-                            <button onClick={()=>{setOverrideInst('');setOverrideYear('');setOverrideArea('');setOverrideTopic('');}} className="text-xs text-red-500 hover:text-red-700 font-bold flex items-center gap-1"><Eraser size={12}/> Limpar Filtros</button>
-                        </div>
-                    )}
                 </div>
-            </div>
-        )}
+                
+                {/* BOTÃO NOVO PARA GERAR INDEX */}
+                <div className="flex items-center justify-between bg-slate-800 p-4 rounded-xl border border-slate-700 mb-6">
+                    <div>
+                        <h4 className="font-semibold text-white">Atualizar Metadados de Questões</h4>
+                        <p className="text-xs text-slate-400 max-w-md">Gera o índice leve para performance. Execute sempre que adicionar muitas questões novas.</p>
+                    </div>
+                    <button onClick={onGenerateMetadata} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors">
+                        <RefreshCw size={18} /> Gerar Index
+                    </button>
+                </div>
 
-        {/* INPUT TABS */}
-        {activeTab === 'input' && (
-            <div className="max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-4">
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                    <label className="block text-lg font-bold text-slate-800 mb-2">
-                        Cole suas questões (Texto)
+                <div>
+                    <label className="block text-sm font-semibold text-slate-300 mb-2 flex items-center gap-2">
+                        Link de Renovação de Assinatura
+                        <span className="text-xs font-normal text-slate-500">(Este link aparecerá para os alunos)</span>
                     </label>
-                    <p className="text-sm text-gray-500 mb-4">A IA vai analisar e enviar para a fila de aprovação (Database).</p>
-                    
-                    <textarea value={rawText} onChange={(e) => setRawText(e.target.value)} placeholder="Cole aqui o texto..." className="w-full h-96 p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-800 font-mono text-sm resize-y mb-4"/>
-
-                    <div className="flex justify-end gap-3 mt-4">
-                        <button onClick={() => { setRawText(''); }} className="px-4 py-3 text-gray-500 hover:bg-gray-100 rounded-xl font-bold">Limpar</button>
-                        <button onClick={processWithAI} disabled={isProcessing || apiKeys.length === 0} className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200 flex items-center gap-2 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
-                            {isProcessing ? <><Loader2 className="animate-spin" size={20} /> Processando...</> : <><Wand2 size={20} /> Enviar para Fila</>}
+                    <div className="flex gap-2">
+                        <input 
+                            type="url" 
+                            value={adminRenewalLink} 
+                            onChange={(e) => setAdminRenewalLink(e.target.value)}
+                            placeholder="https://exemplo.com/pagamento"
+                            className="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-500" 
+                        />
+                        <button 
+                            onClick={handleSaveAdminLink}
+                            disabled={isAdminSaving}
+                            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors disabled:opacity-50"
+                        >
+                            {isAdminSaving ? 'Salvando...' : 'Salvar'}
                         </button>
                     </div>
                 </div>
             </div>
         )}
 
-        {/* BATCH IMAGES TAB */}
-        {activeTab === 'batch_images' && (
-            <div className="max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4">
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                    <div className="flex justify-between items-start mb-6">
-                        <div>
-                            <label className="block text-lg font-bold text-slate-800 mb-1">
-                                Importador de Imagens (Lote ou Única)
-                            </label>
-                            <p className="text-sm text-gray-500">Adicione ou cole (Ctrl+V) várias imagens. As processadas com sucesso serão removidas automaticamente.</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <button onClick={clearBatchQueue} disabled={batchStatus === 'processing' || batchStatus === 'pausing'} title="Limpar Tudo" className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-30"><Trash2 size={20}/></button>
-                            
-                            {batchStatus === 'processing' ? (
-                                <button onClick={toggleBatchProcessing} className="px-4 py-2 bg-amber-100 text-amber-700 rounded-lg font-bold flex items-center gap-2 hover:bg-amber-200 transition-colors"><Pause size={18}/> Pausar</button>
-                            ) : batchStatus === 'pausing' ? (
-                                <button disabled className="px-4 py-2 bg-amber-50 text-amber-400 border border-amber-100 rounded-lg font-bold flex items-center gap-2 cursor-wait"><Loader2 size={18} className="animate-spin"/> Pausando...</button>
-                            ) : (
-                                <button onClick={toggleBatchProcessing} disabled={batchImages.length === 0} className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg font-bold flex items-center gap-2 hover:bg-emerald-200 transition-colors disabled:opacity-50"><Play size={18}/> {batchStatus === 'paused' ? 'Continuar' : 'Iniciar'}</button>
-                            )}
-                        </div>
-                    </div>
-
-                    <div 
-                        onPaste={handleBatchPaste}
-                        className="w-full h-32 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center bg-gray-50 relative overflow-hidden transition-all hover:border-blue-400 mb-6 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                        tabIndex="0"
-                    >
-                        <div className="text-center pointer-events-none p-4">
-                            <UploadCloud size={32} className="mx-auto text-gray-400 mb-2" />
-                            <p className="text-gray-600 font-bold text-sm">Arraste, Clique ou Cole (Ctrl+V)</p>
-                        </div>
-                        <input type="file" accept="image/*" multiple onChange={handleBatchImageUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                    </div>
-
-                    <div className="flex flex-col lg:flex-row gap-6">
-                        <div className="flex-1 bg-gray-50 rounded-xl p-4 border border-gray-200 h-[500px] overflow-y-auto">
-                            <h3 className="text-xs font-bold text-gray-500 uppercase mb-3 flex justify-between">
-                                <span>Fila ({batchImages.length})</span>
-                                {batchStatus === 'processing' && <span className="text-blue-600 flex items-center gap-1"><Loader2 size={10} className="animate-spin"/> Processando...</span>}
-                                {batchStatus === 'pausing' && <span className="text-amber-600 flex items-center gap-1"><Clock size={10} className="animate-spin"/> Pausando...</span>}
-                            </h3>
-                            
-                            {batchImages.length === 0 ? (
-                                <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-50">
-                                    <Files size={48} className="mb-2"/>
-                                    <p className="text-sm">Nenhuma imagem na fila</p>
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                    {batchImages.map((img) => (
-                                        <div key={img.id} className={`relative group rounded-lg overflow-hidden border bg-white aspect-square shadow-sm ${img.status === 'error' ? 'border-red-300 ring-2 ring-red-100' : 'border-gray-200'}`}>
-                                            <img src={img.preview} alt="Preview" className="w-full h-full object-cover" />
-                                            <button onClick={() => removeBatchImage(img.id)} disabled={batchStatus === 'processing' || batchStatus === 'pausing'} className="absolute top-1 right-1 bg-white/80 p-1 rounded-full text-gray-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"><X size={14}/></button>
-                                            
-                                            {img.status === 'error' && (
-                                                <div className="absolute inset-0 bg-red-500/20 flex items-center justify-center p-2 text-center">
-                                                    <span className="text-xs font-bold text-white bg-red-600 px-2 py-1 rounded shadow-sm truncate max-w-full">{img.errorMsg || 'Erro'}</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="w-full lg:w-1/3 flex flex-col h-[500px]">
-                            <div className="bg-slate-900 rounded-xl overflow-hidden shadow-inner flex flex-col h-full">
-                                <div className="p-3 bg-slate-800 border-b border-slate-700 text-gray-400 text-xs font-bold flex items-center gap-2">
-                                    <Terminal size={14}/> Console de Imagens
-                                </div>
-                                <div className="flex-1 p-4 overflow-y-auto font-mono text-xs text-gray-300 space-y-1">
-                                    {batchLogs.length === 0 && <span className="opacity-50">Aguardando logs de imagem...</span>}
-                                    {batchLogs.map((log, i) => (
-                                        <div key={i} className={`mb-1 ${log.type === 'error' ? 'text-red-400' : log.type === 'success' ? 'text-emerald-400' : log.type === 'warning' ? 'text-amber-400' : 'text-blue-300'}`}>
-                                            <span className="opacity-50 mr-2">[{log.time}]</span>
-                                            {log.message}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+            <div className="flex items-center gap-4 mb-6"><div className="bg-blue-100 p-3 rounded-full text-blue-600"><User size={24} /></div><div><h2 className="text-xl font-bold text-slate-900">Meu Perfil</h2><p className="text-slate-500 text-sm">Gerencie suas informações pessoais</p></div></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Nome Completo</label>
+                    <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
+                        <span className="font-bold">SEU ID:</span> 
+                        <span className="font-mono bg-gray-100 px-2 py-1 rounded">{user.uid}</span>
+                        <CopyButton text={user.uid} className="text-blue-500 hover:text-blue-700" />
                     </div>
                 </div>
+                <div><label className="block text-sm font-semibold text-slate-700 mb-2">E-mail</label><input type="email" value={user.email} disabled className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl text-gray-500 cursor-not-allowed" /></div>
+                <div className="md:col-span-2"><label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2"><Smartphone size={16} className="text-green-600" /> WhatsApp (Opcional)</label><input type="text" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="(00) 00000-0000" className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" /><p className="text-xs text-gray-400 mt-1">Usaremos apenas para comunicações importantes sobre sua conta.</p></div>
             </div>
-        )}
+            <div className="text-right"><button onClick={handleSaveProfile} disabled={isSaving || (name === user.name && whatsapp === user.whatsapp)} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Salvar Alterações</button></div>
+        </div>
 
-        {/* PDF TAB */}
-        {activeTab === 'pdf' && (
-            <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4">
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                    <div className="flex justify-between items-start mb-6">
-                        <div>
-                            <label className="block text-lg font-bold text-slate-800 mb-1">
-                                Importador Massivo de PDF (Até 1000 pgs)
-                            </label>
-                            <p className="text-sm text-gray-500">Fatiamento automático: 10 páginas por ciclo. Detecção de erros e pausa inteligente.</p>
-                        </div>
-                        {pdfStatus !== 'idle' && (
-                            <div className="flex items-center gap-2">
-                                <button onClick={handleResetPdf} disabled={pdfStatus === 'processing' || pdfStatus === 'pausing'} title="Cancelar e Novo PDF" className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"><XCircle size={20}/></button>
-                                <button onClick={handleRestartPdf} disabled={pdfStatus === 'processing' || pdfStatus === 'pausing'} title="Reiniciar Processamento" className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors mr-2 disabled:opacity-30 disabled:cursor-not-allowed"><RotateCcw size={20}/></button>
-                                
-                                {pdfStatus === 'processing' ? (
-                                    <button onClick={togglePdfProcessing} className="px-4 py-2 bg-amber-100 text-amber-700 rounded-lg font-bold flex items-center gap-2 hover:bg-amber-200 transition-colors"><Pause size={18}/> Pausar</button>
-                                ) : pdfStatus === 'pausing' ? (
-                                    <button disabled className="px-4 py-2 bg-amber-50 text-amber-400 border border-amber-100 rounded-lg font-bold flex items-center gap-2 cursor-wait"><Loader2 size={18} className="animate-spin"/> Pausando...</button>
-                                ) : (
-                                    <button onClick={togglePdfProcessing} disabled={pdfStatus === 'reading' || pdfStatus === 'completed' || pdfStatus === 'error'} className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg font-bold flex items-center gap-2 hover:bg-emerald-200 transition-colors disabled:opacity-50"><Play size={18}/> {pdfStatus === 'paused' ? 'Continuar' : 'Iniciar'}</button>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                    
-                    {pdfStatus === 'idle' && (
-                        <div className="space-y-4">
-                             {lastSessionData && (
-                                 <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-center gap-4 animate-in slide-in-from-top-2">
-                                     <div className="bg-blue-200 text-blue-700 p-2 rounded-lg">
-                                         <History size={24} />
-                                     </div>
-                                     <div className="flex-1">
-                                         <p className="text-xs font-bold text-blue-500 uppercase">Última Sessão Detectada</p>
-                                         <p className="font-bold text-slate-700 text-sm">Arquivo: {lastSessionData.fileName}</p>
-                                         <p className="text-xs text-slate-500">Parou na fatia: <strong>{lastSessionData.lastChunkPages || 'Desconhecido'}</strong></p>
-                                     </div>
-                                     <div className="text-xs text-blue-400 bg-white/50 px-2 py-1 rounded">
-                                         Se enviar este arquivo novamente,<br/>o sistema continuará automaticamente.
-                                     </div>
-                                 </div>
-                             )}
-
-                             <div className="flex items-end gap-3 p-4 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-                                <div className="flex-1">
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1 flex items-center gap-1"><BookOpen size={12}/> De pg.</label>
-                                    <input type="number" min="1" value={pdfStartPage} onChange={e=>setPdfStartPage(e.target.value)} placeholder="Início" className="w-full p-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"/>
-                                </div>
-                                <div className="flex-1">
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1 flex items-center gap-1"><SkipForward size={12}/> Até pg.</label>
-                                    <input type="number" min="1" value={pdfEndPage} onChange={e=>setPdfEndPage(e.target.value)} placeholder="Fim" className="w-full p-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"/>
-                                </div>
-                                <div className="text-xs text-gray-400 pb-2 w-1/3 leading-tight">
-                                    Deixe em branco para processar o PDF inteiro.
-                                </div>
-                             </div>
-
-                             <div className="w-full h-56 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center bg-gray-50 relative overflow-hidden transition-all hover:border-blue-400">
-                                <div className="text-center pointer-events-none p-4">
-                                    <FileText size={48} className="mx-auto text-gray-400 mb-3" />
-                                    <p className="text-gray-600 font-bold mb-1">Arraste seu PDF aqui</p>
-                                    <p className="text-gray-400 text-sm">Suporta arquivos grandes (100MB+)</p>
-                                </div>
-                                <input type="file" accept="application/pdf" onChange={handlePdfUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                             </div>
-                        </div>
-                    )}
-
-                    {pdfStatus !== 'idle' && (
-                        <div className="space-y-6">
-                            <div className="bg-gray-100 rounded-xl p-4 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className={`p-2 rounded-lg 
-                                        ${pdfStatus === 'error' ? 'bg-red-100 text-red-600' : 
-                                          pdfStatus === 'processing' ? 'bg-blue-100 text-blue-600 animate-pulse' : 
-                                          pdfStatus === 'pausing' ? 'bg-amber-100 text-amber-600 animate-pulse' :
-                                          'bg-gray-200 text-gray-600'}`}>
-                                        {pdfStatus === 'reading' && <Loader2 className="animate-spin" size={24}/>}
-                                        {pdfStatus === 'ready' && <CheckCircle size={24}/>}
-                                        {pdfStatus === 'processing' && <Cpu size={24}/>}
-                                        {pdfStatus === 'pausing' && <Clock size={24}/>}
-                                        {pdfStatus === 'paused' && <Pause size={24}/>}
-                                        {pdfStatus === 'completed' && <CheckCircle size={24}/>}
-                                        {pdfStatus === 'error' && <AlertOctagon size={24}/>}
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-slate-800 text-sm uppercase">
-                                            {pdfStatus === 'reading' ? 'Lendo Arquivo...' : 
-                                             pdfStatus === 'pausing' ? 'Pausando...' : pdfStatus}
-                                        </p>
-                                        <p className="text-xs text-gray-500">{pdfFile?.name} • {pdfChunks.length} fatias</p>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-2xl font-bold text-slate-700">{Math.round((parsedQuestions.filter(q => q.sourceFile === pdfFile?.name).length))} <span className="text-sm font-normal text-gray-400">questões</span></p>
-                                </div>
-                            </div>
-
-                            <div className="border border-gray-200 rounded-xl p-4 max-h-60 overflow-y-auto">
-                                <p className="text-xs font-bold text-gray-400 uppercase mb-2 flex justify-between">
-                                    <span>Timeline (Navegação)</span>
-                                    {pdfStatus === 'paused' && <span className="text-blue-500 text-[10px]">Clique para Navegar (Seek)</span>}
-                                </p>
-                                <div className="grid grid-cols-5 md:grid-cols-8 lg:grid-cols-10 gap-2">
-                                    {pdfChunks.map((chunk, idx) => (
-                                        <button key={chunk.id} 
-                                            onClick={() => handleJumpToChunk(idx)}
-                                            disabled={pdfStatus === 'reading' || pdfStatus === 'processing' || pdfStatus === 'pausing'}
-                                            className={`h-8 rounded-md flex items-center justify-center text-xs font-bold transition-all border
-                                            ${chunk.status === 'pending' ? 'bg-gray-50 text-gray-400 border-gray-200' : ''}
-                                            ${chunk.status === 'success' ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm' : ''}
-                                            ${chunk.status === 'restored' ? 'bg-indigo-100 text-indigo-600 border-indigo-200 shadow-sm' : ''} 
-                                            ${chunk.status === 'error' ? 'bg-red-500 text-white border-red-600 shadow-sm' : ''}
-                                            ${idx === currentChunkIndex && (pdfStatus === 'processing' || pdfStatus === 'pausing') ? 'ring-2 ring-blue-500 ring-offset-1 bg-blue-50 text-blue-600 border-blue-200 animate-pulse' : ''}
-                                            ${(pdfStatus === 'paused' || pdfStatus === 'ready' || pdfStatus === 'completed') ? 'hover:bg-blue-100 hover:text-blue-600 cursor-pointer hover:border-blue-300' : ''}
-                                            ${(pdfStatus === 'processing' || pdfStatus === 'pausing') && idx !== currentChunkIndex ? 'opacity-50 cursor-not-allowed' : ''}
-                                            `}
-                                            title={`Páginas ${chunk.pages} | Erros: ${chunk.errorCount}`}
-                                        >
-                                            {idx + 1}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="bg-slate-900 rounded-xl p-4 font-mono text-xs text-gray-300 h-48 overflow-y-auto shadow-inner flex flex-col-reverse">
-                                {processingLogs.length === 0 && <span className="opacity-50">Aguardando logs...</span>}
-                                {processingLogs.map((log, i) => (
-                                    <div key={i} className={`mb-1 ${log.type === 'error' ? 'text-red-400' : log.type === 'success' ? 'text-emerald-400' : log.type === 'warning' ? 'text-amber-400' : 'text-blue-300'}`}>
-                                        <span className="opacity-50 mr-2">[{log.time}]</span>
-                                        {log.message}
-                                    </div>
-                                ))}
-                                <div className="text-gray-500 border-b border-gray-800 mb-2 pb-1 flex items-center gap-2 sticky top-0 bg-slate-900"><Terminal size={12}/> Console de PDF</div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-        )}
-
-        {/* REVIEW TAB (ATUALIZADA) */}
-        {activeTab === 'review' && (
-            <div className="max-w-4xl mx-auto space-y-4">
-                {parsedQuestions.length > 0 && (
-                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 flex flex-col gap-3 sticky top-20 z-10 animate-in slide-in-from-top-2">
-                        
-                        {/* CABEÇALHO: Título + Lógica + Contador */}
-                        <div className="flex justify-between items-center px-1">
-                            <div className="flex items-center gap-3">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1"><Filter size={10}/> Filtros</span>
-                                
-                                <button 
-                                    onClick={() => setFilterLogic(prev => prev === 'OR' ? 'AND' : 'OR')}
-                                    className={`text-[10px] font-bold px-2 py-0.5 rounded border flex items-center gap-1 transition-all ${filterLogic === 'AND' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}
-                                    title={filterLogic === 'AND' ? "Mostra questões que têm TODAS as características" : "Mostra questões que têm QUALQUER uma das características"}
-                                >
-                                    {filterLogic === 'AND' ? <ToggleRight size={12}/> : <ToggleLeft size={12}/>}
-                                    {filterLogic === 'AND' ? 'E (Restritivo)' : 'OU (Soma)'}
-                                </button>
-                            </div>
-                            <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100">{currentFilteredList.length} questões</span>
-                        </div>
-                        
-                        {/* --- ÁREA DOS BOTÕES (DIVIDIDA EM 2 LINHAS FIXAS) --- */}
-                        <div className="flex flex-col gap-1.5">
-                            
-                            {/* LINHA 1: STATUS & VALIDAÇÃO */}
-                            <div className="flex flex-wrap items-center gap-1.5">
-                                <button onClick={() => toggleFilter('all')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold transition-all border ${activeFilters.includes('all') ? 'bg-blue-600 text-white border-blue-700 shadow-sm' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'}`}>
-                                    Todas
-                                </button>
-                                <div className="w-px h-4 bg-gray-200 mx-1"></div>
-                                <button onClick={() => toggleFilter('verified')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border flex items-center gap-1.5 transition-all ${activeFilters.includes('verified') ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
-                                    <ShieldCheck size={12}/> Verificadas
-                                </button>
-                                <button onClick={() => toggleFilter('suspicious')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border flex items-center gap-1.5 transition-all ${activeFilters.includes('suspicious') ? 'bg-red-100 text-red-700 border-red-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
-                                    <AlertTriangle size={12}/> Suspeitas
-                                </button>
-                                <button onClick={() => toggleFilter('duplicates')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border flex items-center gap-1.5 transition-all ${activeFilters.includes('duplicates') ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
-                                    <Copy size={12}/> Duplicadas
-                                </button>
-                            </div>
-
-                            {/* LINHA 2: CONTEÚDO & FONTE */}
-                            <div className="flex flex-wrap items-center gap-1.5">
-                                <span className="text-[9px] font-bold text-gray-300 uppercase mr-1 select-none">Tipo:</span>
-                                <button onClick={() => toggleFilter('source')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border flex items-center gap-1.5 transition-all ${activeFilters.includes('source') ? 'bg-teal-100 text-teal-700 border-teal-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
-                                    <Globe size={12}/> Com Fonte
-                                </button>
-                                <button onClick={() => toggleFilter('no_source')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border flex items-center gap-1.5 transition-all ${activeFilters.includes('no_source') ? 'bg-slate-100 text-slate-700 border-slate-300' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
-                                    <AlertOctagon size={12}/> Sem Fonte
-                                </button>
-                                <button onClick={() => toggleFilter('needs_image')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border flex items-center gap-1.5 transition-all ${activeFilters.includes('needs_image') ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
-                                    <ImageIcon size={12}/> Requer Imagem
-                                </button>
-                                <button onClick={() => toggleFilter('text_only')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border flex items-center gap-1.5 transition-all ${activeFilters.includes('text_only') ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
-                                    <FileType size={12}/> Texto Puro
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="h-px bg-gray-100 w-full"></div>
-
-                        <div className="flex justify-between items-center gap-2">
-                            <div className="flex items-center gap-1.5">
-                                <button onClick={() => clearAllField('institution')} className="text-[10px] bg-gray-50 border border-gray-200 text-slate-500 px-2 py-1.5 rounded hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all font-bold flex items-center gap-1 whitespace-nowrap"><Eraser size={10}/> Inst.</button>
-                                <button onClick={() => clearAllField('year')} className="text-[10px] bg-gray-50 border border-gray-200 text-slate-500 px-2 py-1.5 rounded hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all font-bold flex items-center gap-1 whitespace-nowrap"><Eraser size={10}/> Ano</button>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                                <button onClick={handleDiscardFilteredClick} disabled={isBatchAction || currentFilteredList.length === 0} className="bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold text-xs px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 whitespace-nowrap">
-                                    <Trash2 size={14} /> Descartar
-                                </button>
-                                
-                                <button onClick={handleApproveFilteredClick} disabled={isBatchAction || currentFilteredList.length === 0} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-1.5 rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 whitespace-nowrap">
-                                    {isBatchAction ? <Loader2 className="animate-spin" size={14}/> : <CheckCircle size={14} />} 
-                                    Aprovar {currentFilteredList.length}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* --- LISTAGEM DAS QUESTÕES (CORRIGIDO: Passando q.id em vez de idx) --- */}
-                {currentFilteredList.length === 0 ? (
-                    <div className="text-center py-20 opacity-50">
-                        <Database size={64} className="mx-auto mb-4 text-gray-300" />
-                        <p className="text-xl font-medium text-gray-500">Nenhuma questão encontrada neste filtro.</p>
-                        {parsedQuestions.length === 0 && <button onClick={() => setActiveTab('input')} className="mt-4 text-blue-600 font-bold hover:underline">Adicionar novas</button>}
-                    </div>
-                ) : (
-                    currentFilteredList.map((q, idx) => (
-                        <div key={q.id} className={`bg-white rounded-2xl shadow-sm border overflow-hidden relative group transition-colors ${q.isDuplicate ? 'border-amber-400 ring-2 ring-amber-100' : 'border-gray-200'}`}>
-                            
-                            <div className="h-1.5 w-full bg-gray-100"><div className="h-full bg-orange-400 w-full animate-pulse"></div></div>
-                            
-                            <div className="bg-gray-50 px-4 py-2 border-b border-gray-100 flex justify-end items-center gap-2 flex-wrap min-h-[40px]">
-                                <div className={`px-3 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 max-w-[250px] ${q.verificationStatus === 'verified' ? 'bg-emerald-100 text-emerald-700' : q.verificationStatus === 'suspicious' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}`} title={q.verificationReason || "Status da verificação"}>
-                                    {q.verificationStatus === 'verified' && <><ShieldCheck size={12} className="flex-shrink-0"/> Double-Checked</>}
-                                    {q.verificationStatus === 'suspicious' && <><ShieldAlert size={12} className="flex-shrink-0"/> <span className="truncate">Suspeita: {q.verificationReason}</span></>}
-                                    {(!q.verificationStatus || q.verificationStatus === 'unchecked') && 'Não Verificada'}
-                                </div>
-                                {q.sourceFound && <div className="bg-teal-100 text-teal-800 px-3 py-1 rounded-full text-[11px] font-bold flex items-center gap-1"><Globe size={12}/> FONTE OK</div>}
-                                {q.isDuplicate && <div className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 animate-pulse"><Copy size={12}/> DUPLICADA</div>}
-                                {q.needsImage && <div className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 animate-pulse border border-purple-200"><ImageIcon size={12}/> REQUER IMAGEM</div>}
-                            </div>
-
-                            <div className="p-6">
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Inst</label><input value={q.institution} onChange={e=>updateQuestionField(q.id,'institution',e.target.value)} className="w-full p-2 bg-gray-50 border rounded-lg text-sm font-bold"/></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Ano</label><input type="number" value={q.year} onChange={e=>updateQuestionField(q.id,'year',e.target.value)} className="w-full p-2 bg-gray-50 border rounded-lg text-sm font-bold"/></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Área</label><select value={q.area} onChange={e=>updateQuestionField(q.id,'area',e.target.value)} className="w-full p-2 bg-blue-50 border border-blue-100 rounded-lg text-sm font-bold text-blue-800"><option value="">Selecione...</option>{areasBase.map(a=><option key={a} value={a}>{a}</option>)}</select></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Tópico</label><select value={q.topic} onChange={e=>updateQuestionField(q.id,'topic',e.target.value)} className="w-full p-2 bg-gray-50 border rounded-lg text-sm font-bold"><option value="">Selecione...</option>{(themesMap[q.area]||[]).map(t=><option key={t} value={t}>{t}</option>)}</select></div>
-                                </div>
-
-                                <div className="mb-6"><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Enunciado</label><textarea value={q.text} onChange={e=>updateQuestionField(q.id,'text',e.target.value)} rows={4} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-slate-800 text-sm focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"/></div>
-
-                                <div className="mb-6 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl">
-                                    <div className="flex justify-between items-center mb-3">
-                                        <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1"><ImageIcon size={12}/> Galeria de Imagens ({q.images?.length || 0})</label>
-                                        {uploadingImageId === q.id && <span className="text-xs text-blue-600 animate-pulse font-bold flex items-center gap-1"><Loader2 size={10} className="animate-spin"/> Enviando...</span>}
-                                    </div>
-                                    <div className="flex flex-wrap gap-3 items-start">
-                                        {q.images?.map((imgUrl, i) => (
-                                            <div key={i} className="relative group w-24 h-24 sm:w-32 sm:h-32 bg-white rounded-lg border border-gray-200 shadow-sm flex-shrink-0">
-                                                <img src={imgUrl} alt={`Img ${i}`} className="w-full h-full object-cover rounded-lg" />
-                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 rounded-lg">
-                                                    <a href={imgUrl} target="_blank" rel="noreferrer" className="text-white hover:text-blue-300"><ExternalLink size={16}/></a>
-                                                    <button onClick={() => deleteImageFromQuestion(idx, q, imgUrl)} className="text-white hover:text-red-400"><Trash2 size={16}/></button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                        <label className={`cursor-pointer w-24 h-24 sm:w-32 sm:h-32 bg-white hover:bg-blue-50 border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-lg flex flex-col items-center justify-center gap-2 text-gray-400 hover:text-blue-500 transition-all ${uploadingImageId === q.id ? 'opacity-50 pointer-events-none' : ''}`}>
-                                            <UploadCloud size={24}/> <span className="text-[10px] font-bold uppercase">Adicionar</span>
-                                            <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUploadToQuestion(e, idx, q)} disabled={uploadingImageId === q.id}/>
-                                        </label>
-                                    </div>
-                                    {q.needsImage && (!q.images || q.images.length === 0) && <p className="mt-2 text-xs text-purple-600 flex items-center gap-1 animate-pulse font-bold"><AlertCircle size={12}/> Esta questão pede imagem!</p>}
-                                </div>
-                              
-                                <div className="space-y-2 mb-6">
-                                    {q.options?.map((opt, optIdx) => (
-                                        <div key={opt.id} className="flex items-center gap-3">
-                                            <div onClick={()=>updateQuestionField(q.id,'correctOptionId',opt.id)} className={`w-8 h-8 rounded-full flex items-center justify-center cursor-pointer font-bold text-sm flex-shrink-0 ${q.correctOptionId===opt.id?'bg-emerald-500 text-white':'bg-gray-100 text-gray-400'}`}>{opt.id.toUpperCase()}</div>
-                                            <input value={opt.text} onChange={e=>updateOptionText(q.id,optIdx,e.target.value)} className={`w-full p-2 border rounded-lg text-sm ${q.correctOptionId===opt.id?'border-emerald-200 bg-emerald-50':'bg-white'}`}/>
-                                        </div>
-                                    ))}
-                                </div>
-                                
-                                <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
-                                    <label className="text-xs font-bold text-amber-700 uppercase flex items-center gap-1 mb-2"><Brain size={12}/> Comentário IA</label>
-                                    <textarea value={q.explanation} onChange={e=>updateQuestionField(q.id,'explanation',e.target.value)} rows={3} className="w-full p-3 bg-white/50 border border-amber-200/50 rounded-lg text-slate-700 text-sm focus:bg-white focus:ring-2 focus:ring-amber-400 outline-none"/>
-                                </div>
-                            </div>
-
-                            <div className="bg-gray-50 px-6 py-4 flex justify-between items-center border-t border-gray-100">
-                                <button onClick={()=>handleDiscardOneClick(q)} className="text-red-500 hover:text-red-700 font-bold text-sm flex items-center gap-1"><Trash2 size={16}/> Descartar</button>
-                                <button onClick={()=>approveQuestion(q)} className={`font-bold text-sm px-6 py-2.5 rounded-lg shadow-lg flex items-center gap-2 transition-all ${q.isDuplicate ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}`}>
-                                    {q.isDuplicate ? <Copy size={18}/> : <CheckCircle size={18}/>} 
-                                    {q.isDuplicate ? 'Atualizar Duplicata' : 'Aprovar e Publicar'}
-                                </button>
-                            </div>
-                        </div>
-                    ))
-                )}
-            </div>
-        )}
-      </main>
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm"><div className="flex items-center gap-4 mb-6"><div className="bg-orange-100 p-3 rounded-full text-orange-600"><Key size={24} /></div><div><h2 className="text-xl font-bold text-slate-900">Segurança</h2><p className="text-slate-500 text-sm">Gerencie sua senha de acesso</p></div></div><div className="flex flex-col md:flex-row items-center justify-between p-4 bg-white rounded-xl border border-gray-100"><div className="mb-4 md:mb-0"><h4 className="font-semibold text-slate-800">Alterar Senha</h4><p className="text-xs text-gray-500">Recomendamos usar uma senha forte e única.</p></div><button onClick={() => setIsPasswordModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white font-bold rounded-lg hover:bg-slate-900 transition-colors"><Key size={18} /> Alterar Senha</button></div></div>
+        
+        <div className="bg-red-50 rounded-2xl border border-red-200 p-6 shadow-sm"><div className="flex items-center gap-4 mb-6"><div className="bg-red-100 p-3 rounded-full text-red-600"><AlertTriangle size={24} /></div><div><h2 className="text-xl font-bold text-red-700">Zona de Perigo</h2><p className="text-red-500 text-sm">Ações irreversíveis de gerenciamento de dados</p></div></div><div className="space-y-4"><div className="flex flex-col md:flex-row items-center justify-between p-4 bg-white rounded-xl border border-red-100"><div className="mb-4 md:mb-0"><h4 className="font-semibold text-slate-800">Resetar Questões</h4><p className="text-xs text-gray-500">Apaga o histórico de respostas. As questões voltam a ser novas.</p></div><button onClick={() => openModal('questions')} className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-600 font-bold rounded-lg hover:bg-red-50 transition-colors"><RotateCcw size={18} /> Resetar Questões</button></div><div className="flex flex-col md:flex-row items-center justify-between p-4 bg-white rounded-xl border border-red-100"><div className="mb-4 md:mb-0"><h4 className="font-semibold text-slate-800">Resetar Tudo</h4><p className="text-xs text-gray-500">Apaga tudo, inclusive sua sequência (streak).</p></div><button onClick={() => openModal('history')} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors"><Trash2 size={18} /> Resetar Tudo</button></div></div></div>
+      </div>
     </div>
   );
+}
+
+function AddQuestionView({ onBack, addToast }) {
+    const [area, setArea] = useState(areasBase[0].id);
+    const [topic, setTopic] = useState('');
+    const [institution, setInstitution] = useState('');
+    const [year, setYear] = useState('');
+    const [text, setText] = useState('');
+    const [options, setOptions] = useState([{ id: 'a', text: '' }, { id: 'b', text: '' }, { id: 'c', text: '' }, { id: 'd', text: '' }, { id: 'e', text: '' }]);
+    const [correctOptionId, setCorrectOptionId] = useState('a');
+    const [explanation, setExplanation] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const availableThemes = useMemo(() => themesMap[area] || [], [area]);
+
+    useEffect(() => { setTopic(''); }, [area]);
+    const handleOptionChange = (id, newText) => { setOptions(prev => prev.map(opt => opt.id === id ? { ...opt, text: newText } : opt)); };
+    const handleSave = async (e) => {
+        e.preventDefault(); setIsSaving(true);
+        const optionA = options.find(o => o.id === 'a').text.trim();
+        const optionB = options.find(o => o.id === 'b').text.trim();
+        if (!text || !topic || !optionA || !optionB) { 
+            addToast('Atenção', 'Preencha a Área, Tópico, Enunciado e as Alternativas A e B.', 'error');
+            setIsSaving(false); return; 
+        }
+        const validOptions = options.filter(opt => opt.text.trim() !== '');
+        if (!validOptions.find(o => o.id === correctOptionId)) { 
+            addToast('Erro', 'A alternativa correta selecionada está vazia.', 'error');
+            setIsSaving(false); return; 
+        }
+        try {
+            const questionData = { area: areaNameMap[area], topic: topic, institution: institution || "", year: year ? parseInt(year) : "", text: text, options: validOptions, correctOptionId: correctOptionId, explanation: explanation || "", createdAt: new Date().toISOString(), hasImage: false, id: null };
+            await addDoc(collection(db, "questions"), questionData);
+            addToast('Sucesso', 'Questão adicionada com sucesso!', 'success');
+            setText(''); setOptions([{ id: 'a', text: '' }, { id: 'b', text: '' }, { id: 'c', text: '' }, { id: 'd', text: '' }, { id: 'e', text: '' }]); setExplanation('');
+        } catch (error) { 
+            addToast('Erro', 'Erro ao salvar no banco de dados.', 'error'); 
+        } finally { setIsSaving(false); }
+    };
+    return (
+        <div className="animate-in fade-in slide-in-from-right-8 duration-500 max-w-4xl mx-auto pb-10"><div className="flex items-center justify-between mb-8"><button onClick={onBack} className="flex items-center text-gray-500 hover:text-blue-600 transition-colors font-medium"><ArrowLeft size={20} className="mr-2" /> Voltar</button><h1 className="text-2xl font-bold">Nova Questão</h1></div><form onSubmit={handleSave} className="space-y-6"><div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="block text-sm font-bold text-slate-700 mb-2">Área</label><select value={area} onChange={e => setArea(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl">{areasBase.map(a => <option key={a.id} value={a.id}>{a.title}</option>)}</select></div><div><label className="block text-sm font-bold text-slate-700 mb-2">Tema</label><select value={topic} onChange={e => setTopic(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl"><option value="">Selecione...</option>{availableThemes.map(t => <option key={t} value={t}>{t}</option>)}</select></div><div><label className="block text-sm font-bold text-slate-700 mb-2">Instituição (Opcional)</label><input type="text" value={institution} onChange={e => setInstitution(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" placeholder="Ex: USP, UNIFESP..." /></div><div><label className="block text-sm font-bold text-slate-700 mb-2">Ano (Opcional)</label><input type="number" value={year} onChange={e => setYear(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-800" placeholder="Ano (opcional)" /></div></div><div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm"><label className="block text-sm font-bold text-slate-700 mb-2">Enunciado</label><textarea value={text} onChange={e => setText(e.target.value)} rows={5} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl resize-y" /></div><div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4"><h3 className="font-bold text-slate-900 border-b border-gray-100 pb-2 mb-4">Alternativas</h3>{options.map((opt) => (<div key={opt.id} className="flex items-start gap-3"><div className="mt-3"><input type="radio" name="correctOption" checked={correctOptionId === opt.id} onChange={() => setCorrectOptionId(opt.id)} className="w-5 h-5 text-blue-600 focus:ring-blue-500 cursor-pointer"/></div><div className="flex-1"><label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Opção {opt.id}</label><textarea value={opt.text} onChange={e => handleOptionChange(opt.id, e.target.value)} rows={2} className={`w-full px-4 py-3 border rounded-xl resize-none ${correctOptionId === opt.id ? 'bg-emerald-50 border-emerald-200 focus:ring-emerald-500' : 'bg-gray-50 border-gray-200 focus:ring-blue-500'}`} placeholder={`Texto da alternativa ${opt.id.toUpperCase()}`} /></div></div>))}</div><div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm"><label className="block text-sm font-bold text-slate-700 mb-2">Comentário</label><textarea value={explanation} onChange={e => setExplanation(e.target.value)} rows={4} className="w-full px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl resize-y" /></div><div className="flex justify-end gap-4"><button type="button" onClick={onBack} className="px-6 py-3 rounded-xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-50">Cancelar</button><button type="submit" disabled={isSaving} className="px-8 py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 disabled:opacity-50">{isSaving ? 'Salvando...' : 'Salvar Questão'}</button></div></form></div>
+    );
 }
