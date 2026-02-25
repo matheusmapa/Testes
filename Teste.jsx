@@ -1,341 +1,620 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
-  CheckCircle, Map, Star, ShieldCheck, Zap, 
-  ArrowRight, BrainCircuit, Target, BarChart3, 
-  PlayCircle, Check, Users, Sparkles, Diamond,
-  Trophy, BookOpen, Lock
+  ArrowRight,
+  Award,
+  BookOpen,
+  Bot,
+  Brain,
+  CheckCircle,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Gift,
+  Globe,
+  Layout,
+  MessageCircle,
+  MonitorPlay,
+  Plane,
+  Play,
+  Shield,
+  Sparkles,
+  Star,
+  Users
 } from 'lucide-react';
 
-export default function LandingPage() {
-  
-  const handleLogin = () => {
-    window.location.href = '/'; 
-  };
+// ==========================================
+// 1. Hero Section (A Primeira Dobra)
+// ==========================================
+const HeroSection = () => {
+  return (
+    <section className="bg-slate-900 text-white py-20 px-4 relative overflow-hidden">
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 opacity-20">
+        <div className="absolute -top-[20%] -right-[10%] w-[50%] h-[50%] rounded-full bg-blue-500 blur-[120px]"></div>
+        <div className="absolute top-[60%] -left-[10%] w-[40%] h-[40%] rounded-full bg-purple-600 blur-[120px]"></div>
+      </div>
 
-  const handleDemo = () => {
-    // Pode redirecionar para uma rota de degustação ou rolar a página
-    document.getElementById('recursos').scrollIntoView({ behavior: 'smooth' });
-  };
+      <div className="max-w-5xl mx-auto text-center relative z-10">
+        <div className="mb-8 inline-flex items-center justify-center bg-white/10 border border-white/20 px-6 py-2 rounded-full backdrop-blur-sm">
+          <Brain className="w-5 h-5 text-blue-400 mr-2" />
+          <span className="font-bold tracking-wider text-sm">ITR | Inglês em Tempo Recorde</span>
+        </div>
 
-  const handleCheckout = () => {
-    document.getElementById('planos').scrollIntoView({ behavior: 'smooth' });
+        <h1 className="text-4xl md:text-6xl font-extrabold mb-6 leading-tight">
+          Inglês em tempo recorde <br className="hidden md:block" />
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
+            Aprimore seu Inglês de uma vez por todas
+          </span>
+        </h1>
+
+        <p className="text-lg md:text-2xl mb-10 text-slate-300 max-w-3xl mx-auto leading-relaxed">
+          Vou te mostrar o segredo para melhorar seu inglês e atingir a fluência de uma vez por todas. Nova metodologia, direto ao ponto, envolvendo técnicas de memorização que funcionam de verdade.
+        </p>
+
+        <button className="group bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-extrabold text-lg md:text-2xl py-5 px-8 rounded-full shadow-[0_0_30px_rgba(16,185,129,0.4)] transform transition-all duration-300 hover:scale-105 w-full md:w-auto flex items-center justify-center mx-auto">
+          SIM, EU QUERO APRIMORAR MEU INGLÊS
+          <ArrowRight className="ml-3 w-6 h-6 group-hover:translate-x-2 transition-transform" />
+        </button>
+      </div>
+    </section>
+  );
+};
+
+// ==========================================
+// 2. Seção de Benefícios
+// ==========================================
+const BenefitsSection = () => {
+  const benefits = [
+    { text: "Aprenda a pensar em inglês sem traduzir", icon: <Brain className="w-6 h-6 text-emerald-500" /> },
+    { text: "Domine a conversação e escuta com confiança e naturalidade", icon: <MessageCircle className="w-6 h-6 text-emerald-500" /> },
+    { text: "Memorize centenas de palavras em tempo recorde", icon: <Clock className="w-6 h-6 text-emerald-500" /> },
+    { text: "Use um método testado e validado por alunos reais", icon: <CheckCircle className="w-6 h-6 text-emerald-500" /> },
+    { text: "Aprenda no seu ritmo, sem complicações", icon: <Shield className="w-6 h-6 text-emerald-500" /> },
+    { text: "Em uma semana você perceberá uma evolução inimaginável", icon: <Award className="w-6 h-6 text-emerald-500" /> }
+  ];
+
+  return (
+    <section className="py-20 px-4 bg-white">
+      <div className="max-w-5xl mx-auto">
+        <h2 className="text-3xl md:text-5xl font-bold text-center mb-16 text-slate-800">
+          O que você vai <span className="text-emerald-500">conquistar</span>
+        </h2>
+        
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {benefits.map((benefit, index) => (
+            <div key={index} className="bg-slate-50 p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow flex flex-col items-center text-center">
+              <div className="bg-emerald-100 p-4 rounded-full mb-4">
+                {benefit.icon}
+              </div>
+              <p className="text-lg font-medium text-slate-700">
+                {benefit.text.split(/(pensar em inglês sem traduzir|confiança e naturalidade|centenas de palavras em tempo recorde|método testado e validado por alunos reais|sem complicações)/).map((part, i) => 
+                  ['pensar em inglês sem traduzir', 'confiança e naturalidade', 'centenas de palavras em tempo recorde', 'método testado e validado por alunos reais', 'sem complicações'].includes(part) ? 
+                  <span key={i} className="text-emerald-600 font-bold">{part}</span> : part
+                )}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// ==========================================
+// 3. Seção de Público-Alvo
+// ==========================================
+const TargetAudienceSection = () => {
+  const targets = [
+    "SE VOCÊ JÁ FEZ CURSO DE INGLÊS E DESISTIU",
+    "SE VOCÊ ESTÁ FAZENDO INGLÊS E QUER ACELERAR SEUS RESULTADOS",
+    "SE VOCÊ JÁ TERMINOU UM CURSO, MAS PERCEBE QUE TEM ALGUMAS LIMITAÇÕES",
+    "SE VOCÊ NÃO APRENDEU INGLÊS ATÉ HOJE POR CONTA DE MÉTODOS EQUIVOCADOS",
+    "SE VOCÊ QUER ATINGIR A FLUÊNCIA EM TEMPO RECORDE"
+  ];
+
+  return (
+    <section className="py-20 px-4 bg-slate-100">
+      <div className="max-w-4xl mx-auto">
+        <h2 className="text-3xl md:text-5xl font-bold text-center mb-12 text-slate-800">
+          Esse curso é <span className="text-blue-500">para você</span>
+        </h2>
+        
+        <div className="space-y-4 mb-12">
+          {targets.map((target, index) => (
+            <div key={index} className="flex items-center bg-white p-5 rounded-xl shadow-sm border-l-4 border-blue-500 transform transition-transform hover:-translate-y-1">
+              <CheckCircle className="w-6 h-6 text-blue-500 mr-4 flex-shrink-0" />
+              <p className="font-bold text-slate-700 text-sm md:text-base">{target}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="text-center">
+          <button className="group bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-extrabold text-lg md:text-2xl py-5 px-8 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.3)] transform transition-all duration-300 hover:scale-105 w-full md:w-auto inline-flex items-center justify-center">
+            SIM, EU QUERO APRIMORAR MEU INGLÊS
+            <ArrowRight className="ml-3 w-6 h-6 group-hover:translate-x-2 transition-transform" />
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// ==========================================
+// 4. Seção de Prova Social e Autoridade
+// ==========================================
+const SocialProofSection = () => {
+  const quotes = [
+    {
+      name: "Bill Gates",
+      role: "Fundador da Microsoft",
+      quote: "Em um mundo que está cada vez mais conectado, quem domina o inglês sai na frente."
+    },
+    {
+      name: "Warren Buffett",
+      role: "O mais bem sucedido investidor do século XX",
+      quote: "O melhor investimento que você pode fazer é em si mesmo. Quanto mais você aprende, mais você ganha."
+    },
+    {
+      name: "Gustavo Kuerten (Guga)",
+      role: "Maior tenista da história do Brasil",
+      quote: "O inglês abriu portas na minha carreira internacional. Se eu não falasse, ia perder metade das oportunidades."
+    }
+  ];
+
+  return (
+    <section className="py-20 px-4 bg-white">
+      <div className="max-w-5xl mx-auto">
+        
+        {/* Seção de Prints do WhatsApp */}
+        <div className="mb-24">
+          <h2 className="text-3xl md:text-5xl font-bold text-center mb-12 text-slate-800">
+            Resultados de <span className="text-emerald-500">Alunos Reais</span>
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* Criando 8 espaços para os prints que você vai adicionar as imagens depois */}
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((item) => (
+              <div key={item} className="bg-slate-100 rounded-xl aspect-[9/16] flex flex-col items-center justify-center border border-slate-200 shadow-sm relative overflow-hidden group">
+                <MessageCircle className="w-10 h-10 text-emerald-400 mb-2 opacity-50" />
+                <span className="text-slate-400 font-medium text-sm">Print WhatsApp {item}</span>
+                <div className="absolute inset-0 bg-emerald-500/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Seção de Autoridades */}
+        <div>
+          <h2 className="text-3xl md:text-5xl font-bold text-center mb-12 text-slate-800">
+            O que dizem os <span className="text-blue-500">Gigantes</span>
+          </h2>
+          <div className="grid md:grid-cols-3 gap-8">
+            {quotes.map((item, index) => (
+              <div key={index} className="bg-slate-50 p-8 rounded-2xl border border-slate-100 shadow-sm relative transform transition-transform hover:-translate-y-2 hover:shadow-md">
+                <Star className="w-8 h-8 text-yellow-400 absolute -top-4 -left-4 bg-white rounded-full p-1 shadow-sm" fill="currentColor" />
+                <p className="text-slate-600 italic mb-6 relative z-10 leading-relaxed">
+                  "{item.quote}"
+                </p>
+                <div>
+                  <h4 className="font-bold text-slate-800 text-lg">{item.name}</h4>
+                  <p className="text-sm text-emerald-600 font-medium">{item.role}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+      </div>
+    </section>
+  );
+};
+
+// ==========================================
+// 5. Seção de Composição do Produto
+// ==========================================
+const CourseCompositionSection = () => {
+  const features = [
+    { text: "Módulos direcionados para o seu nível de inglês atual", icon: <Layout className="w-6 h-6 text-blue-500" /> },
+    { text: "Acesso imediato ao curso completo", icon: <Play className="w-6 h-6 text-blue-500" /> },
+    { text: "Aulas curtas e práticas com direcionamento completo", icon: <Clock className="w-6 h-6 text-blue-500" /> },
+    { text: "Material de apoio", icon: <BookOpen className="w-6 h-6 text-blue-500" /> },
+    { text: "Suporte direto com o criador do método", icon: <Users className="w-6 h-6 text-blue-500" /> },
+    { text: "Diversos Bônus", icon: <Gift className="w-6 h-6 text-blue-500" /> }
+  ];
+
+  return (
+    <section className="py-24 px-4 bg-slate-900 text-white relative overflow-hidden">
+      {/* Efeitos de luz no fundo */}
+      <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[100px] pointer-events-none"></div>
+      
+      <div className="max-w-5xl mx-auto relative z-10">
+        <h2 className="text-3xl md:text-5xl font-bold text-center mb-16">
+          Como o <span className="text-blue-400">ITR</span> é formado?
+        </h2>
+        
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {features.map((feature, index) => (
+            <div key={index} className="bg-slate-800/50 backdrop-blur-sm p-8 rounded-2xl border border-slate-700 hover:bg-slate-800 transition-colors group">
+              <div className="bg-slate-900 w-14 h-14 rounded-xl flex items-center justify-center mb-6 shadow-inner border border-slate-700 group-hover:scale-110 transition-transform duration-300">
+                {feature.icon}
+              </div>
+              <p className="text-lg font-medium text-slate-200 leading-relaxed">
+                {feature.text}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// ==========================================
+// 6. Seção da Estrutura dos Módulos
+// ==========================================
+const ModulesSection = () => {
+  const modules = [
+    { num: "0", title: "Comece por aqui", desc: "Apresentação detalhada de como funcionará o curso e a metodologia." },
+    { num: "1", title: "A Base do Método", desc: "Todo o conhecimento e técnicas necessárias para iniciar o seu aprendizado da forma correta." },
+    { num: "2", title: "Inglês Zero e Básico", desc: "Direcionamento específico para quem está começando do zero ou tem apenas a base." },
+    { num: "3", title: "Inglês Intermediário", desc: "Direcionamento focado para quem já entende algo, mas trava na hora de evoluir." },
+    { num: "4", title: "Inglês Avançado", desc: "Direcionamento para nível avançado com foco em destravar dificuldades específicas." },
+    { num: "5", title: "O Próximo Nível", desc: "Mensagem final com um kit exclusivo de dicas práticas para aplicar no dia a dia." }
+  ];
+
+  return (
+    <section className="py-24 px-4 bg-slate-50">
+      <div className="max-w-4xl mx-auto">
+        <div className="text-center mb-16">
+          <span className="text-emerald-500 font-bold tracking-wider uppercase text-sm mb-2 block">Estrutura Completa</span>
+          <h2 className="text-3xl md:text-5xl font-bold text-slate-800">
+            Conheça os <span className="text-emerald-500">Módulos</span>
+          </h2>
+        </div>
+        
+        <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-1 before:bg-gradient-to-b before:from-transparent before:via-slate-300 before:to-transparent">
+          {modules.map((mod, index) => (
+            <div key={index} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+              
+              {/* Ícone central da timeline */}
+              <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-slate-50 bg-emerald-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
+                <span className="font-bold text-sm">{mod.num}</span>
+              </div>
+              
+              {/* Card do Módulo */}
+              <div className="w-[calc(100%-4rem)] md:w-[calc(50%-3rem)] bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+                <div className="flex items-center mb-2">
+                  <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">
+                    Módulo {mod.num}
+                  </span>
+                </div>
+                <h3 className="text-xl font-bold text-slate-800 mb-2">{mod.title}</h3>
+                <p className="text-slate-600 leading-relaxed">{mod.desc}</p>
+              </div>
+
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// ==========================================
+// 7. Seção de Bônus e Visão de Futuro
+// ==========================================
+const BonusSection = () => {
+  const bonuses = [
+    { 
+      title: "Módulo 6: Expansão", 
+      desc: "Técnicas de memorização testadas para você aplicar em outras áreas da sua vida (estudos, trabalho, etc).", 
+      icon: <Brain className="w-8 h-8 text-yellow-600" /> 
+    },
+    { 
+      title: "IA Personalizada", 
+      desc: "Acesso exclusivo a uma Inteligência Artificial treinada e personalizada para te ajudar a praticar o inglês 24/7.", 
+      icon: <Bot className="w-8 h-8 text-yellow-600" /> 
+    },
+    { 
+      title: "Comunidade VIP", 
+      desc: "Acesso ao grupo fechado no WhatsApp para trocar experiências, tirar dúvidas e receber conteúdos exclusivos.", 
+      icon: <Users className="w-8 h-8 text-yellow-600" /> 
+    }
+  ];
+
+  return (
+    <section className="py-24 px-4 bg-emerald-900 text-white relative overflow-hidden">
+      {/* Elementos de fundo */}
+      <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+        <div className="absolute top-10 left-10 w-32 h-32 bg-yellow-400 rounded-full blur-[80px]"></div>
+        <div className="absolute bottom-10 right-10 w-40 h-40 bg-emerald-400 rounded-full blur-[100px]"></div>
+      </div>
+
+      <div className="max-w-5xl mx-auto relative z-10">
+        <div className="text-center mb-16">
+          <div className="inline-flex items-center justify-center bg-yellow-500/20 text-yellow-400 font-bold px-4 py-1.5 rounded-full mb-4 border border-yellow-500/30">
+            <Sparkles className="w-4 h-4 mr-2" />
+            PRESENTES EXCLUSIVOS
+          </div>
+          <h2 className="text-3xl md:text-5xl font-bold">
+            Garantindo sua vaga hoje, <br className="hidden md:block" />
+            você <span className="text-yellow-400">leva de bônus:</span>
+          </h2>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-6 mb-20">
+          {bonuses.map((bonus, index) => (
+            <div key={index} className="bg-emerald-800/50 backdrop-blur-md border border-emerald-700 p-8 rounded-2xl transform transition-transform hover:-translate-y-2 hover:bg-emerald-800">
+              <div className="bg-yellow-400/20 w-16 h-16 rounded-2xl flex items-center justify-center mb-6 border border-yellow-400/30">
+                {bonus.icon}
+              </div>
+              <h3 className="text-xl font-bold mb-3 text-yellow-400">{bonus.title}</h3>
+              <p className="text-emerald-100 leading-relaxed">{bonus.desc}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Visão de Futuro (Aspiracional) */}
+        <div className="bg-gradient-to-r from-emerald-800 to-slate-900 p-8 md:p-12 rounded-3xl border border-emerald-700/50 shadow-2xl relative overflow-hidden">
+          <div className="absolute -right-10 -top-10 opacity-10">
+            <Globe className="w-64 h-64 text-white" />
+          </div>
+          <div className="relative z-10 max-w-3xl">
+            <h3 className="text-2xl md:text-3xl font-bold mb-6 text-white">
+              Feche os olhos e imagine...
+            </h3>
+            <p className="text-lg md:text-xl text-emerald-100 leading-relaxed font-light italic mb-8">
+              "Você fazendo a viagem dos sonhos conversando de forma fluente, podendo assistir conteúdos em inglês, filmes, séries e vídeos sem legenda, fazendo buscas na internet e dominando o mundo ao seu redor. Tudo isso por conta de uma nova metodologia que você decidiu aprender hoje."
+            </p>
+            <div className="flex gap-4 text-emerald-400">
+              <Plane className="w-6 h-6" />
+              <MonitorPlay className="w-6 h-6" />
+              <MessageCircle className="w-6 h-6" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// ==========================================
+// 8. Seção de Oferta e Preço
+// ==========================================
+const OfferSection = () => {
+  return (
+    <section className="py-24 px-4 bg-slate-50 relative">
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-white rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.1)] border-t-8 border-emerald-500 overflow-hidden">
+          <div className="p-8 md:p-16 text-center">
+            
+            <h2 className="text-3xl md:text-4xl font-extrabold text-slate-800 mb-4">
+              A hora de agir é <span className="text-emerald-500">agora</span>
+            </h2>
+            <p className="text-lg text-slate-600 mb-10">
+              Tenha acesso imediato a todo o método ITR, todos os módulos e todos os bônus exclusivos.
+            </p>
+
+            <div className="flex flex-col items-center justify-center mb-10">
+              <p className="text-slate-400 font-medium text-lg line-through decoration-red-400 decoration-2 mb-2">
+                De R$ 399,00
+              </p>
+              <div className="flex items-start justify-center gap-2">
+                <span className="text-2xl font-bold text-slate-800 mt-2">por apenas</span>
+                <span className="text-6xl md:text-8xl font-black text-emerald-500 tracking-tighter">
+                  R$ 200
+                </span>
+              </div>
+              <p className="text-slate-500 font-medium mt-4 bg-slate-100 px-4 py-1 rounded-full">
+                Pagamento único e acesso vitalício
+              </p>
+            </div>
+
+            <button className="group bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-extrabold text-xl md:text-3xl py-6 px-10 rounded-full shadow-[0_0_30px_rgba(16,185,129,0.4)] transform transition-all duration-300 hover:scale-105 w-full md:w-auto flex items-center justify-center mx-auto mb-6">
+              SIM, EU QUERO APRIMORAR MEU INGLÊS
+              <ArrowRight className="ml-3 w-8 h-8 group-hover:translate-x-2 transition-transform" />
+            </button>
+
+            <div className="flex items-center justify-center gap-4 text-slate-500 text-sm font-medium">
+              <span className="flex items-center gap-1"><Shield className="w-4 h-4 text-emerald-500" /> Compra Segura</span>
+              <span className="flex items-center gap-1"><Award className="w-4 h-4 text-emerald-500" /> Garantia de 7 dias</span>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// ==========================================
+// 9. Seção de FAQ (Dúvidas Frequentes)
+// ==========================================
+const FAQSection = () => {
+  const [openIndex, setOpenIndex] = useState(null);
+
+  const faqs = [
+    {
+      q: "Minha rotina é corrida e não tenho tempo para me dedicar",
+      a: "O acesso é vitalício e o conhecimento que passarei pode ser adaptado para diferentes rotinas."
+    },
+    {
+      q: "Tenho zero conhecimento em inglês, esse curso serve para mim?",
+      a: "Sim, ele vai te ajudar muito nessa jornada. Esse curso foi projetado para pessoas que já têm certo nível de contato, mas todas as técnicas de memorização e aprendizado são aplicadas para quem está iniciando, fazendo com que você aprenda em tempo recorde."
+    },
+    {
+      q: "Tem certificado aprovado pelo MEC?",
+      a: "Seu certificado será o seu resultado assustador que você terá em pouco tempo dominando a língua."
+    },
+    {
+      q: "Quando vou receber o acesso ao meu curso?",
+      a: "Logo após o pagamento você será redirecionado e receberá seu acesso imediato por e-mail."
+    },
+    {
+      q: "A compra é segura?",
+      a: "Sim, o pagamento é feito de forma 100% segura, com todas as suas informações protegidas."
+    },
+    {
+      q: "Não tenho dinheiro, o que eu faço?",
+      a: "Imagina que esse curso vai acelerar seu aprendizado em um nível absurdo, você vai economizar e muito em meses ou anos de aulas de inglês tradicionais. Lembre-se: TEMPO não tem preço."
+    },
+    {
+      q: "E se eu não tiver resultado com o método?",
+      a: "Eu garanto que você terá resultado. Mas se você for a primeira pessoa a não ter, eu quero sentar com você e conversar sobre tudo que aconteceu, porque meu objetivo é que todos tenham sucesso, sem ninguém ficar para trás."
+    },
+    {
+      q: "Caso eu mude de ideia, posso realizar estorno?",
+      a: "Sim! Você tem 7 dias para alinhar seus pensamentos e iniciar nesse novo mundo. Caso isso não aconteça, iremos reembolsar o valor integral do seu investimento."
+    }
+  ];
+
+  const toggleFAQ = (index) => {
+    setOpenIndex(openIndex === index ? null : index);
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800 overflow-x-hidden selection:bg-blue-500 selection:text-white">
-      
-      {/* NAVBAR GLASSMORPHISM */}
-      <nav className="w-full bg-white/70 backdrop-blur-lg border-b border-gray-200/50 fixed top-0 z-50 transition-all duration-300">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.scrollTo(0,0)}>
-            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-2.5 rounded-xl text-white shadow-lg shadow-blue-500/30">
-              <Map size={26} strokeWidth={2.5} />
+    <section className="py-24 px-4 bg-white">
+      <div className="max-w-3xl mx-auto">
+        <h2 className="text-3xl md:text-5xl font-bold text-center mb-12 text-slate-800">
+          Perguntas <span className="text-emerald-500">Frequentes</span>
+        </h2>
+        
+        <div className="space-y-4 mb-12">
+          {faqs.map((faq, index) => (
+            <div 
+              key={index} 
+              className={`border rounded-2xl overflow-hidden transition-all duration-300 ${openIndex === index ? 'border-emerald-500 shadow-md bg-emerald-50/30' : 'border-slate-200 bg-white hover:border-emerald-300'}`}
+            >
+              <button 
+                className="w-full px-6 py-5 text-left flex justify-between items-center focus:outline-none"
+                onClick={() => toggleFAQ(index)}
+              >
+                <span className={`font-bold pr-4 ${openIndex === index ? 'text-emerald-700' : 'text-slate-700'}`}>
+                  {faq.q}
+                </span>
+                {openIndex === index ? (
+                  <ChevronUp className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                ) : (
+                  <ChevronDown className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                )}
+              </button>
+              
+              <div 
+                className={`px-6 overflow-hidden transition-all duration-300 ease-in-out ${openIndex === index ? 'max-h-48 pb-5 opacity-100' : 'max-h-0 opacity-0'}`}
+              >
+                <p className="text-slate-600 leading-relaxed">
+                  {faq.a}
+                </p>
+              </div>
             </div>
-            <span className="text-2xl font-black tracking-tighter text-slate-900">MedMaps</span>
-          </div>
-          <div className="flex items-center gap-4 md:gap-6">
-            <button 
-              onClick={handleDemo}
-              className="text-sm font-bold text-slate-500 hover:text-blue-600 transition-colors hidden sm:flex items-center gap-1"
-            >
-              Espiar Plataforma
-            </button>
-            <button 
-              onClick={handleLogin}
-              className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-2.5 rounded-xl font-bold text-sm transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2 border border-slate-200 shadow-sm"
-            >
-              <Lock size={16} /> Já sou aluno
-            </button>
-          </div>
-        </div>
-      </nav>
-
-      {/* HERO SECTION ULTRA-PREMIUM */}
-      <section className="relative pt-40 pb-20 lg:pt-52 lg:pb-32 px-4 overflow-hidden">
-        {/* Efeitos de Fundo Modernos */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[600px] opacity-30 pointer-events-none -z-10">
-            <div className="absolute top-20 left-10 w-72 h-72 bg-blue-400 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob"></div>
-            <div className="absolute top-20 right-10 w-72 h-72 bg-indigo-400 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-2000"></div>
-            <div className="absolute -bottom-8 left-1/2 w-72 h-72 bg-purple-400 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-4000"></div>
+          ))}
         </div>
 
-        <div className="max-w-5xl mx-auto text-center relative z-10">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-gray-200 shadow-sm mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <Map size={16} className="text-blue-600" strokeWidth={3} />
-            <span className="text-xs md:text-sm font-bold text-slate-700 uppercase tracking-wide">Sua rota para a residência</span>
-          </div>
-          
-          <h1 className="text-5xl md:text-7xl lg:text-[5rem] font-black text-slate-900 tracking-tight mb-8 leading-[1.05] animate-in fade-in slide-in-from-bottom-6 duration-700">
-            O melhor custo-benefício <br className="hidden lg:block"/>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600">
-              para a sua aprovação.
-            </span>
-          </h1>
-          
-          <p className="text-lg md:text-2xl text-slate-500 max-w-3xl mx-auto font-medium mb-12 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-150 leading-relaxed">
-            <Diamond className="inline text-blue-500 mb-1 mr-1" size={20}/> Recursos premium por um preço justo. <br className="hidden md:block"/>
-            Acabe com a frustração dos PDFs infinitos usando <strong className="text-slate-700">Análise de Erros Cirúrgica</strong> e <strong className="text-slate-700">Flashcards Inteligentes</strong> para focar no que realmente cai nas bancas.
-          </p>
-          
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16 animate-in fade-in slide-in-from-bottom-10 duration-700 delay-300">
-            <button 
-              onClick={handleCheckout}
-              className="w-full sm:w-auto px-8 py-4 rounded-2xl font-black text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-xl shadow-blue-500/30 transition-all transform hover:-translate-y-1 hover:shadow-2xl flex items-center justify-center gap-3 text-lg"
-            >
-              Garanta sua vaga aqui <ArrowRight size={20} />
-            </button>
-            <button 
-              onClick={handleDemo}
-              className="w-full sm:w-auto px-8 py-4 rounded-2xl font-bold text-slate-700 bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all shadow-sm hover:shadow flex items-center justify-center gap-2 text-lg"
-            >
-              <PlayCircle size={20} className="text-blue-600" /> Espiar Plataforma
-            </button>
-          </div>
-
-          {/* SOCIAL PROOF MICRO-COMPONENTE */}
-          <div className="flex flex-col items-center justify-center gap-3 animate-in fade-in duration-1000 delay-500">
-              <div className="flex -space-x-3">
-                  {[1,2,3,4,5].map((i) => (
-                      <img key={i} src={`https://i.pravatar.cc/100?img=${i+10}`} alt="Estudante" className="w-10 h-10 rounded-full border-2 border-white shadow-sm" />
-                  ))}
-              </div>
-              <div className="flex items-center gap-2 text-sm font-bold text-slate-600">
-                  <div className="flex text-amber-400"><Star size={16} fill="currentColor"/><Star size={16} fill="currentColor"/><Star size={16} fill="currentColor"/><Star size={16} fill="currentColor"/><Star size={16} fill="currentColor"/></div>
-                  <span>Junte-se aos futuros residentes</span>
-              </div>
-          </div>
+        <div className="text-center mt-12">
+          <button className="group bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-extrabold text-lg md:text-2xl py-5 px-8 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.3)] transform transition-all duration-300 hover:scale-105 w-full md:w-auto inline-flex items-center justify-center">
+            SIM, EU QUERO APRIMORAR MEU INGLÊS
+            <ArrowRight className="ml-3 w-6 h-6 group-hover:translate-x-2 transition-transform" />
+          </button>
         </div>
-      </section>
+      </div>
+    </section>
+  );
+};
 
-      {/* BANNER DE AUTORIDADE */}
-      <section className="py-10 bg-slate-900 text-white">
-          <div className="max-w-7xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-8 divide-x divide-slate-800">
-              <div className="text-center px-4">
-                  <p className="text-4xl md:text-5xl font-black text-blue-400 mb-2">100%</p>
-                  <p className="text-xs md:text-sm font-bold text-slate-400 uppercase tracking-wider">Questões Comentadas</p>
-              </div>
-              <div className="text-center px-4">
-                  <p className="text-4xl md:text-5xl font-black text-indigo-400 mb-2">SRS</p>
-                  <p className="text-xs md:text-sm font-bold text-slate-400 uppercase tracking-wider">Repetição Espaçada</p>
-              </div>
-              <div className="text-center px-4">
-                  <p className="text-4xl md:text-5xl font-black text-purple-400 mb-2"><BarChart3 size={40} className="mx-auto inline"/></p>
-                  <p className="text-xs md:text-sm font-bold text-slate-400 uppercase tracking-wider">Raio-X de Desempenho</p>
-              </div>
-              <div className="text-center px-4">
-                  <p className="text-4xl md:text-5xl font-black text-emerald-400 mb-2">24/7</p>
-                  <p className="text-xs md:text-sm font-bold text-slate-400 uppercase tracking-wider">Acesso Ilimitado</p>
-              </div>
-          </div>
-      </section>
+// ==========================================
+// 10. Seção do Mentor e Footer
+// ==========================================
+const MentorAndFooterSection = () => {
+  return (
+    <>
+      <section className="py-24 px-4 bg-slate-900 text-white relative overflow-hidden">
+        {/* Fundo decorativo */}
+        <div className="absolute top-0 right-0 w-1/2 h-full bg-slate-800 skew-x-12 translate-x-20 opacity-50 pointer-events-none"></div>
 
-      {/* FEATURES - O ECOSSISTEMA */}
-      <section id="recursos" className="py-24 bg-white relative">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-20">
-            <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-6">A anatomia da sua aprovação</h2>
-            <p className="text-xl text-slate-500 font-medium max-w-3xl mx-auto">Não somos apenas um banco de questões. Somos um <strong>Ecossistema de Alta Performance</strong> focado em lapidar o seu conhecimento de forma ativa.</p>
-          </div>
+        <div className="max-w-5xl mx-auto relative z-10 flex flex-col md:flex-row items-center gap-12">
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">
+          {/* Espaço para a foto do Mentor */}
+          <div className="w-full md:w-5/12">
+            <div className="aspect-[4/5] bg-slate-700 rounded-3xl overflow-hidden relative shadow-2xl border-4 border-slate-800">
+              <div className="absolute inset-0 flex items-center justify-center text-slate-500 flex-col">
+                <Users className="w-16 h-16 mb-4 opacity-50" />
+                <span className="font-medium">Sua Foto Aqui</span>
+              </div>
+              {/* Quando tiver a foto, use a tag img abaixo */}
+              {/* <img src="caminho-da-foto.jpg" alt="Ronaldo Durães" className="w-full h-full object-cover" /> */}
+            </div>
             
-            <div className="p-10 rounded-[2rem] bg-gradient-to-br from-slate-50 to-white border border-gray-100 hover:border-blue-200 shadow-sm hover:shadow-2xl hover:shadow-blue-900/5 transition-all duration-300 group relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity"><Target size={120}/></div>
-              <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 group-hover:rotate-3 transition-transform shadow-inner">
-                <Target size={32} strokeWidth={2.5}/>
-              </div>
-              <h3 className="text-2xl font-black text-slate-900 mb-4">Motor de Questões de Elite</h3>
-              <p className="text-slate-600 text-lg leading-relaxed mb-6">Simule o dia da prova filtrando por Grande Área, Tópico e Banca. Acervo massivo em constante atualização com gabaritos detalhados para você nunca mais cair em pegadinhas.</p>
-              <ul className="space-y-3">
-                  <li className="flex items-center gap-3 text-slate-700 font-medium"><CheckCircle size={18} className="text-blue-500"/> Filtros avançados por Instituição e Ano</li>
-                  <li className="flex items-center gap-3 text-slate-700 font-medium"><CheckCircle size={18} className="text-blue-500"/> Comentários objetivos e direto ao ponto</li>
-              </ul>
+            <div className="mt-8 text-center md:text-left">
+              <h3 className="text-3xl font-extrabold text-white mb-2">Ronaldo Durães</h3>
+              <p className="text-emerald-400 font-medium">Criador do Método ITR</p>
             </div>
-
-            <div className="p-10 rounded-[2rem] bg-gradient-to-br from-slate-50 to-white border border-gray-100 hover:border-indigo-200 shadow-sm hover:shadow-2xl hover:shadow-indigo-900/5 transition-all duration-300 group relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity"><BookOpen size={120}/></div>
-              <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 group-hover:-rotate-3 transition-transform shadow-inner">
-                <BookOpen size={32} strokeWidth={2.5}/>
-              </div>
-              <h3 className="text-2xl font-black text-slate-900 mb-4">Flashcards & Revisão Espaçada</h3>
-              <p className="text-slate-600 text-lg leading-relaxed mb-6">O Sistema Anti-Esquecimento integrado (SRS) programa suas revisões automaticamente para o exato momento em que seu cérebro estaria prestes a esquecer o conteúdo.</p>
-              <ul className="space-y-3">
-                  <li className="flex items-center gap-3 text-slate-700 font-medium"><CheckCircle size={18} className="text-indigo-500"/> Transforme erros em cards com 1 clique</li>
-                  <li className="flex items-center gap-3 text-slate-700 font-medium"><CheckCircle size={18} className="text-indigo-500"/> Crie baralhos personalizados</li>
-              </ul>
-            </div>
-
-            <div className="p-10 rounded-[2rem] bg-gradient-to-br from-slate-50 to-white border border-gray-100 hover:border-orange-200 shadow-sm hover:shadow-2xl hover:shadow-orange-900/5 transition-all duration-300 group relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity"><BarChart3 size={120}/></div>
-              <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 group-hover:rotate-3 transition-transform shadow-inner">
-                <BarChart3 size={32} strokeWidth={2.5}/>
-              </div>
-              <h3 className="text-2xl font-black text-slate-900 mb-4">Análise de Erros Cirúrgica</h3>
-              <p className="text-slate-600 text-lg leading-relaxed mb-6">Descubra que você acerta 80% em Pediatria, mas erra 75% das questões de Calendário Vacinal. O MedMaps mostra a ferida exata para você tratar o sintoma correto.</p>
-              <ul className="space-y-3">
-                  <li className="flex items-center gap-3 text-slate-700 font-medium"><CheckCircle size={18} className="text-orange-500"/> Gráficos de precisão por Tópico específico</li>
-                  <li className="flex items-center gap-3 text-slate-700 font-medium"><CheckCircle size={18} className="text-orange-500"/> Histórico evolutivo de Hit-Rate</li>
-              </ul>
-            </div>
-
-            <div className="p-10 rounded-[2rem] bg-gradient-to-br from-slate-50 to-white border border-gray-100 hover:border-emerald-200 shadow-sm hover:shadow-2xl hover:shadow-emerald-900/5 transition-all duration-300 group relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity"><Zap size={120}/></div>
-              <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 group-hover:-rotate-3 transition-transform shadow-inner">
-                <Zap size={32} strokeWidth={2.5}/>
-              </div>
-              <h3 className="text-2xl font-black text-slate-900 mb-4">Fluxo Imparável (Flow)</h3>
-              <p className="text-slate-600 text-lg leading-relaxed mb-6">Uma interface minimalista, rápida como um raio e sem distrações. Feita para você entrar no "estado de flow" e resolver baterias gigantes de questões sem sentir o tempo passar.</p>
-              <ul className="space-y-3">
-                  <li className="flex items-center gap-3 text-slate-700 font-medium"><CheckCircle size={18} className="text-emerald-500"/> Carregamento instantâneo, sem engasgos</li>
-                  <li className="flex items-center gap-3 text-slate-700 font-medium"><CheckCircle size={18} className="text-emerald-500"/> Design Dark/Light mode adaptável</li>
-              </ul>
-            </div>
-
-          </div>
-        </div>
-      </section>
-
-      {/* PRICING SECTION */}
-      <section id="planos" className="py-24 px-4 bg-slate-50 border-t border-slate-200/50">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <span className="bg-amber-100 text-amber-800 text-xs font-black uppercase tracking-widest py-1.5 px-4 rounded-full shadow-sm mb-4 inline-flex items-center gap-2">
-                <Trophy size={14} /> O Melhor Custo-Benefício do Mercado
-            </span>
-            <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 mt-4">A sua aprovação custa menos que um lanche por dia.</h2>
-            <p className="text-xl text-slate-500 font-medium max-w-2xl mx-auto">Cancele as mensalidades abusivas dos cursinhos. Escolha o plano de alta performance que cabe no seu bolso.</p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl mx-auto items-stretch">
+          {/* Texto da História */}
+          <div className="w-full md:w-7/12 space-y-6 text-slate-300 leading-relaxed text-lg">
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-8">
+              Conheça o mentor que estará com você
+            </h2>
             
-            {/* PLANO MENSAL */}
-            <div className="bg-white rounded-[2rem] p-8 md:p-10 border border-gray-200 shadow-lg hover:shadow-xl transition-all flex flex-col mt-4 lg:mt-8">
-                <h3 className="text-2xl font-black text-slate-800 mb-2">Mensal</h3>
-                <p className="text-sm text-slate-500 mb-6 font-medium">Liberdade total para testar os recursos premium.</p>
-                <div className="mb-8">
-                   <span className="text-5xl font-black text-slate-900">R$ 19</span>
-                   <span className="text-2xl font-bold text-slate-400">,90</span>
-                   <span className="text-sm text-slate-500 font-bold ml-1">/mês</span>
-                </div>
-                <button onClick={handleCheckout} className="w-full py-4 px-4 rounded-xl font-bold text-slate-700 bg-white border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors mb-8 shadow-sm text-lg">
-                    Assinar Mensal
-                </button>
-                <div className="space-y-4 mt-auto">
-                    {['Acesso ilimitado ao banco', 'Simulados customizáveis', 'Flashcards (SRS)', 'Raio-X de Desempenho'].map((feat, idx) => (
-                        <div key={idx} className="flex items-start gap-3">
-                            <Check size={20} strokeWidth={3} className="text-slate-300 flex-shrink-0 mt-0.5" />
-                            <span className="text-slate-600 font-bold">{feat}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* PLANO TRIMESTRAL (DESTAQUE) */}
-            <div className="bg-slate-900 rounded-[2rem] p-8 md:p-10 border border-slate-700 shadow-[0_0_60px_-15px_rgba(59,130,246,0.5)] transform lg:-translate-y-4 flex flex-col relative z-10">
-                <div className="absolute -top-5 left-1/2 transform -translate-x-1/2 w-full text-center">
-                    <span className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-xs font-black uppercase tracking-widest py-2 px-6 rounded-full shadow-lg border border-blue-400">
-                        🔥 ESCOLHA INTELIGENTE
-                    </span>
-                </div>
-                <h3 className="text-2xl font-black text-white mt-4 mb-2">Trimestral</h3>
-                <p className="text-sm text-blue-200 mb-6 font-medium">Foco total na reta final. Intensidade e estratégia.</p>
-                <div className="mb-2 flex items-center gap-2">
-                    <span className="text-sm text-slate-400 line-through decoration-red-500 font-bold">R$ 59,70</span>
-                    <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-black px-2 py-0.5 rounded-md">ECONOMIZE 16%</span>
-                </div>
-                <div className="mb-2">
-                   <span className="text-6xl font-black text-white">R$ 16</span>
-                   <span className="text-2xl font-bold text-blue-200">,63</span>
-                   <span className="text-sm text-blue-300 font-bold ml-1">/mês</span>
-                </div>
-                <p className="text-sm text-blue-400 font-bold mb-8">Cobrado R$ 49,90 a cada 3 meses.</p>
-                
-                <button onClick={handleCheckout} className="w-full py-4 px-4 rounded-xl font-black text-white bg-blue-600 hover:bg-blue-500 shadow-[0_10px_25px_-5px_rgba(37,99,235,0.5)] transition-all transform hover:-translate-y-1 mb-8 text-lg">
-                    Garanta Sua Vaga Aqui
-                </button>
-                
-                <div className="space-y-4 mt-auto bg-slate-800/50 p-6 rounded-xl border border-slate-700/50">
-                    <p className="text-xs font-bold text-blue-300 uppercase tracking-widest mb-4">Tudo do mensal, mais:</p>
-                    {['Análise Cirúrgica Avançada', 'Filtros exclusivos de bancas', 'Prioridade em Suporte'].map((feat, idx) => (
-                        <div key={idx} className="flex items-start gap-3">
-                            <Check size={20} strokeWidth={3} className="text-blue-400 flex-shrink-0 mt-0.5" />
-                            <span className="text-slate-200 font-bold">{feat}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* PLANO ANUAL */}
-            <div className="bg-white rounded-[2rem] p-8 md:p-10 border border-gray-200 shadow-lg hover:shadow-xl transition-all flex flex-col mt-4 lg:mt-8 relative overflow-hidden">
-                <div className="absolute top-0 right-0 bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-bl-2xl shadow-sm">
-                    MAIOR DESCONTO
-                </div>
-                <h3 className="text-2xl font-black text-slate-800 mb-2">Anual</h3>
-                <p className="text-sm text-slate-500 mb-6 font-medium">A jornada completa com o menor valor possível.</p>
-                
-                <div className="mb-2 flex items-center gap-2">
-                    <span className="text-sm text-slate-400 line-through decoration-red-500 font-bold">R$ 238,80</span>
-                    <span className="bg-emerald-100 text-emerald-700 text-xs font-black px-2 py-0.5 rounded-md border border-emerald-200">-37% OFF</span>
-                </div>
-                <div className="mb-2">
-                   <span className="text-5xl font-black text-slate-900">R$ 12</span>
-                   <span className="text-2xl font-bold text-slate-400">,49</span>
-                   <span className="text-sm text-slate-500 font-bold ml-1">/mês</span>
-                </div>
-                <p className="text-sm text-emerald-600 font-black mb-8">Apenas R$ 0,41 por dia! (R$ 149,90/ano)</p>
-                
-                <button onClick={handleCheckout} className="w-full py-4 px-4 rounded-xl font-black text-slate-700 bg-emerald-50 border-2 border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300 transition-colors mb-8 shadow-sm text-lg">
-                    Assinar Anual
-                </button>
-                
-                <div className="space-y-4 mt-auto">
-                    {['O menor preço garantido', 'Proteção contra reajustes', 'Status de Aluno Fundador', 'Acesso VIP a Novidades'].map((feat, idx) => (
-                        <div key={idx} className="flex items-start gap-3">
-                            <Check size={20} strokeWidth={3} className="text-emerald-500 flex-shrink-0 mt-0.5" />
-                            <span className="text-slate-600 font-bold">{feat}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-          </div>
-
-          {/* GARANTIA BLINDADA */}
-          <div className="mt-20 flex justify-center animate-in fade-in slide-in-from-bottom-8">
-            <div className="bg-white border-2 border-slate-100 px-8 py-6 rounded-3xl flex flex-col md:flex-row items-center gap-6 shadow-xl max-w-3xl transform hover:scale-[1.02] transition-transform">
-                <div className="bg-emerald-100 p-4 rounded-2xl text-emerald-600 shrink-0 shadow-inner">
-                    <ShieldCheck size={40} strokeWidth={2.5} />
-                </div>
-                <div className="text-center md:text-left">
-                    <h4 className="text-xl font-black text-slate-900 mb-1">Garantia Blindada de 7 Dias</h4>
-                    <p className="text-slate-600 font-medium">
-                        Entre, resolva simulados, utilize os flashcards e veja a Análise de Erros em ação. Se você achar que a plataforma não vale o investimento, cancele com 1 clique e devolveremos 100% do seu dinheiro.
-                    </p>
-                </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* FOOTER */}
-      <footer className="bg-slate-900 pt-16 pb-8 text-center text-slate-400 border-t border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col items-center">
-            <div className="flex items-center gap-2 text-white mb-6 bg-slate-800 p-3 rounded-2xl shadow-inner border border-slate-700">
-                <Map size={24} className="text-blue-500" />
-                <span className="text-xl font-black tracking-tight">MedMaps</span>
-            </div>
-            <p className="text-sm mb-8 max-w-md font-medium text-slate-500">
-                Sua rota definitiva para alcançar a aprovação na Residência Médica. Alta performance e tecnologia a serviço dos seus estudos.
+            <p>
+              Durante anos, tentei aprender inglês da forma tradicional: passei por quatro escolas, fiz aulas, exercícios, mas a sensação era sempre a mesma — era chato, difícil e parecia que eu não saía do lugar. Tudo mudou quando meu pai sugeriu que eu fizesse um curso de memorização. Foi aí que virei a chave.
             </p>
-            <div className="flex gap-8 text-sm font-bold mb-12">
-                <a href="/termos" className="hover:text-white transition-colors">Termos de Uso</a>
-                <a href="/privacidade" className="hover:text-white transition-colors">Privacidade</a>
-                <a href="mailto:suporte@medmaps.com.br" className="hover:text-white transition-colors">Suporte</a>
+            
+            <p className="font-bold text-emerald-400 text-xl border-l-4 border-emerald-500 pl-4 py-2 bg-emerald-500/10 rounded-r-lg">
+              Descobri que o problema nunca foi comigo — e sim com o método.
+            </p>
+            
+            <p>
+              A partir desse momento, mergulhei no universo da memorização e criei um plano passo a passo para aprimorar meu inglês de forma leve, natural e eficiente. Desenvolvi técnicas que me ajudaram a absorver centenas de palavras em tempo recorde — e mais importante: a manter tudo isso na minha memória de longo prazo.
+            </p>
+            
+            <p>
+              Compartilhei esse método com amigos e familiares, e os resultados foram incríveis! Todos relataram melhorias não só no inglês, mas também nos estudos, no trabalho e na vida pessoal. Hoje, eu transformei essa experiência em um curso prático e direto ao ponto.
+            </p>
+
+            <p className="font-medium text-white italic">
+              É a metodologia que eu gostaria de ter conhecido anos atrás. Se você já tentou de tudo e ainda sente que o inglês é uma barreira, me deixa te mostrar um caminho diferente. Você não vai se arrepender.
+            </p>
+
+            <div className="pt-8 mt-8 border-t border-slate-700">
+              <h4 className="text-2xl font-bold text-white mb-6 text-center md:text-left">
+                Quantas oportunidades você já deixou passar? <span className="text-emerald-500">Faz essa ser diferente.</span>
+              </h4>
+              
+              <button className="group bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-extrabold text-lg py-5 px-8 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.3)] transform transition-all duration-300 hover:scale-105 w-full flex items-center justify-center">
+                SIM, EU QUERO APRIMORAR MEU INGLÊS
+                <ArrowRight className="ml-3 w-6 h-6 group-hover:translate-x-2 transition-transform" />
+              </button>
             </div>
-            <div className="w-full max-w-lg h-px bg-slate-800 mb-8"></div>
-            <p className="text-xs font-bold tracking-widest uppercase text-slate-600">&copy; {new Date().getFullYear()} MedMaps. Todos os direitos reservados.</p>
+          </div>
+
         </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-slate-950 py-8 px-4 text-center border-t border-slate-900">
+        <p className="text-slate-500 font-medium">
+          © {new Date().getFullYear()} Ronaldo Durães | Todos os direitos reservados.
+        </p>
       </footer>
+    </>
+  );
+};
+
+// ==========================================
+// COMPONENTE PRINCIPAL (Obrigatório no final do arquivo)
+// ==========================================
+export default function LandingPageITR() {
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
+      <HeroSection />
+      <BenefitsSection />
+      <TargetAudienceSection />
+      <SocialProofSection />
+      <CourseCompositionSection />
+      <ModulesSection />
+      <BonusSection />
+      <OfferSection />
+      <FAQSection />
+      <MentorAndFooterSection />
     </div>
   );
 }
