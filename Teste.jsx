@@ -1,2862 +1,1808 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { motion, useMotionValue, useTransform } from 'framer-motion';
 import { 
-  Map, Save, Trash2, Settings, CheckCircle, 
-  AlertCircle, FileText, Database, 
-  Loader2, Wand2, Cpu, RefreshCw, User, X,
-  LogOut, Send, Brain, Image as ImageIcon, UploadCloud, Lock, CloudLightning, ArrowLeft,
-  AlertTriangle, ExternalLink, Key, Play, Pause, AlertOctagon, Terminal, ShieldCheck, ShieldAlert, 
-  ToggleLeft, ToggleRight, Layers, Filter, Eraser, RefreshCcw, XCircle, RotateCcw, Copy,
-  SkipForward, BookOpen, Clock, Files, Info, History, FastForward, Globe, ListFilter,
-  FileType, BarChart3, Settings2
+  Play, Sparkles, ArrowRight, BrainCircuit, Target, 
+  BarChart3, Clock, CheckCircle2, Zap, TrendingUp, TrendingDown, ChevronRight, Star,
+  Check, Trophy, ShieldCheck, Map, CheckCircle, ArrowLeft, XCircle,
+  LayoutGrid, Eye, PauseCircle, Calculator, PenTool, RotateCcw,
+  Activity, BookOpen, PieChart, Scissors, Stethoscope, HeartPulse, Baby, Shield, PlayCircle, X, Calendar,
+  BarChart2, HelpCircle, Menu, Layers, CheckSquare, Copy, ChevronDown, AlertTriangle, PlusCircle, MousePointer2,
+  Heart, Flag, ChevronLeft
 } from 'lucide-react';
 
-// --- FIREBASE IMPORTS ---
-import { initializeApp } from "firebase/app";
+/* =========================================
+   1. SEÇÃO HERO (MOUSE GLOBAL E NOVO TEXTO)
+   ========================================= */
+const HeroMedMaps = () => {
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  
+  const mouseXSpring = useTransform(x, [-0.5, 0.5], [15, -15]);
+  const mouseYSpring = useTransform(y, [-0.5, 0.5], [-15, 15]);
 
-// 1. Banco de Dados (Firestore)
-import { 
-  getFirestore, collection, addDoc, doc, getDoc, deleteDoc, onSnapshot, query, orderBy, setDoc, writeBatch, updateDoc, arrayUnion, arrayRemove, increment 
-} from "firebase/firestore";
+  const handleMouseMove = (e) => {
+    const mouseX = e.clientX;
+    const mouseY = e.clientY;
+    x.set((mouseX / window.innerWidth) - 0.5);
+    y.set((mouseY / window.innerHeight) - 0.5);
+  };
 
-// 2. Autenticação (Auth)
-import { 
-  getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
-} from "firebase/auth";
+  const handleMouseLeave = () => {
+    x.set(0);
+    y.set(0);
+  };
 
-// 3. Arquivos (Storage)
-import { 
-  getStorage, ref, uploadBytes, getDownloadURL, deleteObject 
-} from "firebase/storage";
+  const scrollToPlanos = () => document.getElementById('planos').scrollIntoView({ behavior: 'smooth' });
 
-// --- PDF.JS IMPORT (Dynamic CDN) ---
-const loadPdfJs = async () => {
-    if (window.pdfjsLib) return window.pdfjsLib;
-    
-    return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-        script.onload = () => {
-            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-            resolve(window.pdfjsLib);
-        };
-        script.onerror = reject;
-        document.head.appendChild(script);
+  const getDiscrete = (keyPoints, mapper) => {
+    const times = []; const values = [];
+    keyPoints.forEach(([time, val], i) => {
+      if (i > 0) { times.push(Number(((time - 0.001) / 32).toFixed(4))); values.push(mapper(keyPoints[i-1][1])); }
+      times.push(Number((time / 32).toFixed(4))); values.push(mapper(val));
     });
-};
+    times.push(1); values.push(mapper(keyPoints[keyPoints.length-1][1]));
+    return { times, values };
+  };
 
-// --- CONFIGURAÇÃO FIREBASE ---
-const firebaseConfig = {
-  apiKey: "AIzaSyBhwtINeofqm97BzIE_s9DcG-l3v7zsAAY",
-  authDomain: "bancodequestoes-5cc34.firebaseapp.com",
-  projectId: "bancodequestoes-5cc34",
-  storageBucket: "bancodequestoes-5cc34.firebasestorage.app",
-  messagingSenderId: "174347052858",
-  appId: "1:174347052858:web:d54bbf3b193d30a5f69203",
-  measurementId: "G-XNHXB5BCGF"
-};
+  const getTrans = (timesArray, easeType = "linear") => ({ duration: 32, repeat: Infinity, times: timesArray, ease: easeType });
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-const storage = getStorage(app);
+  const mT = [0, 1.0, 1.1, 1.2, 2.5, 2.6, 2.7, 4.0, 4.1, 4.2, 8.0, 9.0, 9.1, 9.2, 10.0, 10.1, 10.2, 10.6, 10.7, 11.5, 11.6, 11.7, 12.5, 12.6, 12.7, 13.5, 13.6, 13.7, 16.0, 17.0, 17.1, 17.2, 18.5, 18.6, 18.7, 20.0, 20.1, 20.2, 24.0, 25.0, 25.1, 25.2, 26.5, 26.6, 26.7, 28.0, 28.1, 28.2, 32].map(t => Number((t/32).toFixed(4)));
+  
+  // X ajustado para 35 (bem em cima da bolinha)
+  const mX = [150, 35,  35,  35, 150, 150, 150, 260, 260, 260, 150, 35,  35,  35,  150,  150,  150,  150,  150,  35,   35,   35,  150,  150,  150,  260,  260,  260,  150,  35,   35,   35,  150,  150,  150,  260,  260,  260,  150,  35,   35,   35,  150,  150,  150,  260,  260,  260, 150];
+  
+  // Y ajustado (+55px) para descer mais e compensar perfeitamente a barra nova
+  const mY = [400, 215, 215, 215, 545, 545, 545, 545, 545, 545, 400, 305, 305, 305, 545,  545,  545,  545,  545,  260,  260,  260,  545,  545,  545,  545,  545,  545,  400,  350,  350,  350,  545,  545,  545,  545,  545,  545,  400,  260,  260,  260,  545,  545,  545,  545,  545,  545, 400];
+  const mS = [1,   1,   0.8, 1,   1,   0.8, 1,   1,   0.8, 1,   1,   1,   0.8, 1,   1,    0.8,  1,    0.8,  1,    1,    0.8,  1,    1,    0.8,  1,    1,    0.8,  1,    1,    1,    0.8,  1,    1,    0.8,  1,    1,    0.8,  1,    1,    1,    0.8,  1,    1,    0.8,  1,    1,    0.8,  1,   1];
 
-// --- DADOS DE REFERÊNCIA ---
-const areasBase = [
-  'Clínica Médica', 
-  'Cirurgia Geral', 
-  'Ginecologia e Obstetrícia', 
-  'Pediatria', 
-  'Preventiva'
-];
+  const bgMap = {0: "#ffffff", 1: "#eff6ff", 2: "#ecfdf5", 3: "#fef2f2"};
+  const boMap = {0: "#f3f4f6", 1: "#2563eb", 2: "#10b981", 3: "#ef4444"};
+  const iWMap = {0: "2px", 1: "6px", 2: "0px", 3: "0px"};
+  const iBMap = {0: "#d1d5db", 1: "#2563eb", 2: "#10b981", 3: "#ef4444"};
+  
+  const q1a = getDiscrete([[0,0], [1.1,1], [2.6,2], [5.1,0]], s => s);
+  const q2c = getDiscrete([[0,0], [9.1,1], [10.1,3], [10.6,0]], s => s);
+  const q2b = getDiscrete([[0,0], [11.6,1], [12.6,2], [13.7,0]], s => s);
+  const q3d = getDiscrete([[0,0], [17.1,1], [18.6,2], [20.2,0]], s => s);
+  const q4b = getDiscrete([[0,0], [25.1,1], [26.6,2], [28.2,0]], s => s);
 
-const themesMap = {
-    'Clínica Médica': [
-        'Cardiologia', 'Dermatologia', 'Endocrinologia e Metabologia', 'Gastroenterologia', 'Hematologia', 'Hepatologia', 'Infectologia', 'Nefrologia', 'Neurologia', 'Pneumologia', 'Psiquiatria', 'Reumatologia'
-    ],
-    'Cirurgia Geral': [
-        'Abdome Agudo', 'Cirurgia Hepatobiliopancreática', 'Cirurgia Torácica e de Cabeça e Pescoço', 'Cirurgia Vascular', 'Cirurgia do Esôfago e Estômago', 'Coloproctologia', 'Hérnias e Parede Abdominal', 'Pré e Pós-Operatório', 'Queimaduras', 'Resposta Metabólica e Cicatrização', 'Trauma', 'Urologia'
-    ],
-    'Ginecologia e Obstetrícia': [
-        'Ciclo Menstrual e Anticoncepção', 'Climatério e Menopausa', 'Doenças Intercorrentes na Gestação', 'Infecções Congênitas e Gestacionais', 'Infecções Ginecológicas e ISTs', 'Mastologia', 'Obstetrícia Fisiológica e Pré-Natal', 'Oncologia Pélvica', 'Parto e Puerpério', 'Sangramentos da Gestação', 'Uroginecologia e Distopias', 'Vitalidade Fetal e Amniograma'
-    ],
-    'Pediatria': [
-        'Adolescência e Puberdade', 'Afecções Respiratórias', 'Aleitamento Materno e Nutrição', 'Cardiologia e Reumatologia Pediátrica', 'Crescimento e Desenvolvimento', 'Emergências e Acidentes', 'Gastroenterologia Pediátrica', 'Imunizações', 'Infectopediatria e Exantemáticas', 'Nefrologia Pediátrica', 'Neonatologia: Patologias', 'Neonatologia: Sala de Parto'
-    ],
-    'Preventiva': [
-        'Atenção Primária e Saúde da Família', 'Estudos Epidemiológicos', 'Financiamento e Gestão', 'História e Princípios do SUS', 'Indicadores de Saúde e Demografia', 'Medicina Baseada em Evidências', 'Medicina Legal', 'Medidas de Associação e Testes Diagnósticos', 'Políticas Nacionais de Saúde', 'Saúde do Trabalhador', 'Vigilância em Saúde', 'Ética Médica e Bioética'
-    ]
-};
+  const scr1 = getDiscrete([[0,1], [5.1,0], [28.2,1]], s => s);
+  const scr2 = getDiscrete([[0,0], [5.1,1], [13.7,0]], s => s);
+  const scr3 = getDiscrete([[0,0], [13.7,1], [20.2,0]], s => s);
+  const scr4 = getDiscrete([[0,0], [20.2,1], [28.2,0]], s => s);
+  const prog = getDiscrete([[0,"25%"], [5.1,"50%"], [13.7,"75%"], [20.2,"100%"], [28.2,"25%"]], s => s);
 
-// --- HELPER: OTIMIZADOR DE IMAGEM (WEB CLIENT-SIDE) ---
-const optimizeImageForWeb = (file) => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = (event) => {
-            const img = new Image();
-            img.src = event.target.result;
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
-                const MAX_WIDTH = 1920; 
-                
-                if (width > MAX_WIDTH) {
-                    height = Math.round((height * MAX_WIDTH) / width);
-                    width = MAX_WIDTH;
-                }
-                
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-                
-                canvas.toBlob((blob) => {
-                    if (blob) {
-                        const newFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".webp", {
-                            type: "image/webp",
-                            lastModified: Date.now(),
-                        });
-                        resolve(newFile);
-                    } else {
-                        reject(new Error("Falha na conversão para WebP"));
-                    }
-                }, 'image/webp', 0.90);
-            };
-            img.onerror = (err) => reject(err);
-        };
-        reader.onerror = (err) => reject(err);
-    });
-};
+  const resp = getDiscrete([[0,0], [1.1,1], [2.6,2], [5.1,0], [9.1,1], [10.1,3], [10.6,0], [11.6,1], [12.6,2], [13.7,0], [17.1,1], [18.6,2], [20.2,0], [25.1,1], [26.6,2], [28.2,0]], s => s);
+  const rBgMap = {0: "#f3f4f6", 1: "#2563eb", 2: "#10b981", 3: "#ef4444"};
+  const rColMap= {0: "#9ca3af", 1: "#ffffff", 2: "#ffffff", 3: "#ffffff"};
+  const rBoMap = {0: "#e5e7eb", 1: "#2563eb", 2: "#10b981", 3: "#ef4444"};
+  const rSclT = [0, 2.5, 2.6, 2.7, 10.0, 10.1, 10.2, 10.5, 10.6, 10.7, 12.5, 12.6, 12.7, 18.5, 18.6, 18.7, 26.5, 26.6, 26.7, 32].map(t => Number((t/32).toFixed(4)));
+  const rSclV = [1, 1,   0.95,1,   1,    0.95,1,    1,    0.95,1,    1,    0.95,1,    1,    0.95,1,    1,    0.95,1,    1];
 
-// --- NOVO HELPER: FUZZY HASH GENERATOR (DEDUPLICATION BLINDADA) ---
-const generateFuzzyHash = async (questionData) => {
-    if (!questionData || !questionData.text) return null;
-
-    // 1. Limpeza pesada de OCR (remove padrões como "A) ", "b. ", "(C) ") no texto principal
-    let cleanText = questionData.text.replace(/\n\s*[a-eA-E][).]\s/g, ' ');
-
-    // 2. Normalização básica do texto
-    cleanText = cleanText
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, "");
-
-    // 3. Assinatura Frankenstein (Primeiros 40 + Últimos 40 caracteres)
-    let coreTextSignature = "";
-    if (cleanText.length > 80) {
-        coreTextSignature = cleanText.substring(0, 40) + cleanText.substring(cleanText.length - 40);
-    } else {
-        coreTextSignature = cleanText;
-    }
-
-    // 4. Assinatura das alternativas (Agrupa as opções para evitar falsos positivos de caso clínico)
-    let optionsSignature = "";
-    if (Array.isArray(questionData.options)) {
-        optionsSignature = questionData.options
-            .map(opt => (opt.text || ""))
-            .join("")
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .toLowerCase()
-            .replace(/[^a-z0-9]/g, "");
-    }
-
-    // 5. Junta tudo
-    const finalSignature = coreTextSignature + optionsSignature;
-
-    // 6. Gera o Hash SHA-256
-    const msgBuffer = new TextEncoder().encode(finalSignature);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 32);
-};
-
-// --- HELPER: CLEAN INSTITUTION (ATUALIZADO - ANTI-CURSINHO) ---
-const cleanInstitutionText = (inst) => {
-    if (!inst) return "";
-    let text = inst.toString().trim();
-    const lower = text.toLowerCase();
-
-    const blockList = [
-        "medcurso", "medgrupo", "medcel", "medcof", 
-        "sanar", "estrategia", "hardwork", "sic", "residencia médica", "medicina livre"
-    ];
-
-    if (blockList.includes(lower)) return "";
-    if (lower.startsWith("apostila") || lower.startsWith("simulado") || lower.includes("banco de questões")) return "";
-    if (
-        lower.includes("não informado") || 
-        lower.includes("nao informado") || 
-        lower.includes("detectar") ||
-        lower.includes("nao consta")
-    ) return "";
-
-    return text;
-};
-
-// --- HELPER: EXTRAIR TEMPO DE ESPERA DA MENSAGEM DE ERRO ---
-const extractRetryTime = (message) => {
-    const match = message.match(/retry in ([0-9\.]+)s/);
-    return match ? parseFloat(match[1]) : null;
-};
-
-// --- HELPER: PARSER JSON BLINDADO ---
-const safeJsonParse = (jsonString) => {
-    let clean = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
-    clean = clean.replace(/[\u0000-\u0019]+/g, ""); 
-
-    const startIndex = clean.indexOf('[');
-    if (startIndex === -1) {
-        try { return JSON.parse(clean); } catch(e) { 
-            throw new Error("Formato inválido: JSON não encontrado."); 
-        }
-    }
-    clean = clean.substring(startIndex);
-
-    try {
-        const parsed = JSON.parse(clean);
-        if (!Array.isArray(parsed) && typeof parsed === 'object') return [parsed];
-        return parsed;
-    } catch (e) {
-        console.warn("JSON quebrado detectado. Iniciando recuperação iterativa...", e.message);
-        
-        let currentString = clean;
-        let attempts = 0;
-        const maxAttempts = 50;
-
-        while (currentString.length > 2 && attempts < maxAttempts) {
-            attempts++;
-            const lastClose = currentString.lastIndexOf('}');
-            
-            if (lastClose === -1) {
-                console.error("Recuperação falhou: nenhum objeto válido encontrado.");
-                return []; 
-            }
-            
-            const candidate = currentString.substring(0, lastClose + 1) + ']';
-            
-            try {
-                const result = JSON.parse(candidate);
-                console.log(`Recuperação com sucesso na tentativa ${attempts}! ${result.length} itens salvos.`);
-                return result;
-            } catch (e2) {
-                currentString = currentString.substring(0, lastClose);
-            }
-        }
-        
-        console.error("Falha total na recuperação do JSON.");
-        return [];
-    }
-};
-
-// --- COMPONENTE DE NOTIFICAÇÃO INTELIGENTE ---
-function NotificationToast({ notification, onClose, positionClass }) {
-  const [isHovered, setIsHovered] = useState(false);
-
-  useEffect(() => {
-    if (!notification || isHovered) return;
-    const timer = setTimeout(() => { onClose(); }, 6000);
-    return () => clearTimeout(timer);
-  }, [notification, isHovered, onClose]);
-
-  if (!notification) return null;
+  const nT = [0, 4.0, 4.1, 4.2, 13.5, 13.6, 13.7, 20.0, 20.1, 20.2, 28.0, 28.1, 28.2, 32].map(t => Number((t/32).toFixed(4)));
+  const nScl=[1, 1,   0.85,1,   1,    0.85,1,    1,    0.85,1,    1,    0.85,1,    1];
 
   return (
-    <div 
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        className={`${positionClass} z-[100] p-4 rounded-xl shadow-xl flex items-start gap-3 animate-in slide-in-from-right-10 duration-300 max-w-sm border transition-all ${notification.type === 'error' ? 'bg-white border-red-200 text-red-700' : notification.type === 'warning' ? 'bg-white border-amber-200 text-amber-700' : notification.type === 'info' ? 'bg-white border-blue-200 text-blue-700' : 'bg-white border-emerald-200 text-emerald-700'}`}
+    <section 
+      className="relative min-h-screen w-full bg-[#0a0a0f] text-slate-200 overflow-hidden flex items-center justify-center pt-20 pb-16"
+      onMouseMove={handleMouseMove} 
+      onMouseLeave={handleMouseLeave}
     >
-        <div className={`mt-0.5 p-1 rounded-full ${notification.type === 'error' ? 'bg-red-100' : notification.type === 'warning' ? 'bg-amber-100' : notification.type === 'info' ? 'bg-blue-100' : 'bg-emerald-100'}`}>
-            {notification.type === 'error' ? <AlertCircle size={20} /> : notification.type === 'warning' ? <AlertTriangle size={20} /> : notification.type === 'info' ? <Info size={20}/> : <CheckCircle size={20} />}
-        </div>
-        <div className="flex-1">
-            <p className="font-bold text-sm mb-1">{notification.type === 'error' ? 'Erro' : notification.type === 'warning' ? 'Atenção' : notification.type === 'info' ? 'Info' : 'Sucesso'}</p>
-            <p className="text-sm opacity-90 leading-tight">{notification.text}</p>
-        </div>
-        <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
-            <X size={18}/>
-        </button>
-    </div>
-  );
-}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-cyan-500/20 rounded-full blur-[120px] opacity-50 pointer-events-none" />
+      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay pointer-events-none"></div>
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] pointer-events-none" />
 
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
-  
-  // Gestão de Chaves API
-  const [apiKeys, setApiKeys] = useState(() => JSON.parse(localStorage.getItem('gemini_api_keys') || '[]'));
-  
-  // Modelos
-  const [availableModels, setAvailableModels] = useState([
-      { name: 'models/gemini-2.5-flash', displayName: 'Gemini 2.5 Flash (Padrão)' },
-      { name: 'models/gemini-2.5-pro', displayName: 'Gemini 2.5 Pro' }
-  ]);
-  const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('gemini_model') || 'models/gemini-2.5-flash');
-  
-  // Estados UI Básicos
-  const [rawText, setRawText] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isBatchAction, setIsBatchAction] = useState(false); 
-  const [isSavingKey, setIsSavingKey] = useState(false);
-  const [parsedQuestions, setParsedQuestions] = useState([]);
-  const [activeTab, setActiveTab] = useState('input');
-  const [notification, setNotification] = useState(null);
-  const [isValidatingKey, setIsValidatingKey] = useState(false);
-  const [isDoubleCheckEnabled, setIsDoubleCheckEnabled] = useState(true); 
-  const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(true); 
-
-  // COTA GLOBAL
-  const [searchQuota, setSearchQuota] = useState({ count: 0, lastReset: '' });
-  const [isSearchLimitEnabled, setIsSearchLimitEnabled] = useState(true);
-  const DAILY_SEARCH_LIMIT = 1400; 
-
-  const [uploadingImageId, setUploadingImageId] = useState(null);
-  
-  const [activeFilters, setActiveFilters] = useState(['verified', 'source', 'text_only']); 
-  const [filterLogic, setFilterLogic] = useState('AND'); 
-  
-  // Override States
-  const [overrideInst, setOverrideInst] = useState('');
-  const [overrideYear, setOverrideYear] = useState('');
-  const [overrideArea, setOverrideArea] = useState('');
-  const [overrideTopic, setOverrideTopic] = useState('');
-
-  // Modais
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-  const [tempApiKeysText, setTempApiKeysText] = useState('');
-  const [showTutorial, setShowTutorial] = useState(false);
-  
-  const [confirmationModal, setConfirmationModal] = useState({
-      isOpen: false, type: null, data: null, title: '', message: '', confirmText: '', confirmColor: ''
-  });
-  
-  // Login Inputs
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-
-  // BATCH IMAGE STATES
-  const [batchImages, setBatchImages] = useState([]); 
-  const [batchStatus, setBatchStatus] = useState('idle'); 
-  const [batchLogs, setBatchLogs] = useState([]);
-
-  // PDF PROCESSING STATES
-  const [pdfFile, setPdfFile] = useState(null);
-  const [pdfStatus, setPdfStatus] = useState('idle');
-  const [pdfChunks, setPdfChunks] = useState([]); 
-  const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
-  const [processingLogs, setProcessingLogs] = useState([]);
-  const [consecutiveErrors, setConsecutiveErrors] = useState(0);
-  
-  const [pdfStartPage, setPdfStartPage] = useState('');
-  const [pdfEndPage, setPdfEndPage] = useState('');
-
-  // RE-PROCESS BATCH STATES
-  const [showReprocessModal, setShowReprocessModal] = useState(false);
-  const [reprocessConfig, setReprocessConfig] = useState({ search: true, audit: true });
-  const [reprocessState, setReprocessState] = useState({ status: 'idle', total: 0, current: 0 }); 
-
-  // SESSION STATE
-  const [lastSessionData, setLastSessionData] = useState(null);
-
-  const processorRef = useRef(null); 
-  const batchProcessorRef = useRef(null);
-  
-  // REFS
-  const pdfStatusRef = useRef(pdfStatus);
-  const pdfChunksRef = useRef(pdfChunks);
-  const batchImagesRef = useRef(batchImages);
-  const batchStatusRef = useRef(batchStatus);
-  const apiKeysRef = useRef(apiKeys);
-  const keyRotationIndex = useRef(0);
-  const doubleCheckRef = useRef(isDoubleCheckEnabled); 
-  const webSearchRef = useRef(isWebSearchEnabled); 
-  const overridesRef = useRef({ overrideInst, overrideYear, overrideArea, overrideTopic });
-  const currentChunkIndexRef = useRef(currentChunkIndex); 
-  const searchQuotaRef = useRef(searchQuota);
-  const isSearchLimitEnabledRef = useRef(isSearchLimitEnabled);
-  const reprocessStateRef = useRef(reprocessState);
-
-  const CHUNK_SIZE = 10; 
-
-  // --- AUTH CHECK ---
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (u) => {
-        if (u) {
-            try {
-                const userDocRef = doc(db, "users", u.uid);
-                const userDoc = await getDoc(userDocRef);
-                if (userDoc.exists() && userDoc.data().role === 'admin') {
-                    setUser(u);
-                } else {
-                    await signOut(auth);
-                    setUser(null);
-                    showNotification('error', 'Acesso negado: Usuário não é administrador.');
-                }
-            } catch (error) {
-                console.error("Erro ao verificar role:", error);
-                await signOut(auth);
-                setUser(null);
-            }
-        } else {
-            setUser(null);
-        }
-        setIsLoadingAuth(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // --- SYNC REFS ---
-  useEffect(() => { pdfStatusRef.current = pdfStatus; }, [pdfStatus]);
-  useEffect(() => { pdfChunksRef.current = pdfChunks; }, [pdfChunks]);
-  useEffect(() => { batchImagesRef.current = batchImages; }, [batchImages]);
-  useEffect(() => { batchStatusRef.current = batchStatus; }, [batchStatus]);
-  useEffect(() => { apiKeysRef.current = apiKeys; }, [apiKeys]);
-  useEffect(() => { doubleCheckRef.current = isDoubleCheckEnabled; }, [isDoubleCheckEnabled]);
-  useEffect(() => { webSearchRef.current = isWebSearchEnabled; }, [isWebSearchEnabled]);
-  useEffect(() => { overridesRef.current = { overrideInst, overrideYear, overrideArea, overrideTopic }; }, [overrideInst, overrideYear, overrideArea, overrideTopic]);
-  useEffect(() => { currentChunkIndexRef.current = currentChunkIndex; }, [currentChunkIndex]);
-  useEffect(() => { searchQuotaRef.current = searchQuota; }, [searchQuota]);
-  useEffect(() => { isSearchLimitEnabledRef.current = isSearchLimitEnabled; }, [isSearchLimitEnabled]);
-  useEffect(() => { reprocessStateRef.current = reprocessState; }, [reprocessState]);
-
-  // --- SYNC CHAVES API ---
-  useEffect(() => {
-      if (!user) return;
-      const unsubscribe = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
-          if (docSnap.exists()) {
-              const data = docSnap.data();
-              let newKeys = [];
-              if (data.geminiApiKeys && Array.isArray(data.geminiApiKeys)) {
-                  newKeys = data.geminiApiKeys;
-              } else if (data.geminiApiKey) {
-                  newKeys = [data.geminiApiKey];
-              }
-              const uniqueKeys = [...new Set(newKeys.filter(k => k && k.trim().length > 0))];
-              if (JSON.stringify(uniqueKeys) !== JSON.stringify(apiKeysRef.current)) {
-                  setApiKeys(uniqueKeys);
-                  localStorage.setItem('gemini_api_keys', JSON.stringify(uniqueKeys));
-              }
-              if (data.isSearchLimitEnabled !== undefined) {
-                  setIsSearchLimitEnabled(data.isSearchLimitEnabled);
-              }
-          }
-      }, (error) => console.error("Erro ao sincronizar chaves:", error));
-      return () => unsubscribe();
-  }, [user]);
-
-  // --- SYNC RASCUNHOS ---
-  useEffect(() => {
-      if (!user) { setParsedQuestions([]); return; }
-      const q = query(collection(db, "draft_questions"), orderBy("createdAt", "desc"));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-          const drafts = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, status: 'draft' }));
-          setParsedQuestions(drafts);
-      });
-      return () => unsubscribe();
-  }, [user]);
-
-  // --- SYNC PROGRESSO DO PDF ---
-  useEffect(() => {
-      if (!user) {
-          setLastSessionData(null);
-          return;
-      }
-      const unsubscribe = onSnapshot(doc(db, "users", user.uid, "progress", "pdf_session"), (docSnap) => {
-          if (docSnap.exists()) {
-              setLastSessionData(docSnap.data());
-          } else {
-              setLastSessionData(null);
-          }
-      });
-      return () => unsubscribe();
-  }, [user]);
-
-  // --- SYNC COTA DE PESQUISA ---
-  useEffect(() => {
-      if (!user) return;
-      
-      const unsubscribe = onSnapshot(doc(db, "settings", "search_quota"), (docSnap) => {
-          const today = new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString().split('T')[0];
-
-          if (!docSnap.exists()) {
-              setDoc(doc(db, "settings", "search_quota"), { count: 0, lastReset: today });
-          } else {
-              const data = docSnap.data();
-              if (data.lastReset !== today) {
-                  setDoc(doc(db, "settings", "search_quota"), { count: 0, lastReset: today }, { merge: true })
-                      .then(() => console.log("Cota diária resetada!"));
-                  setSearchQuota({ count: 0, lastReset: today });
-              } else {
-                  setSearchQuota(data);
-              }
-          }
-      });
-      return () => unsubscribe();
-  }, [user]);
-
-  // --- ROTATION HELPER ---
-  const executeWithKeyRotation = async (operationName, requestFn) => {
-      const keys = apiKeysRef.current;
-      if (!keys || keys.length === 0) throw new Error("Nenhuma chave API configurada.");
-
-      let lastError = null;
-      const startIndex = keyRotationIndex.current;
-
-      for (let i = 0; i < keys.length; i++) {
-          const currentIndex = (startIndex + i) % keys.length;
-          const currentKey = keys[currentIndex];
+      <div className="max-w-7xl mx-auto px-6 lg:px-8 relative z-10 w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-8 items-center">
           
-          keyRotationIndex.current = (currentIndex + 1) % keys.length;
-
-          try {
-              return await requestFn(currentKey);
-          } catch (error) {
-              const msg = error.message || "";
-              const isQuotaError = msg.includes("Quota exceeded") || msg.includes("429") || msg.includes("Resource has been exhausted");
-              
-              if (isQuotaError) {
-                  const logFn = operationName.includes("Imagem") ? addBatchLog : addLog;
-                  logFn('warning', `[${operationName}] Chave ...${currentKey.slice(-4)} no limite. Rotacionando...`);
-                  lastError = error;
-                  continue; 
-              } else {
-                  throw error; 
-              }
-          }
-      }
-      throw lastError || new Error("Todas as chaves falharam. Aguardando recarga...");
-  };
-
-  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
-  const executeBlindlyWithRetry = async (operationName, taskFn, setStatusLog, shouldStopFn) => {
-      let attempts = 0;
-      
-      while (true) {
-          if (shouldStopFn && shouldStopFn()) {
-               throw new Error("ABORT_RETRY"); 
-          }
-
-          try {
-              return await executeWithKeyRotation(operationName, taskFn);
-          } catch (error) {
-              if (shouldStopFn && shouldStopFn()) {
-                   throw new Error("ABORT_RETRY");
-              }
-
-              if (error.message.includes("Cota de Pesquisa Diária Atingida")) {
-                  throw error;
-              }
-
-              attempts++;
-              const msg = error.message || "Erro desconhecido";
-              const waitTime = Math.min(2000 * Math.pow(2, attempts), 120000); 
-              
-              console.warn(`[${operationName}] Tentativa ${attempts} falhou. Retentando em ${waitTime/1000}s... Erro: ${msg}`);
-              
-              if (setStatusLog) {
-                  setStatusLog('warning', `[${operationName}] Falha ${attempts}. Aguardando ${Math.ceil(waitTime/1000)}s... (Pause para cancelar)`);
-              }
-
-              await sleep(waitTime);
-          }
-      }
-  };
-
-  const incrementSearchCount = async () => {
-      try {
-          const ref = doc(db, "settings", "search_quota");
-          await updateDoc(ref, { count: increment(1) });
-      } catch (e) {
-          console.warn("Falha ao incrementar cota:", e);
-      }
-  };
-
-  const searchQuestionSource = async (questionText, checkStop) => {
-      if (isSearchLimitEnabledRef.current) {
-          const quota = searchQuotaRef.current;
-          if (quota.count >= DAILY_SEARCH_LIMIT) {
-              throw new Error(`Cota de Pesquisa Diária Atingida (${quota.count}/${DAILY_SEARCH_LIMIT}). Pause ou desative o Limite.`);
-          }
-      }
-
-      const searchPromptText = questionText.length > 400 
-        ? questionText.substring(0, 400) + "..." 
-        : questionText;
-
-      const modelNameClean = selectedModel.startsWith('models/') ? selectedModel.replace('models/', '') : selectedModel;
-
-      const result = await executeBlindlyWithRetry("Pesquisa Web", async (key) => {
-          const systemPrompt = `Você é um verificador de questões de residência médica.
-              Sua missão: Identificar a origem da questão usando a Pesquisa Google.
-              CRITÉRIOS DE ESCOLHA:
-              - Se a questão apareceu em múltiplas provas, escolha a ORIGINAL ou a MAIS RECENTE.
-              REGRAS DE FORMATAÇÃO DE NOME:
-              - Resuma nomes longos para o formato: "UF - Nome Curto / Sigla".
-              - Exemplo Ruim: "Secretaria da Saúde do Estado da Bahia (SESAB) - Processo Unificado"
-              - Exemplo Bom: "BA - SUS Bahia"
-              - Exemplo Bom: "SP - USP São Paulo"
-              - Exemplo Bom: "Nacional - ENARE"
-              {
-                "institution": "Nome da Instituição Resumido (ou vazio se não achar)",
-                "year": "Ano (apenas números, ou vazio se não achar)"
-              }`;
-
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${modelNameClean}:generateContent?key=${key}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: `IDENTIFICAR ORIGEM:\n${searchPromptText}` }] }],
-                systemInstruction: { parts: [{ text: systemPrompt }] },
-                tools: [{ google_search: {} }] 
-              })
-            }
-          );
-
-          if (!response.ok) {
-              const errData = await response.json().catch(() => ({}));
-              throw new Error(errData.error?.message || "Erro HTTP na API Search");
-          }
-          
-          const data = await response.json();
-          let jsonString = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-          jsonString = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
-          
-          try { 
-              return JSON.parse(jsonString); 
-          } catch(e) { 
-              console.warn("JSON inválido na busca, assumindo não encontrado.");
-              return { institution: "", year: "" }; 
-          }
-      }, addLog, checkStop);
-
-      await incrementSearchCount();
-      return result;
-  };
-
-  const verifyQuestionWithAI = async (questionData, checkStop) => {
-      const modelNameClean = selectedModel.startsWith('models/') ? selectedModel.replace('models/', '') : selectedModel;
-      
-      return executeBlindlyWithRetry("Auditoria", async (key) => {
-          const verifyPrompt = `
-    Você é um Auditor Sênior de Questões Médicas.
-    Sua missão é validar se esta questão é SEGURA e COERENTE para um banco de dados de estudo.
-    ATENÇÃO: Você NÃO tem acesso à internet. Use exclusivamente seu conhecimento médico treinado.
-
-    DADOS DA QUESTÃO:
-    Banca: ${questionData.institution || "Não informada"}
-    Ano: ${questionData.year || "Não informado"}
-    Enunciado: "${questionData.text}"
-    Alternativas: ${JSON.stringify(questionData.options)}
-    Gabarito Proposto: ${questionData.correctOptionId}
-    Explicação Gerada: "${questionData.explanation}"
-
-    PASSO A PASSO DA AUDITORIA:
-    1. Analise se o gabarito faz sentido clinicamente.
-    2. Verifique se a "Explicação Gerada" realmente justifica o gabarito.
-    3. Aplique as REGRAS DE JULGAMENTO abaixo.
-
-    REGRAS DE JULGAMENTO (HIERARQUIA DE DECISÃO):
-
-    [NÍVEL 1: FATOS OBJETIVOS E ABSURDOS - TOLERÂNCIA ZERO]
-    - Se a questão contém ERROS GRAVES de números (Doses letais, Anatomia impossível).
-    - Se o gabarito é ABSURDAMENTE errado (ex: tratar parada cardíaca com dipirona).
-    - Se a Explicação contradiz o próprio Gabarito.
-    -> AÇÃO: REPROVE ("isValid": false).
-
-    [NÍVEL 2: ANACRONISMO (IMPORTANTE)]
-    - Se a questão parece "errada" hoje, mas estava CERTA no Ano da questão (mudança de diretriz/protocolo).
-    -> AÇÃO: APROVE com ressalva no motivo ("isValid": true, "reason": "Correto para a época").
-
-    [NÍVEL 3: ZONA CINZENTA E CONDUTAS]
-    - Se houver divergência na literatura médica.
-    - Se o gabarito for defendido por PELO MENOS UMA corrente bibliográfica (Harrison, Cecil, MS, UpToDate).
-    -> AÇÃO: APROVE ("isValid": true).
-
-    [NÍVEL 4: "NA DÚVIDA"]
-    - Se não for um erro médico grosseiro.
-    -> AÇÃO: APROVE ("isValid": true).
-
-    SAÍDA OBRIGATÓRIA (JSON):
-    {
-        "isValid": boolean, 
-        "reason": "Explicação breve e direta (máx 15 palavras)"
-    }
-`;
-
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelNameClean}:generateContent?key=${key}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                contents: [{ parts: [{ text: verifyPrompt }] }], 
-            })
-          });
-          
-          if (!response.ok) {
-               const errData = await response.json().catch(() => ({}));
-               throw new Error(errData.error?.message || "Erro na API Audit");
-          }
-
-          const data = await response.json();
-          let jsonString = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-          jsonString = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
-          const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
-          if (jsonMatch) jsonString = jsonMatch[0];
-          return safeJsonParse(jsonString);
-          
-      }, addLog, checkStop).then(result => {
-          return {
-              status: result.isValid ? 'verified' : 'suspicious',
-              reason: result.reason || (result.isValid ? "Validado (Web/Lógica)" : "Erro Fatual ou Divergência Grave")
-          };
-      });
-  };
-
-  const addLog = (type, message) => {
-      const time = new Date().toLocaleTimeString();
-      setProcessingLogs(prev => [{ type, message, time }, ...prev].slice(0, 50)); 
-  };
-  
-  const addBatchLog = (type, message) => {
-      const time = new Date().toLocaleTimeString();
-      setBatchLogs(prev => [{ type, message, time }, ...prev].slice(0, 50));
-  };
-
-  const toggleFilter = (filterKey) => {
-      setActiveFilters(prev => {
-          if (filterKey === 'all') return ['all'];
-          let newFilters = prev.filter(f => f !== 'all');
-          
-          if (newFilters.includes(filterKey)) {
-              newFilters = newFilters.filter(f => f !== filterKey);
-          } else {
-              newFilters.push(filterKey);
-          }
-          
-          if (newFilters.length === 0) return ['all'];
-          return newFilters;
-      });
-  };
-
-  const getFilteredQuestions = () => {
-    if (activeFilters.includes('all')) return parsedQuestions;
-    
-    return parsedQuestions.filter(q => {
-      if (!activeFilters.includes('duplicates') && q.isDuplicate) return false;
-
-      const results = activeFilters.map(filterKey => {
-          if (filterKey === 'verified') return q.verificationStatus === 'verified';
-          if (filterKey === 'suspicious') return q.verificationStatus === 'suspicious';
-          if (filterKey === 'source') return !!q.sourceFound;
-          if (filterKey === 'no_source') return !q.sourceFound;
-          if (filterKey === 'duplicates') return !!q.isDuplicate;
-          if (filterKey === 'needs_image') return !!q.needsImage; 
-          if (filterKey === 'text_only') return !q.needsImage; 
-          return true;
-      });
-
-      if (filterLogic === 'AND') {
-          return results.every(r => r === true);
-      } else {
-          return results.some(r => r === true);
-      }
-    });
-  };
-
-  const filterLabels = {
-      'all': 'Todas',
-      'verified': 'Verificadas',
-      'source': 'Com Fonte',
-      'no_source': 'Sem Fonte', 
-      'suspicious': 'Suspeitas',
-      'duplicates': 'Duplicadas',
-      'needs_image': 'Requer Imagem',
-      'text_only': 'Texto Puro (Sem Imagem)' 
-  };
-
-  const handleImageUploadToQuestion = async (e, idx, questionData) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      setUploadingImageId(questionData.id);
-
-      try {
-          const optimizedFile = await optimizeImageForWeb(file);
-          const timestamp = Date.now();
-          const fileName = `${questionData.id}_${timestamp}.webp`;
-          const storageRef = ref(storage, `questions_images/${fileName}`);
-          
-          const snapshot = await uploadBytes(storageRef, optimizedFile);
-          const downloadURL = await getDownloadURL(snapshot.ref);
-
-          await updateDoc(doc(db, "draft_questions", questionData.id), {
-              images: arrayUnion(downloadURL), 
-              hasImage: true
-          });
-
-          const newQ = [...parsedQuestions];
-          if (newQ[idx]) {
-              const currentImages = newQ[idx].images || [];
-              newQ[idx].images = [...currentImages, downloadURL];
-              newQ[idx].hasImage = true;
-              setParsedQuestions(newQ);
-          }
-          
-          showNotification('success', 'Imagem adicionada à galeria!');
-
-      } catch (error) {
-          console.error(error);
-          showNotification('error', 'Erro ao enviar: ' + error.message);
-      } finally {
-          setUploadingImageId(null);
-      }
-  };
-  
-  const deleteImageFromQuestion = async (idx, questionData, urlToDelete) => {
-      if (!window.confirm("Remover esta imagem específica?")) return;
-
-      try {
-          try {
-              const fileRef = ref(storage, urlToDelete);
-              await deleteObject(fileRef);
-          } catch (e) { console.warn("Erro storage:", e); }
-
-          await updateDoc(doc(db, "draft_questions", questionData.id), {
-              images: arrayRemove(urlToDelete)
-          });
-
-          const newQ = [...parsedQuestions];
-          if (newQ[idx]) {
-              newQ[idx].images = newQ[idx].images.filter(url => url !== urlToDelete);
-              if (newQ[idx].images.length === 0) newQ[idx].hasImage = false;
-              setParsedQuestions(newQ);
-          }
-          showNotification('success', 'Imagem removida.');
-      } catch (error) {
-          showNotification('error', 'Erro ao remover imagem.');
-      }
-  };
-
-  const handleBatchImageUpload = (e) => {
-      const files = Array.from(e.target.files);
-      if (files.length === 0) return;
-
-      const newImages = files.map(file => ({
-          id: Math.random().toString(36).substr(2, 9),
-          file,
-          name: file.name,
-          preview: URL.createObjectURL(file),
-          status: 'pending',
-          errorMsg: ''
-      }));
-
-      setBatchImages(prev => [...prev, ...newImages]);
-      addBatchLog('info', `${files.length} imagens adicionadas à fila.`);
-  };
-
-  const handleBatchPaste = (e) => {
-      const items = e.clipboardData.items;
-      const newImages = [];
-      for (let i = 0; i < items.length; i++) {
-          if (items[i].type.indexOf("image") !== -1) {
-              const blob = items[i].getAsFile();
-              newImages.push({
-                  id: Math.random().toString(36).substr(2, 9),
-                  file: blob,
-                  name: `Colada_${new Date().getTime()}_${i}.png`,
-                  preview: URL.createObjectURL(blob),
-                  status: 'pending',
-                  errorMsg: ''
-              });
-          }
-      }
-      if (newImages.length > 0) {
-          setBatchImages(prev => [...prev, ...newImages]);
-          addBatchLog('info', `${newImages.length} imagens coladas (Ctrl+V) na fila.`);
-      }
-  };
-
-  const removeBatchImage = (id) => {
-      setBatchImages(prev => prev.filter(img => img.id !== id));
-  };
-
-  const clearBatchQueue = () => {
-      if (batchStatus === 'processing' || batchStatus === 'pausing') return;
-      setBatchImages([]);
-      addBatchLog('info', 'Fila de imagens limpa.');
-      setBatchLogs([]);
-  };
-
-  const toggleBatchProcessing = () => {
-      const currentStatus = batchStatusRef.current;
-      
-      if (currentStatus === 'processing') {
-          setBatchStatus('pausing');
-          addBatchLog('warning', 'Solicitando pausa... Aguardando a imagem atual finalizar.');
-      } else if (currentStatus === 'paused' || currentStatus === 'idle') {
-          setBatchStatus('processing');
-          addBatchLog('info', 'Iniciando processamento de imagens...');
-          batchProcessorRef.current = false;
-          setTimeout(() => processNextBatchImage(), 100);
-      }
-  };
-
-  const fileToBase64 = (file) => {
-      return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.readAsDataURL(file);
-          reader.onload = () => resolve(reader.result.split(',')[1]);
-          reader.onerror = error => reject(error);
-      });
-  };
-
-  const processNextBatchImage = async () => {
-      if (batchProcessorRef.current) return;
-
-      const currentStatus = batchStatusRef.current;
-      if (currentStatus === 'pausing') {
-          setBatchStatus('paused');
-          addBatchLog('warning', 'Processamento pausado com segurança.');
-          return;
-      }
-      if (currentStatus !== 'processing') return;
-
-      const queue = batchImagesRef.current;
-      const nextImg = queue.find(img => img.status === 'pending');
-
-      if (!nextImg) {
-          setBatchStatus('idle');
-          addBatchLog('success', 'Fila de imagens finalizada!');
-          showNotification('success', 'Todas as imagens foram processadas.');
-          return;
-      }
-
-      batchProcessorRef.current = true;
-      const ovr = overridesRef.current;
-      addBatchLog('info', `Processando imagem: ${nextImg.name}...`);
-
-      try {
-          const base64Data = await fileToBase64(nextImg.file);
-          const activeThemesMap = ovr.overrideArea ? { [ovr.overrideArea]: themesMap[ovr.overrideArea] } : themesMap;
-
-          const shouldStopBatch = () => batchStatusRef.current === 'pausing';
-
-          const questions = await executeBlindlyWithRetry("Imagem Batch", async (key) => {
-              const systemPrompt = `
-              Você é um especialista em banco de dados médicos (MedMaps).
-              Analise o conteúdo e gere um JSON ESTRITO.
-              
-              CONTEXTO (Informacional):
-              - Instituição: ${ovr.overrideInst ? ovr.overrideInst : "Não informado (Detectar do texto)"}
-              - Ano: ${ovr.overrideYear ? ovr.overrideYear : "Não informado (Detectar do texto)"}
-
-              REGRAS DE EXTRAÇÃO E LIMPEZA:
-              1. LIMPEZA DE INÍCIO:
-                 - Remova APENAS índices/rótulos de questão (ex: "1)", "159048)", "05.", "Questão 1:", "Enunciado:").
-                 - MANTENHA números que fazem parte da frase (ex: "3 pacientes...", "40 anos...").
-                 - Comece o texto direto no conteúdo do caso clínico.
-
-              2. SEPARAÇÃO DAS ALTERNATIVAS:
-                 - O campo "text" DEVE TERMINAR antes das alternativas.
-                 - NUNCA inclua "A) ... B) ..." ou "a. ... b. ..." dentro do campo "text".
-                 - As alternativas DEVEM ser extraídas separadamente no array "options".
-
-              3. DETECÇÃO DE IMAGEM (LÓGICA CONTEXTUAL):
-                 - MARQUE "needsImage": true SE:
-                   * O texto MANDA olhar: "Vide figura", "Observe a imagem", "A figura abaixo", "Ver anexo".
-                   * O texto DEPENDE do visual: "De acordo com o exame de imagem", "Baseado no ECG apresentado".
-                   * O texto é vago sobre o resultado: "O Raio-X revela... (e não diz o que)".
-                 - MARQUE "needsImage": false SE:
-                   * O texto já DESCREVE o resultado: "ECG normal", "Raio-X evidenciando fratura".
-                   * Apenas cita que o exame foi feito: "Foi solicitada tomografia".
-
-              4. CLASSIFICAÇÃO E RESOLUÇÃO:
-                 - Classifique usando a lista: ${JSON.stringify(activeThemesMap)}
-                 - Tente encontrar o gabarito. Se não houver, RESOLVA a questão.
-                 - Gere sempre "explanation".
-
-              Formato Saída JSON:
-              [
-                {
-                  "institution": "String", "year": Number|String, "area": "String", "topic": "String",
-                  "text": "String", "options": [{"id": "a", "text": "String"}],
-                  "correctOptionId": "char", "explanation": "String",
-                  "needsImage": boolean
-                }
-              ]
-            `;
-
-              const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel.replace('models/', '')}:generateContent?key=${key}`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                      contents: [{
-                          parts: [
-                              { text: systemPrompt },
-                              { inline_data: { mime_type: nextImg.file.type, data: base64Data } }
-                          ]
-                      }]
-                  })
-              });
-
-              if (!response.ok) {
-                   const errData = await response.json().catch(() => ({}));
-                   throw new Error(errData.error?.message || "Erro na API Gemini");
-              }
-
-              const data = await response.json();
-              let jsonString = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-              const parsed = safeJsonParse(jsonString);
-              return parsed.filter(q => q.options && q.options.length >= 2);
-          }, addBatchLog, shouldStopBatch);
-
-          let processedQuestions = await Promise.all(questions.map(async (q) => {
-              // --- USANDO FUZZY HASH ---
-              const hashId = await generateFuzzyHash(q);
-              
-              let isDuplicate = false;
-              let oldData = null;
-
-              if (hashId) {
-                  const existingDoc = await getDoc(doc(db, "questions", hashId));
-                  if (existingDoc.exists()) {
-                      isDuplicate = true;
-                      oldData = existingDoc.data();
-                  }
-              }
-
-              const shouldRunAPIs = !isDuplicate; 
-
-              let preCleanedInst = cleanInstitutionText(q.institution);
-              
-              let finalInst = preCleanedInst;
-              let finalYear = q.year;
-              let sourceFound = false;
-              let verificationStatus = 'unchecked';
-              let verificationReason = '';
-
-              if (shouldRunAPIs) {
-                  const doWebSearch = webSearchRef.current; 
-                  const doDoubleCheck = doubleCheckRef.current; 
-
-                  const searchPromise = (async () => {
-                      if (doWebSearch && (!preCleanedInst || !q.year)) { 
-                         return await searchQuestionSource(q.text, shouldStopBatch);
-                      }
-                      return null;
-                  })();
-
-                  const auditPromise = (async () => {
-                      if (doDoubleCheck) {
-                          return await verifyQuestionWithAI(q, shouldStopBatch);
-                      }
-                      return { status: 'unchecked', reason: '' };
-                  })();
-
-                  const [searchResult, auditResult] = await Promise.all([searchPromise, auditPromise]);
-
-                  if (searchResult) {
-                      if (searchResult.institution) { finalInst = searchResult.institution; sourceFound = true; }
-                      if (searchResult.year) finalYear = searchResult.year;
-                  }
-                  verificationStatus = auditResult.status;
-                  verificationReason = auditResult.reason;
-
-              } else {
-                  if (oldData) {
-                      finalInst = oldData.institution || q.institution;
-                      finalYear = oldData.year || q.year;
-                      sourceFound = oldData.sourceFound || false; 
-                      verificationStatus = oldData.verificationStatus || 'unchecked';
-                      verificationReason = oldData.verificationReason || 'Duplicata recuperada';
-                  }
-              }
-
-              finalInst = cleanInstitutionText(finalInst);
-
-              const ovr = overridesRef.current || { overrideInst, overrideYear, overrideArea, overrideTopic };
-              if (ovr.overrideInst) finalInst = ovr.overrideInst;
-              if (ovr.overrideYear) finalYear = ovr.overrideYear;
-
-              return {
-                  ...q,
-                  institution: finalInst,
-                  year: finalYear,
-                  area: ovr.overrideArea || q.area,
-                  topic: ovr.overrideTopic || q.topic,
-                  sourceFound,
-                  verificationStatus,
-                  verificationReason,
-                  hashId,
-                  isDuplicate
-              };
-          }));
-        
-          const batch = writeBatch(db);
-          let savedCount = 0;
-          
-          for (const q of processedQuestions) {
-              const docId = q.hashId || doc(collection(db, "draft_questions")).id;
-              const docRef = doc(db, "draft_questions", docId);
-              batch.set(docRef, {
-                  ...q,
-                  institution: q.institution || "", 
-                  year: q.year || "",
-                  createdAt: new Date().toISOString(),
-                  createdBy: user.email,
-                  sourceFile: nextImg.name,
-                  hasImage: true 
-              });
-              savedCount++;
-          }
-          await batch.commit();
-          
-          addBatchLog('success', `Sucesso em ${nextImg.name}: ${savedCount} questões salvas.`);
-          setBatchImages(prev => prev.filter(img => img.id !== nextImg.id));
-
-          setTimeout(() => {
-              batchProcessorRef.current = false;
-              processNextBatchImage();
-          }, 1000);
-
-      } catch (error) {
-          console.error(error);
-          
-          if (error.message === 'ABORT_RETRY') {
-              addBatchLog('warning', `Processamento interrompido manualmente pelo usuário.`);
-              setBatchStatus('paused');
-              batchProcessorRef.current = false;
-              showNotification('info', 'Pausado! Agora você pode remover a imagem se desejar.');
-              return;
-          }
-          
-          if (error.message.includes("Cota de Pesquisa")) {
-              addBatchLog('error', error.message);
-              setBatchStatus('paused');
-              batchProcessorRef.current = false;
-              showNotification('error', error.message);
-              return;
-          }
-
-          const errorMessage = error.message || "Erro desconhecido";
-          addBatchLog('error', `Falha em ${nextImg.name}: ${errorMessage}`);
-          setBatchImages(prev => prev.map(img => img.id === nextImg.id ? { ...img, status: 'error', errorMsg: errorMessage } : img));
-          
-          setTimeout(() => {
-              batchProcessorRef.current = false;
-              processNextBatchImage();
-          }, 1000);
-      }
-  };
-
-  const handlePdfUpload = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      if (file.type !== 'application/pdf') return showNotification('error', 'Por favor, envie um arquivo PDF.');
-      
-      setPdfFile(file);
-      setPdfStatus('reading');
-      setProcessingLogs([]);
-      addLog('info', `Iniciando leitura de: ${file.name}`);
-
-      try {
-          const pdfjs = await loadPdfJs();
-          const arrayBuffer = await file.arrayBuffer();
-          const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
-          
-          addLog('info', `PDF carregado. Total: ${pdf.numPages} págs.`);
-          
-          let startP = parseInt(pdfStartPage) || 1;
-          let endP = parseInt(pdfEndPage) || pdf.numPages;
-
-          if (startP < 1) startP = 1;
-          if (endP > pdf.numPages) endP = pdf.numPages;
-          if (startP > endP) {
-               startP = 1; 
-               endP = pdf.numPages;
-               showNotification('warning', 'Intervalo inválido. Usando PDF completo.');
-          } else {
-               if (startP !== 1 || endP !== pdf.numPages) {
-                   addLog('info', `Recortando páginas: ${startP} até ${endP}`);
-               }
-          }
-
-          let chunks = [];
-          let currentChunkText = "";
-          let chunkStartPage = startP;
-          let lastPageContent = "";
-
-          for (let i = startP; i <= endP; i++) {
-              const page = await pdf.getPage(i);
-              const content = await page.getTextContent();
-              const text = content.items.map(item => item.str).join(' ');
-              
-              lastPageContent = text; 
-
-              const pageTextFormatted = `\n--- PÁGINA ${i} ---\n${text}`;
-              currentChunkText += pageTextFormatted;
-
-              if ((i - startP + 1) % CHUNK_SIZE === 0 || i === endP) {
-                  
-                  let finalChunkText = currentChunkText;
-
-                  if (i < endP) {
-                      try {
-                          const nextPage = await pdf.getPage(i + 1);
-                          const nextContent = await nextPage.getTextContent();
-                          const nextText = nextContent.items.map(item => item.str).join(' ');
-                          finalChunkText += `\n\n--- CONTEXTO DA PRÓXIMA PÁGINA (${i+1}) ---\n${nextText}`;
-                      } catch (err) {
-                          console.warn("Não foi possível buscar o contexto da próxima página:", err);
-                      }
-                  }
-
-                  chunks.push({
-                      id: `chunk_${chunkStartPage}_${i}`,
-                      pages: `${chunkStartPage} a ${i}`,
-                      text: finalChunkText,
-                      status: 'pending',
-                      errorCount: 0
-                  });
-                  
-                  if (i < endP) {
-                      currentChunkText = `\n--- CONTEXTO DA PÁGINA ANTERIOR (${i}) ---\n${lastPageContent}`;
-                  } else {
-                      currentChunkText = "";
-                  }
-                  
-                  chunkStartPage = i + 1;
-              }
-          }
-
-          setPdfChunks(chunks);
-          setPdfStatus('ready');
-          addLog('success', `Pronto! ${chunks.length} partes geradas (${startP}-${endP}).`);
-
-          if (lastSessionData && lastSessionData.fileName === file.name) {
-              const lastIdx = lastSessionData.lastChunkIndex;
-              const nextIndex = lastIdx + 1;
-
-              if (nextIndex < chunks.length) {
-                  setCurrentChunkIndex(nextIndex);
-                  
-                  for(let i = 0; i < nextIndex; i++) {
-                      chunks[i].status = 'restored';
-                  }
-
-                  addLog('info', `Sessão encontrada no DB! Agulha movida para a fatia ${chunks[nextIndex].pages}.`);
-                  showNotification('info', `Retomando ${file.name} a partir da fatia ${chunks[nextIndex].pages}.`);
-              } else {
-                  setCurrentChunkIndex(chunks.length - 1);
-                  chunks.forEach(c => c.status = 'restored');
-                  
-                  addLog('success', `Este arquivo já foi finalizado na última sessão.`);
-                  showNotification('success', 'Arquivo já finalizado anteriormente.');
-              }
-          } else {
-              const newSession = {
-                  fileName: file.name,
-                  lastChunkIndex: -1, 
-                  lastChunkPages: 'Início',
-                  timestamp: new Date().toISOString()
-              };
-              
-              if (user) {
-                  try {
-                      await setDoc(doc(db, "users", user.uid, "progress", "pdf_session"), newSession);
-                      addLog('info', 'Novo arquivo detectado. Progresso resetado no banco.');
-                  } catch (e) {
-                      console.error("Erro ao salvar inicio de sessão:", e);
-                  }
-              }
-          }
-
-      } catch (error) {
-          console.error(error);
-          setPdfStatus('error');
-          addLog('error', `Erro crítico ao ler PDF: ${error.message}`);
-          showNotification('error', 'Erro ao ler PDF.');
-      }
-  };
-
-  const handleResetPdf = () => {
-      if (pdfStatus === 'processing' || pdfStatus === 'pausing') return; 
-      setPdfFile(null);
-      setPdfChunks([]);
-      setPdfStatus('idle');
-      setCurrentChunkIndex(0);
-      setProcessingLogs([]);
-      setConsecutiveErrors(0);
-      setPdfStartPage('');
-      setPdfEndPage('');
-  };
-
-  const handleRestartPdf = () => {
-      if (!pdfFile || pdfStatus === 'processing' || pdfStatus === 'pausing') return;
-      const resetChunks = pdfChunks.map(c => ({ ...c, status: 'pending', errorCount: 0 }));
-      setPdfChunks(resetChunks);
-      setCurrentChunkIndex(0);
-      setPdfStatus('ready');
-      setProcessingLogs([]);
-      setConsecutiveErrors(0);
-      
-      const resetSession = {
-          fileName: pdfFile.name,
-          lastChunkIndex: -1,
-          lastChunkPages: 'Início',
-          timestamp: new Date().toISOString()
-      };
-      
-      if (user) {
-          setDoc(doc(db, "users", user.uid, "progress", "pdf_session"), resetSession)
-            .catch(e => console.error("Erro ao resetar sessão:", e));
-      }
-      
-      addLog('info', 'Processamento reiniciado do zero.');
-  };
-
-  const handleJumpToChunk = (index) => {
-      if (pdfStatus === 'processing' || pdfStatus === 'idle' || pdfStatus === 'pausing' || pdfStatus === 'reading') return;
-      
-      const chunk = pdfChunks[index];
-      addLog('info', `Agulha movida para fatia ${chunk.pages} (Aguardando Início)...`);
-      
-      setCurrentChunkIndex(index);
-
-      setPdfChunks(prev => {
-          const newChunks = [...prev];
-          newChunks[index] = { ...newChunks[index], status: 'pending', errorCount: 0 };
-          return newChunks;
-      });
-  };
-
-  const processNextChunk = async () => {
-      const currentStatus = pdfStatusRef.current;
-      const currentChunks = pdfChunksRef.current;
-      const doDoubleCheck = doubleCheckRef.current;
-      const doWebSearch = webSearchRef.current; 
-      const ovr = overridesRef.current; 
-      const currentFile = pdfFile; 
-      const activeIndex = currentChunkIndexRef.current;
-
-      if (currentStatus === 'pausing' || currentStatus === 'paused') {
-          if (currentStatus === 'pausing') {
-              setPdfStatus('paused');
-              addLog('warning', 'Pausa solicitada. Sistema parado com segurança.');
-          }
-          processorRef.current = false; 
-          return; 
-      }
-      
-      if (processorRef.current) return; 
-      if (currentStatus === 'completed') return;
-      
-      if (activeIndex >= currentChunks.length) {
-           setPdfStatus('completed');
-           addLog('success', 'Processamento Completo!');
-           showNotification('success', 'Todas as partes selecionadas foram processadas.');
-           return;
-      }
-
-      const chunk = currentChunks[activeIndex];
-
-      if (currentStatus !== 'pausing' && currentStatus !== 'processing') setPdfStatus('processing');
-      
-      processorRef.current = true; 
-      addLog('info', `Processando fatia ${chunk.pages}...`);
-
-      try {
-          const activeThemesMap = ovr.overrideArea ? { [ovr.overrideArea]: themesMap[ovr.overrideArea] } : themesMap;
-
-          const shouldStopPdf = () => pdfStatusRef.current === 'pausing';
-
-          const questions = await executeBlindlyWithRetry("Geração", async (key) => {
-              const systemPrompt = `
-              Você é um especialista em banco de dados médicos (MedMaps).
-              Analise o conteúdo e gere um JSON ESTRITO.
-              
-              CONTEXTO (Informacional):
-              - Instituição: ${ovr.overrideInst ? ovr.overrideInst : "Não informado (Detectar do texto)"}
-              - Ano: ${ovr.overrideYear ? ovr.overrideYear : "Não informado (Detectar do texto)"}
-
-              OBSERVAÇÃO SOBRE CONTEXTO (CRÍTICO PARA PDF):
-              - O texto contém seções de 'CONTEXTO' (Anterior e Próxima). 
-              - Use essas seções APENAS para reconstruir questões quebradas nas bordas do conteúdo principal.
-              - Se uma questão estiver 100% contida dentro de uma área de contexto, ignore-a (ela será processada no outro lote).
-
-              REGRAS DE EXTRAÇÃO E LIMPEZA:
-              1. LIMPEZA DE INÍCIO:
-                 - Remova APENAS índices/rótulos de questão (ex: "1)", "159048)", "05.", "Questão 1:", "Enunciado:").
-                 - MANTENHA números que fazem parte da frase (ex: "3 pacientes...", "40 anos...").
-                 - Comece o texto direto no conteúdo do caso clínico.
-                 
-              2. SEPARAÇÃO DAS ALTERNATIVAS:
-                 - O campo "text" DEVE TERMINAR antes das alternativas.
-                 - NUNCA inclua "A) ... B) ..." ou "a. ... b. ..." dentro do campo "text".
-                 - As alternativas DEVEM ser extraídas separadamente no array "options".
-
-              3. DETECÇÃO DE IMAGEM (LÓGICA CONTEXTUAL):
-                 - MARQUE "needsImage": true SE:
-                   * O texto MANDA olhar: "Vide figura", "Observe a imagem", "A figura abaixo", "Ver anexo".
-                   * O texto DEPENDE do visual: "De acordo com o exame de imagem", "Baseado no ECG apresentado".
-                   * O texto é vago sobre o resultado: "O Raio-X revela... (e não diz o que)".
-                 - MARQUE "needsImage": false SE:
-                   * O texto já DESCREVE o resultado: "ECG normal", "Raio-X evidenciando fratura".
-                   * Apenas cita que o exame foi feito: "Foi solicitada tomografia".
-
-              4. CLASSIFICAÇÃO E RESOLUÇÃO:
-                - Se o gabarito estiver no texto, use-o. Se NÃO, RESOLVA a questão.
-                - Gere sempre um campo "explanation".
-                 - Classifique CADA questão em uma das Áreas e Tópicos da lista abaixo.
-                  - É CRUCIAL que a classificação esteja correta.
-                  - LISTA DE CLASSIFICAÇÃO VÁLIDA:
-                   ${JSON.stringify(activeThemesMap)}
-
-              5. DADOS DE CABEÇALHO:
-                  - IGNORE nomes de cursos preparatórios (Medgrupo, Medcurso, Estratégia, etc) no campo "institution".
-                  - Procure pelo nome do HOSPITAL ou BANCA.
-                  - Se não encontrar, deixe "".
-
-              Formato Saída JSON:
-              [
-                {
-                  "institution": "String", "year": Number|String, "area": "String", "topic": "String",
-                  "text": "String", "options": [{"id": "a", "text": "String"}],
-                  "correctOptionId": "char", "explanation": "String",
-                  "needsImage": boolean
-                }
-              ]
-            `;
-            
-              const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel.replace('models/', '')}:generateContent?key=${key}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: systemPrompt + "\n\nTEXTO DO PDF:\n" + chunk.text }] }]
-                })
-              });
-
-              if (!response.ok) {
-                  const errData = await response.json().catch(() => ({}));
-                  throw new Error(errData.error?.message || "Erro na API Geração");
-              }
-
-              const data = await response.json();
-              let jsonString = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-              const parsed = safeJsonParse(jsonString);
-              return parsed.filter(q => q.options && q.options.length >= 2);
-          }, addLog, shouldStopPdf);
-
-          addLog('info', `Pós-processando ${questions.length} questões (Search + Audit)...`);
-
-          let processedQuestions = await Promise.all(questions.map(async (q) => {
-              // --- USANDO FUZZY HASH ---
-              const hashId = await generateFuzzyHash(q);
-              
-              let isDuplicate = false;
-              let oldData = null;
-
-              if (hashId) {
-                  const existingDoc = await getDoc(doc(db, "questions", hashId));
-                  if (existingDoc.exists()) {
-                      isDuplicate = true;
-                      oldData = existingDoc.data();
-                  }
-              }
-
-              const shouldRunAPIs = !isDuplicate; 
-
-              let preCleanedInst = cleanInstitutionText(q.institution);
-              let finalInst = preCleanedInst;
-              let finalYear = q.year;
-              let sourceFound = false;
-              let verificationStatus = 'unchecked';
-              let verificationReason = '';
-
-              if (shouldRunAPIs) {
-                  const doWebSearch = webSearchRef.current; 
-                  const doDoubleCheck = doubleCheckRef.current; 
-
-                  const searchPromise = (async () => {
-                      if (doWebSearch && (!preCleanedInst || !q.year)) { 
-                         return await searchQuestionSource(q.text, shouldStopPdf);
-                      }
-                      return null;
-                  })();
-
-                  const auditPromise = (async () => {
-                      if (doDoubleCheck) {
-                          return await verifyQuestionWithAI(q, shouldStopPdf);
-                      }
-                      return { status: 'unchecked', reason: '' };
-                  })();
-
-                  const [searchResult, auditResult] = await Promise.all([searchPromise, auditPromise]);
-
-                  if (searchResult) {
-                      if (searchResult.institution) { finalInst = searchResult.institution; sourceFound = true; }
-                      if (searchResult.year) finalYear = searchResult.year;
-                  }
-                  verificationStatus = auditResult.status;
-                  verificationReason = auditResult.reason;
-
-              } else {
-                  if (oldData) {
-                      finalInst = oldData.institution || q.institution;
-                      finalYear = oldData.year || q.year;
-                      sourceFound = oldData.sourceFound || false; 
-                      verificationStatus = oldData.verificationStatus || 'unchecked';
-                      verificationReason = oldData.verificationReason || 'Duplicata recuperada';
-                  }
-              }
-
-              finalInst = cleanInstitutionText(finalInst);
-
-              const ovr = overridesRef.current || { overrideInst, overrideYear, overrideArea, overrideTopic }; 
-              if (ovr.overrideInst) finalInst = ovr.overrideInst;
-              if (ovr.overrideYear) finalYear = ovr.overrideYear;
-
-              return {
-                  ...q,
-                  institution: finalInst,
-                  year: finalYear,
-                  area: ovr.overrideArea || q.area,
-                  topic: ovr.overrideTopic || q.topic,
-                  sourceFound,
-                  verificationStatus,
-                  verificationReason,
-                  hashId,
-                  isDuplicate
-              };
-          }));
-
-          const batch = writeBatch(db);
-          processedQuestions.forEach(q => {
-              const docId = q.hashId || doc(collection(db, "draft_questions")).id;
-              const docRef = doc(db, "draft_questions", docId);
-              
-              batch.set(docRef, {
-                  ...q,
-                  institution: q.institution || "", 
-                  year: q.year || "",
-                  createdAt: new Date().toISOString(),
-                  createdBy: user.email,
-                  sourceFile: pdfFile.name,
-                  sourcePages: chunk.pages,
-                  hasImage: false
-              });
-          });
-          await batch.commit();
-
-          addLog('success', `Sucesso fatia ${chunk.pages}: ${processedQuestions.length} questões salvas.`);
-          setPdfChunks(prev => {
-              const newChunks = [...prev];
-              newChunks[activeIndex] = { ...newChunks[activeIndex], status: 'success' };
-              return newChunks;
-          });
-          setConsecutiveErrors(0); 
-
-          if (currentFile && currentFile.name && user) {
-              const sessionData = {
-                  fileName: currentFile.name,
-                  lastChunkIndex: activeIndex, 
-                  lastChunkPages: chunk.pages,
-                  timestamp: new Date().toISOString()
-              };
-              setDoc(doc(db, "users", user.uid, "progress", "pdf_session"), sessionData)
-                .catch(err => console.error("Erro ao salvar progresso no DB:", err));
-          }
-
-          if (pdfStatusRef.current === 'pausing') {
-              setPdfStatus('paused');
-              addLog('warning', 'Pausa solicitada. Ciclo atual concluído e salvo.');
-              processorRef.current = false;
-              return; 
-          }
-
-          if (pdfStatusRef.current === 'paused' || pdfStatusRef.current === 'idle') {
-              processorRef.current = false;
-              return;
-          }
-
-          setCurrentChunkIndex(prev => prev + 1);
-          setTimeout(() => {
-              processorRef.current = false; 
-              processNextChunk(); 
-          }, 500); 
-
-      } catch (error) {
-          console.error(error);
-          
-          if (error.message === 'ABORT_RETRY') {
-              addLog('warning', `Processamento interrompido manualmente pelo usuário.`);
-              setPdfStatus('paused');
-              processorRef.current = false;
-              return;
-          }
-
-          if (error.message.includes("Cota de Pesquisa")) {
-              addLog('error', error.message);
-              setPdfStatus('paused');
-              processorRef.current = false;
-              showNotification('error', error.message);
-              return;
-          }
-
-          const errorMessage = error.message || "";
-          const newErrorCount = chunk.errorCount + 1;
-          const delay = 3000 * Math.pow(2, newErrorCount);
-          
-          if (newErrorCount >= 3) {
-              addLog('error', `Fatia ${chunk.pages} marcada com ERRO APÓS 3 TENTATIVAS.`);
-              setPdfChunks(prev => {
-                  const newChunks = [...prev];
-                  newChunks[activeIndex] = { ...newChunks[activeIndex], status: 'error', errorCount: newErrorCount };
-                  return newChunks;
-              });
-              setConsecutiveErrors(0);
-              processorRef.current = false;
-              
-              setCurrentChunkIndex(prev => prev + 1);
-              setTimeout(() => processNextChunk(), 1000); 
-              return;
-          }
-
-          setPdfChunks(prev => {
-              const newChunks = [...prev];
-              newChunks[activeIndex] = { ...newChunks[activeIndex], status: 'pending' };
-              return newChunks;
-          });
-
-          setTimeout(() => {
-              processorRef.current = false;
-              processNextChunk();
-          }, delay);
-      }
-  };
-
-  const togglePdfProcessing = () => {
-      const currentStatus = pdfStatusRef.current;
-      if (currentStatus === 'processing') {
-          setPdfStatus('pausing');
-          addLog('warning', 'Solicitando pausa... Aguardando conclusão da fatia atual.');
-      } else if (currentStatus === 'paused' || currentStatus === 'ready') {
-          setPdfStatus('processing');
-          addLog('info', currentStatus === 'ready' ? 'Iniciando processamento...' : 'Retomando...');
-          processorRef.current = false; 
-          setTimeout(() => processNextChunk(), 100);
-      }
-  };
-
-  const startReprocessBatch = async () => {
-      const targets = getFilteredQuestions();
-      if (targets.length === 0) return;
-
-      setReprocessState({ status: 'processing', total: targets.length, current: 0 });
-      setShowReprocessModal(false);
-
-      let successCount = 0;
-      const BATCH_SIZE = 5; 
-
-      for (let i = 0; i < targets.length; i += BATCH_SIZE) {
-          if (reprocessStateRef.current.status === 'pausing') {
-              setReprocessState(prev => ({ ...prev, status: 'paused' }));
-              showNotification('warning', 'Re-processamento pausado com sucesso.');
-              return;
-          }
-
-          const chunk = targets.slice(i, i + BATCH_SIZE);
-          
-          try {
-              await Promise.all(chunk.map(async (q) => {
-                  let updates = {};
-
-                  if (reprocessConfig.search) {
-                      const searchResult = await searchQuestionSource(q.text, () => reprocessStateRef.current.status === 'pausing');
-                      if (searchResult) {
-                          if (searchResult.institution) {
-                              updates.institution = cleanInstitutionText(searchResult.institution);
-                              updates.sourceFound = true;
-                          }
-                          if (searchResult.year) updates.year = searchResult.year;
-                      }
-                  }
-
-                  if (reprocessConfig.audit) {
-                      const auditData = { ...q, ...updates }; 
-                      const auditResult = await verifyQuestionWithAI(auditData, () => reprocessStateRef.current.status === 'pausing');
-                      updates.verificationStatus = auditResult.status;
-                      updates.verificationReason = auditResult.reason;
-                  }
-
-                  if (Object.keys(updates).length > 0) {
-                      const docRef = doc(db, "draft_questions", q.id);
-                      await updateDoc(docRef, updates);
-                      
-                      setParsedQuestions(prev => prev.map(item => item.id === q.id ? { ...item, ...updates } : item));
-                  }
-
-                  successCount++;
-              }));
-
-          } catch (error) {
-              if (error.message === 'ABORT_RETRY') {
-                  setReprocessState(prev => ({ ...prev, status: 'paused' }));
-                  return;
-              }
-              if (error.message.includes("Cota de Pesquisa")) {
-                  showNotification('error', error.message);
-                  setReprocessState(prev => ({ ...prev, status: 'paused' }));
-                  return;
-              }
-              console.error(`Erro em um dos itens do lote:`, error);
-          }
-
-          setReprocessState(prev => ({ ...prev, current: Math.min(i + BATCH_SIZE, targets.length) }));
-
-          await sleep(2500); 
-      }
-
-      setReprocessState({ status: 'idle', total: 0, current: 0 });
-      showNotification('success', `Lote Finalizado! ${successCount} questões re-processadas.`);
-  };
-
-  const pauseReprocessBatch = () => {
-      setReprocessState(prev => ({ ...prev, status: 'pausing' }));
-      showNotification('info', 'Pausando... Aguarde a questão atual terminar.');
-  };
-
-  const saveApiKeyFromModal = async () => {
-      const rawKeys = tempApiKeysText.split('\n').map(k => k.trim()).filter(k => k.length > 0);
-      const uniqueKeys = [...new Set(rawKeys)];
-
-      if (uniqueKeys.length === 0) return showNotification('error', 'Adicione pelo menos uma chave.');
-      
-      setIsSavingKey(true);
-      try {
-          setApiKeys(uniqueKeys);
-          localStorage.setItem('gemini_api_keys', JSON.stringify(uniqueKeys));
-          apiKeysRef.current = uniqueKeys;
-          keyRotationIndex.current = 0; 
-
-          await setDoc(doc(db, "settings", "global"), {
-              geminiApiKeys: uniqueKeys, 
-              geminiApiKey: uniqueKeys[0], 
-              updatedBy: user.email,
-              updatedAt: new Date().toISOString()
-          }, { merge: true });
-          
-          setShowApiKeyModal(false);
-          setShowTutorial(false);
-          showNotification('success', `${uniqueKeys.length} Chaves API Salvas!`);
-          
-          if (pdfStatus === 'paused') addLog('success', 'Novas chaves detectadas! Clique em "Continuar".');
-
-      } catch (error) {
-          showNotification('error', 'Erro ao salvar: ' + error.message);
-      } finally {
-          setIsSavingKey(false);
-      }
-  };
-  
-  const toggleSearchLimit = async () => {
-      const newState = !isSearchLimitEnabled;
-      setIsSearchLimitEnabled(newState);
-      
-      try {
-          await setDoc(doc(db, "settings", "global"), { isSearchLimitEnabled: newState }, { merge: true });
-      } catch (e) {
-          console.error("Erro ao salvar toggle:", e);
-      }
-  };
-
-  const handleGetKey = () => { window.open('https://aistudio.google.com/app/api-keys', '_blank'); setShowTutorial(true); };
-  const handleModelChange = (modelName) => { setSelectedModel(modelName); localStorage.setItem('gemini_model', modelName); };
-  const showNotification = (type, text) => { setNotification({ type, text }); };
-  const closeNotification = () => { setNotification(null); };
-  const handleLogout = () => { signOut(auth); setParsedQuestions([]); setActiveTab('input'); };
-
-  const validateKeyAndFetchModels = async () => {
-      const currentKey = apiKeysRef.current[0]; 
-      if (!currentKey) return showNotification('error', 'Configure as chaves API primeiro.');
-      setIsValidatingKey(true);
-      try {
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${currentKey}`);
-          const data = await response.json();
-          if (data.error) throw new Error(data.error.message);
-          if (!data.models) throw new Error("Sem acesso a modelos.");
-          const genModels = data.models.filter(m => m.supportedGenerationMethods?.includes("generateContent") && (m.name.includes("gemini")));
-          if (genModels.length > 0) {
-              setAvailableModels(genModels);
-              showNotification('success', `${genModels.length} modelos liberados!`);
-          } else {
-              showNotification('error', 'Chave válida mas sem modelos.');
-          }
-      } catch (error) {
-          showNotification('error', `Erro na chave principal: ${error.message}`);
-      } finally {
-          setIsValidatingKey(false);
-      }
-  };
-
-  const processWithAI = async () => {
-    if (activeTab === 'input' && !rawText.trim()) return showNotification('error', 'Cole o texto.');
-    
-    setIsProcessing(true);
-
-    const ovr = { overrideInst, overrideYear, overrideArea, overrideTopic };
-    
-    try {
-        const activeThemesMap = ovr.overrideArea ? { [ovr.overrideArea]: themesMap[ovr.overrideArea] } : themesMap;
-
-        const questions = await executeWithKeyRotation("Processamento Único", async (key) => {
-            const systemPrompt = `
-              Você é um especialista em banco de dados médicos (MedMaps).
-              Analise o conteúdo e gere um JSON ESTRITO.
-              
-              CONTEXTO (Informacional):
-              - Instituição: ${ovr.overrideInst ? ovr.overrideInst : "Não informado (Detectar do texto)"}
-              - Ano: ${ovr.overrideYear ? ovr.overrideYear : "Não informado (Detectar do texto)"}
-
-              REGRAS DE EXTRAÇÃO E LIMPEZA:
-              1. LIMPEZA DE INÍCIO:
-                 - Remova APENAS índices/rótulos de questão (ex: "1)", "159048)", "05.", "Questão 1:", "Enunciado:").
-                 - MANTENHA números que fazem parte da frase (ex: "3 pacientes...", "40 anos...").
-                 - Comece o texto direto no conteúdo do caso clínico.
-
-              2. SEPARAÇÃO DAS ALTERNATIVAS:
-                 - O campo "text" DEVE TERMINAR antes das alternativas.
-                 - NUNCA inclua "A) ... B) ..." ou "a. ... b. ..." dentro do campo "text".
-                 - As alternativas DEVEM ser extraídas separadamente no array "options".
-
-              3. DETECÇÃO DE IMAGEM (LÓGICA CONTEXTUAL):
-                 - MARQUE "needsImage": true SE:
-                   * O texto MANDA olhar: "Vide figura", "Observe a imagem", "A figura abaixo", "Ver anexo".
-                   * O texto DEPENDE do visual: "De acordo com o exame de imagem", "Baseado no ECG apresentado".
-                   * O texto é vago sobre o resultado: "O Raio-X revela... (e não diz o que)".
-                 - MARQUE "needsImage": false SE:
-                   * O texto já DESCREVE o resultado: "ECG normal", "Raio-X evidenciando fratura".
-                   * Apenas cita que o exame foi feito: "Foi solicitada tomografia".
-
-              4. CLASSIFICAÇÃO E RESOLUÇÃO:
-                 - Classifique usando a lista: ${JSON.stringify(activeThemesMap)}
-                 - Tente encontrar o gabarito. Se não houver, RESOLVA a questão.
-                 - Gere sempre "explanation".
-
-              Formato Saída JSON:
-              [
-                {
-                  "institution": "String", "year": Number|String, "area": "String", "topic": "String",
-                  "text": "String", "options": [{"id": "a", "text": "String"}],
-                  "correctOptionId": "char", "explanation": "String",
-                  "needsImage": boolean
-                }
-              ]
-            `;
-
-            let contentsPayload = [{ parts: [{ text: systemPrompt + "\n\nCONTEÚDO:\n" + rawText }] }];
-            
-            const modelNameClean = selectedModel.startsWith('models/') ? selectedModel.replace('models/', '') : selectedModel;
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelNameClean}:generateContent?key=${key}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: contentsPayload })
-            });
-            
-            if (!response.ok) {
-                 const errData = await response.json().catch(() => ({}));
-                 throw new Error(errData.error?.message || "Erro na API Geração");
-            }
-
-            const data = await response.json();
-            let jsonString = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-            const parsed = safeJsonParse(jsonString);
-            return parsed.filter(q => q.options && q.options.length >= 2);
-        });
-
-        showNotification('info', `Pós-processando ${questions.length} questões...`);
-
-          let processedQuestions = await Promise.all(questions.map(async (q) => {
-              // --- USANDO FUZZY HASH ---
-              const hashId = await generateFuzzyHash(q);
-              
-              let isDuplicate = false;
-              let oldData = null;
-
-              if (hashId) {
-                  const existingDoc = await getDoc(doc(db, "questions", hashId));
-                  if (existingDoc.exists()) {
-                      isDuplicate = true;
-                      oldData = existingDoc.data();
-                  }
-              }
-
-              const shouldRunAPIs = !isDuplicate; 
-
-              let preCleanedInst = cleanInstitutionText(q.institution);
-
-              let finalInst = preCleanedInst;
-              let finalYear = q.year;
-              let sourceFound = false;
-              let verificationStatus = 'unchecked';
-              let verificationReason = '';
-
-              if (shouldRunAPIs) {
-                  const doWebSearch = webSearchRef.current; 
-                  const doDoubleCheck = doubleCheckRef.current; 
-
-                  const searchPromise = (async () => {
-                      if (doWebSearch && (!preCleanedInst || !q.year)) { 
-                         return await searchQuestionSource(q.text);
-                      }
-                      return null;
-                  })();
-
-                  const auditPromise = (async () => {
-                      if (doDoubleCheck) {
-                          return await verifyQuestionWithAI(q);
-                      }
-                      return { status: 'unchecked', reason: '' };
-                  })();
-
-                  const [searchResult, auditResult] = await Promise.all([searchPromise, auditPromise]);
-
-                  if (searchResult) {
-                      if (searchResult.institution) { finalInst = searchResult.institution; sourceFound = true; }
-                      if (searchResult.year) finalYear = searchResult.year;
-                  }
-                  verificationStatus = auditResult.status;
-                  verificationReason = auditResult.reason;
-
-              } else {
-                  if (oldData) {
-                      finalInst = oldData.institution || q.institution;
-                      finalYear = oldData.year || q.year;
-                      sourceFound = oldData.sourceFound || false; 
-                      
-                      verificationStatus = oldData.verificationStatus || 'unchecked';
-                      verificationReason = oldData.verificationReason || 'Duplicata recuperada';
-                  }
-              }
-
-              finalInst = cleanInstitutionText(finalInst);
-
-              const ovr = overridesRef.current || { overrideInst, overrideYear, overrideArea, overrideTopic }; 
-              if (ovr.overrideInst) finalInst = ovr.overrideInst;
-              if (ovr.overrideYear) finalYear = ovr.overrideYear;
-
-              return {
-                  ...q,
-                  institution: finalInst,
-                  year: finalYear,
-                  area: ovr.overrideArea || q.area,
-                  topic: ovr.overrideTopic || q.topic,
-                  sourceFound,
-                  verificationStatus,
-                  verificationReason,
-                  hashId,
-                  isDuplicate
-              };
-          }));
-
-        let savedCount = 0;
-        const batch = writeBatch(db);
-        
-        for (const q of processedQuestions) {
-            const docId = q.hashId || doc(collection(db, "draft_questions")).id;
-            const docRef = doc(db, "draft_questions", docId);
-            
-            batch.set(docRef, {
-                ...q,
-                institution: q.institution || "", 
-                year: q.year || "",
-                createdAt: new Date().toISOString(),
-                createdBy: user.email,
-                hasImage: false
-            });
-            savedCount++;
-        }
-        
-        if (savedCount > 0) await batch.commit();
-
-        setRawText('');
-        setActiveTab('review');
-        
-        showNotification('success', `${savedCount} questões enviadas para fila (inclusive duplicatas)!`);
-
-    } catch (error) {
-        console.error(error);
-        showNotification('error', 'Erro: ' + error.message);
-    } finally {
-        setIsProcessing(false);
-    }
-  };
-
-  const clearAllField = (field) => {
-      const targetQuestions = getFilteredQuestions();
-      if (targetQuestions.length === 0) return;
-      
-      setConfirmationModal({
-          isOpen: true,
-          type: field === 'institution' ? 'clear_institution' : 'clear_year',
-          data: null,
-          title: `Limpar ${field === 'institution' ? 'Instituições' : 'Anos'}?`,
-          message: `Deseja limpar o campo "${field === 'institution' ? 'Instituição' : 'Ano'}" de ${targetQuestions.length} questões exibidas?`,
-          confirmText: 'Sim, Limpar',
-          confirmColor: 'red'
-      });
-  };
-
-  const handleDiscardOneClick = (q) => {
-      setConfirmationModal({
-          isOpen: true,
-          type: 'delete_one',
-          data: q,
-          title: 'Excluir Rascunho?',
-          message: 'Tem certeza que deseja excluir esta questão?',
-          confirmText: 'Sim, Excluir',
-          confirmColor: 'red'
-      });
-  };
-
-  const handleApproveFilteredClick = () => {
-      const targetQuestions = getFilteredQuestions();
-      if (targetQuestions.length === 0) return;
-      
-      const count = targetQuestions.length;
-
-      const activeLabels = activeFilters.map(f => filterLabels[f]).join(' + ');
-
-      setConfirmationModal({
-          isOpen: true,
-          type: 'approve_filtered',
-          data: null,
-          title: `Aprovar ${count} Questões?`,
-          message: `Você está prestes a publicar (ou atualizar) ${count} questões dos filtros: ${activeLabels}.`,
-          confirmText: 'Sim, Publicar/Atualizar',
-          confirmColor: 'emerald'
-      });
-  };
-
-  const handleDiscardFilteredClick = () => {
-      const targetQuestions = getFilteredQuestions();
-      if (targetQuestions.length === 0) return;
-
-      const activeLabels = activeFilters.map(f => filterLabels[f]).join(' + ');
-
-      setConfirmationModal({
-          isOpen: true,
-          type: 'delete_filtered',
-          data: null,
-          title: `Excluir ${targetQuestions.length} Questões?`,
-          message: `Isso excluirá permanentemente as questões dos filtros: ${activeLabels}.`,
-          confirmText: 'Sim, Excluir',
-          confirmColor: 'red'
-      });
-  };
-
-  const executeConfirmationAction = async () => {
-      const { type, data } = confirmationModal;
-      setConfirmationModal({ ...confirmationModal, isOpen: false }); 
-
-      if (type === 'clear_institution' || type === 'clear_year') {
-          const field = type === 'clear_institution' ? 'institution' : 'year';
-          const targetQuestions = getFilteredQuestions();
-          
-          const updated = parsedQuestions.map(q => {
-              if (targetQuestions.some(t => t.id === q.id)) {
-                  return { ...q, [field]: '' };
-              }
-              return q;
-          });
-          setParsedQuestions(updated);
-
-          const batch = writeBatch(db);
-          targetQuestions.forEach(q => {
-              const docRef = doc(db, "draft_questions", q.id);
-              batch.update(docRef, { [field]: '' });
-          });
-          batch.commit().then(() => {
-              showNotification('success', `Campo ${field === 'institution' ? 'Instituição' : 'Ano'} limpo em ${targetQuestions.length} questões.`);
-          }).catch(err => {
-              console.error(err);
-              showNotification('error', 'Erro ao salvar limpeza no banco.');
-          });
-          return;
-      }
-
-      if (type === 'delete_one') {
-          if (!data || !data.id) return;
-          try { await deleteDoc(doc(db, "draft_questions", data.id)); showNotification('success', 'Excluído.'); } catch (e) { showNotification('error', e.message); }
-      } 
-      else if (type === 'approve_filtered') {
-          setIsBatchAction(true);
-          let count = 0;
-          const targetQuestions = getFilteredQuestions();
-
-          try {
-              for (const q of targetQuestions) {
-                  const { id, status, createdAt, createdBy, verificationStatus, verificationReason, isDuplicate, hashId, sourceFound, ...finalData } = q;
-                  if (q.area && q.topic && q.text) {
-                     await setDoc(doc(db, "questions", id), { 
-                         ...finalData, 
-                         updatedAt: new Date().toISOString(), 
-                         approvedBy: user.email
-                     });
-                     await deleteDoc(doc(db, "draft_questions", id));
-                     count++;
-                  }
-              }
-              showNotification('success', `${count} questões processadas (criadas ou atualizadas)!`);
-          } catch (e) { showNotification('error', e.message); } finally { setIsBatchAction(false); }
-      }
-      else if (type === 'delete_filtered') {
-          setIsBatchAction(true);
-          const targetQuestions = getFilteredQuestions();
-          try {
-              const batch = writeBatch(db);
-              targetQuestions.forEach(q => batch.delete(doc(db, "draft_questions", q.id)));
-              await batch.commit();
-              showNotification('success', 'Fila limpa.');
-          } catch (e) { showNotification('error', e.message); } finally { setIsBatchAction(false); }
-      }
-  };
-
-  const approveQuestion = async (q) => {
-    if (!q.area || !q.topic || !q.text || !q.options || q.options.length < 2) {
-      return showNotification('error', 'Preencha os campos obrigatórios.');
-    }
-    try {
-      const { id, status, createdAt, createdBy, verificationStatus, verificationReason, isDuplicate, hashId, sourceFound, ...finalData } = q;
-      
-      await setDoc(doc(db, "questions", id), {
-        ...finalData,
-        updatedAt: new Date().toISOString(), 
-        approvedBy: user.email
-      });
-      
-      await deleteDoc(doc(db, "draft_questions", id));
-      
-      if (q.isDuplicate) {
-          showNotification('success', 'Questão original ATUALIZADA com sucesso!');
-      } else {
-          showNotification('success', 'Publicada!');
-      }
-    } catch (error) {
-      showNotification('error', 'Erro: ' + error.message);
-    }
-  };
-
-  const updateQuestionField = (id, field, val) => {
-      setParsedQuestions(prev => prev.map(q => q.id === id ? { ...q, [field]: val } : q));
-  };
-
-  const updateOptionText = (qId, optIdx, val) => {
-      setParsedQuestions(prev => prev.map(q => {
-          if (q.id === qId) {
-              const newOptions = [...q.options];
-              newOptions[optIdx].text = val;
-              return { ...q, options: newOptions };
-          }
-          return q;
-      }));
-  };
-
-  const currentFilteredList = getFilteredQuestions();
-
-  if (isLoadingAuth) return <div className="min-h-screen bg-slate-900 flex items-center justify-center"><Loader2 className="text-white animate-spin" size={48} /></div>;
-  
-  if (!user) return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans">
-        <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300">
-          <div className="flex items-center gap-3 mb-6 justify-center">
-             <div className="bg-blue-600 p-3 rounded-xl shadow-lg shadow-blue-900/20"><Brain className="text-white" size={32} /></div>
-             <h1 className="text-2xl font-bold text-slate-800">MedImporter Admin</h1>
+          <div className="flex flex-col items-start text-left max-w-2xl pointer-events-auto">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: "easeOut" }} className="flex items-center gap-3 mb-6">
+              <div className="bg-gradient-to-br from-cyan-500 to-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-cyan-500/30">
+                <Map size={28} strokeWidth={2.5} />
+              </div>
+              <span className="text-3xl tracking-tighter text-white" style={{ fontFamily: 'Arial, sans-serif', fontWeight: 900 }}>MedMapa</span>
+            </motion.div>
+
+            <motion.h1 
+              initial={{ opacity: 0, y: 20 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              transition={{ duration: 0.5, delay: 0.1, ease: "easeOut" }} 
+              className="text-5xl lg:text-6xl xl:text-7xl font-extrabold tracking-tight mb-6 leading-[1.15]"
+            >
+              O atalho definitivo <br />
+              para a sua <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">
+                vaga na <br className="hidden sm:block" /> Residência.
+              </span>
+            </motion.h1>
+
+            <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2, ease: "easeOut" }} className="text-lg lg:text-xl text-slate-400 mb-10 leading-relaxed max-w-lg">
+              Chega de perder tempo com resumos infinitos. Estude de forma ativa com questões direcionadas, flashcards inteligentes e métricas de desempenho que mostram exatamente onde você precisa melhorar.
+            </motion.p>
+
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3, ease: "easeOut" }} className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+              <button onClick={scrollToPlanos} className="group relative px-8 py-4 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden shadow-[0_0_30px_rgba(6,182,212,0.3)] hover:shadow-[0_0_50px_rgba(6,182,212,0.5)] hover:-translate-y-1">
+                <span className="relative z-10 flex items-center gap-2">Ver Planos <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" /></span>
+                <div className="absolute inset-0 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent z-0" />
+              </button>
+              <button onClick={() => window.location.href = '/index.html'} className="px-8 py-4 bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700/50 text-white font-semibold rounded-xl transition-all duration-300 flex items-center justify-center gap-2 backdrop-blur-md hover:-translate-y-1">
+                <div className="p-1.5 bg-slate-200/10 rounded-full flex items-center justify-center"><Play size={16} className="text-cyan-400 fill-cyan-400 ml-0.5" /></div> Ver como funciona
+              </button>
+            </motion.div>
           </div>
-          <p className="text-slate-500 text-center mb-6">Acesso restrito a administradores.</p>
-          <form onSubmit={(e) => { e.preventDefault(); signInWithEmailAndPassword(auth, email, password).catch(err => showNotification('error', err.message)); }} className="space-y-4">
-            <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition-all"/>
-            <input type="password" placeholder="Senha" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition-all"/>
-            <button className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center gap-2"><Lock size={18} /> Acessar Sistema</button>
-          </form>
+
+          <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7, delay: 0.4, ease: "easeOut" }} className="relative w-full aspect-square lg:aspect-auto lg:h-[600px] flex items-center justify-center [perspective:1000px] pointer-events-none">
+            
+            <motion.div style={{ rotateX: mouseYSpring, rotateY: mouseXSpring, transformStyle: "preserve-3d" }} className="relative w-[300px] h-[600px] rounded-[3rem] border-[8px] border-slate-800 bg-gray-50 shadow-2xl flex flex-col overflow-hidden ring-1 ring-white/10">
+              
+              <div className="absolute top-0 inset-x-0 h-6 flex justify-center z-50"><div className="w-20 h-5 bg-slate-800 rounded-b-2xl"></div></div>
+
+              {/* CURSOR DO MOUSE */}
+              <motion.div
+                 className="absolute inset-0 z-[100] drop-shadow-xl pointer-events-none"
+                 animate={{ x: mX, y: mY, scale: mS }} transition={getTrans(mT, "easeInOut")}
+                 style={{ transformOrigin: 'top left' }}
+              >
+                 <svg width="24" height="24" viewBox="0 0 24 24" fill="white" stroke="black" strokeWidth="1.2" style={{ transform: 'translate(-4px, -2px)' }}>
+                   <path d="M4 2.5l14 11-6 1.5 3 6-3 1.5-3-6-4.5 4.5z" strokeLinejoin="round" />
+                 </svg>
+              </motion.div>
+
+              {/* INTERFACE REALISTA DO APP (QuestionView) */}
+              <div className="relative z-10 w-full h-full flex flex-col bg-gray-50 text-slate-800 mt-6 overflow-hidden rounded-b-[2.5rem]" style={{ transform: "translateZ(30px)" }}>
+                 
+                 {/* HEADER MOBILE REPLICADO */}
+                 <div className="flex justify-between items-center px-4 py-2.5 bg-white border-b border-gray-200 z-30 relative shadow-sm shrink-0">
+                     <h1 className="text-[14px] font-bold text-blue-700 flex items-center gap-1.5"><Map size={16} strokeWidth={2.5} />MedMapa</h1>
+                     <Menu size={18} className="text-gray-500" />
+                 </div>
+
+                 {/* Topbar Replicada */}
+                 <div className="flex flex-col border-b border-gray-200 bg-gray-50 pb-2 relative z-20 shrink-0">
+                     <div className="flex items-center justify-between px-3 pt-2 pb-1 gap-1 border-b border-gray-100">
+                         <div className="flex-1 flex justify-center py-1 bg-white border border-gray-200 rounded text-slate-500 shadow-sm"><LayoutGrid size={12}/></div>
+                         <div className="flex-1 flex justify-center py-1 bg-white border border-gray-200 rounded text-slate-500 shadow-sm"><Eye size={12}/></div>
+                         <div className="flex-1 flex justify-center py-1 bg-white border border-gray-200 rounded text-slate-500 shadow-sm"><PauseCircle size={12}/></div>
+                         <div className="flex-1 flex justify-center py-1 bg-red-50 border border-red-200 rounded text-red-400 shadow-sm"><CheckCircle size={12}/></div>
+                     </div>
+                     <div className="flex items-center gap-2 px-4 pt-2">
+                         <div className="relative w-10 h-5 bg-white border border-gray-200 rounded shadow-sm flex items-center justify-center text-[9px] font-bold text-slate-700">
+                             <motion.span className="absolute" animate={{ opacity: scr1.values }} transition={getTrans(scr1.times)}>1 / 4</motion.span>
+                             <motion.span className="absolute" animate={{ opacity: scr2.values }} transition={getTrans(scr2.times)}>2 / 4</motion.span>
+                             <motion.span className="absolute" animate={{ opacity: scr3.values }} transition={getTrans(scr3.times)}>3 / 4</motion.span>
+                             <motion.span className="absolute" animate={{ opacity: scr4.values }} transition={getTrans(scr4.times)}>4 / 4</motion.span>
+                         </div>
+                         <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                             <motion.div className="h-full bg-blue-600 rounded-full" animate={{ width: prog.values }} transition={getTrans(prog.times)} />
+                         </div>
+                     </div>
+                 </div>
+
+                 {/* TOOLBAR LATERAL (Calculadora / Caneta) */}
+                 <div className="absolute right-0 top-[40%] flex flex-col gap-1 z-30 pointer-events-none">
+                     <div className="w-8 h-10 bg-white border border-r-0 border-gray-200 rounded-l-xl shadow flex items-center justify-center text-slate-400"><Calculator size={14}/></div>
+                     <div className="w-8 h-10 bg-white border border-r-0 border-gray-200 rounded-l-xl shadow flex items-center justify-center text-slate-400"><PenTool size={14}/></div>
+                 </div>
+
+                 <div className="relative flex-1 w-full bg-white overflow-hidden">
+                     
+                     {/* PERGUNTA 1 (Custo-Benefício) */}
+                     <motion.div className="absolute inset-0 px-3 py-2 flex flex-col" animate={{ opacity: scr1.values }} transition={getTrans(scr1.times)}>
+                         <div className="flex gap-1.5 border-b border-gray-100 pb-1.5"><span className="bg-blue-50 text-blue-700 text-[8px] font-bold px-1 py-0.5 rounded border border-blue-100">MEDMAPA</span><span className="bg-gray-100 text-gray-600 text-[8px] font-bold px-1 py-0.5 rounded border border-gray-200">2026</span><span className="bg-purple-50 text-purple-700 text-[8px] font-bold px-1 py-0.5 rounded border border-purple-100">CUSTO-BENEFÍCIO</span></div>
+                         <p className="font-bold text-slate-800 text-[11px] mt-1.5 leading-snug">Qual o banco de questões mais completo e barato do mercado?</p>
+                         <div className="mt-2 space-y-1.5">
+                            <motion.div className="w-full p-2 rounded-lg border-2 flex items-center gap-2" animate={{ backgroundColor: q1a.values.map(s=>bgMap[s]), borderColor: q1a.values.map(s=>boMap[s]) }} transition={getTrans(q1a.times)}>
+                                <motion.div className="w-4 h-4 rounded-full border-2 flex justify-center items-center shrink-0 bg-white" animate={{ borderColor: q1a.values.map(s=>iBMap[s]), borderWidth: q1a.values.map(s=>iWMap[s]) }} transition={getTrans(q1a.times)}>
+                                    <motion.div animate={{ opacity: q1a.values.map(s=>s===2?1:0) }} transition={getTrans(q1a.times)}><CheckCircle size={14} className="text-emerald-500 fill-emerald-100" /></motion.div>
+                                </motion.div>
+                                <span className="text-[10px] font-semibold text-slate-700"><span className="font-bold mr-1">A)</span>MedMapa</span>
+                            </motion.div>
+                            <div className="w-full p-2 rounded-lg border-2 border-gray-100 flex items-center gap-2"><div className="w-4 h-4 rounded-full border-2 border-gray-300"/><span className="text-[10px] font-semibold text-slate-700"><span className="font-bold mr-1">B)</span>Cursinhos tradicionais caros</span></div>
+                            <div className="w-full p-2 rounded-lg border-2 border-gray-100 flex items-center gap-2"><div className="w-4 h-4 rounded-full border-2 border-gray-300"/><span className="text-[10px] font-semibold text-slate-700"><span className="font-bold mr-1">C)</span>Apostilas e PDFs antigos</span></div>
+                            <div className="w-full p-2 rounded-lg border-2 border-gray-100 flex items-center gap-2"><div className="w-4 h-4 rounded-full border-2 border-gray-300"/><span className="text-[10px] font-semibold text-slate-700"><span className="font-bold mr-1">D)</span>Estudar sem direcionamento</span></div>
+                         </div>
+                     </motion.div>
+
+                     {/* PERGUNTA 2 (Métricas c/ Refazer) */}
+                     <motion.div className="absolute inset-0 px-3 py-2 flex flex-col" animate={{ opacity: scr2.values }} transition={getTrans(scr2.times)} style={{ pointerEvents: 'none' }}>
+                         <div className="flex gap-1.5 border-b border-gray-100 pb-1.5"><span className="bg-blue-50 text-blue-700 text-[8px] font-bold px-1 py-0.5 rounded border border-blue-100">MEDMAPA</span><span className="bg-gray-100 text-gray-600 text-[8px] font-bold px-1 py-0.5 rounded border border-gray-200">2026</span><span className="bg-emerald-50 text-emerald-700 text-[8px] font-bold px-1 py-0.5 rounded border border-emerald-100">MÉTRICAS</span></div>
+                         <p className="font-bold text-slate-800 text-[11px] mt-1.5 leading-snug">O que acontece quando você erra uma questão no MedMapa?</p>
+                         <div className="mt-2 space-y-1.5">
+                            <div className="w-full p-2 rounded-lg border-2 border-gray-100 flex items-center gap-2"><div className="w-4 h-4 rounded-full border-2 border-gray-300"/><span className="text-[10px] font-semibold text-slate-700"><span className="font-bold mr-1">A)</span>Você apenas perde pontos</span></div>
+                            
+                            {/* B: Certa (Marcada depois) */}
+                            <motion.div className="w-full p-2 rounded-lg border-2 flex items-center gap-2" animate={{ backgroundColor: q2b.values.map(s=>bgMap[s]), borderColor: q2b.values.map(s=>boMap[s]) }} transition={getTrans(q2b.times)}>
+                                <motion.div className="w-4 h-4 rounded-full border-2 flex justify-center items-center shrink-0 bg-white" animate={{ borderColor: q2b.values.map(s=>iBMap[s]), borderWidth: q2b.values.map(s=>iWMap[s]) }} transition={getTrans(q2b.times)}>
+                                    <motion.div animate={{ opacity: q2b.values.map(s=>s===2?1:0) }} transition={getTrans(q2b.times)}><CheckCircle size={14} className="text-emerald-500 fill-emerald-100" /></motion.div>
+                                </motion.div>
+                                <span className="text-[10px] font-semibold text-slate-700"><span className="font-bold mr-1">B)</span>Cria flashcards no seu erro</span>
+                            </motion.div>
+                            
+                            {/* C: Errada (Marcada Primeiro) */}
+                            <motion.div className="w-full p-2 rounded-lg border-2 flex items-center gap-2" animate={{ backgroundColor: q2c.values.map(s=>bgMap[s]), borderColor: q2c.values.map(s=>boMap[s]) }} transition={getTrans(q2c.times)}>
+                                <motion.div className="w-4 h-4 rounded-full border-2 flex justify-center items-center shrink-0 bg-white" animate={{ borderColor: q2c.values.map(s=>iBMap[s]), borderWidth: q2c.values.map(s=>iWMap[s]) }} transition={getTrans(q2c.times)}>
+                                    <motion.div animate={{ opacity: q2c.values.map(s=>s===3?1:0) }} transition={getTrans(q2c.times)}><XCircle size={14} className="text-red-500 fill-red-100" /></motion.div>
+                                </motion.div>
+                                <span className="text-[10px] font-semibold text-slate-700"><span className="font-bold mr-1">C)</span>A questão é bloqueada</span>
+                            </motion.div>
+
+                            <div className="w-full p-2 rounded-lg border-2 border-gray-100 flex items-center gap-2"><div className="w-4 h-4 rounded-full border-2 border-gray-300"/><span className="text-[10px] font-semibold text-slate-700"><span className="font-bold mr-1">D)</span>Tem que comprar outro módulo</span></div>
+                         </div>
+                     </motion.div>
+
+                     {/* PERGUNTA 3 (Flashcards) */}
+                     <motion.div className="absolute inset-0 px-3 py-2 flex flex-col" animate={{ opacity: scr3.values }} transition={getTrans(scr3.times)} style={{ pointerEvents: 'none' }}>
+                         <div className="flex gap-1.5 border-b border-gray-100 pb-1.5"><span className="bg-blue-50 text-blue-700 text-[8px] font-bold px-1 py-0.5 rounded border border-blue-100">MEDMAPA</span><span className="bg-gray-100 text-gray-600 text-[8px] font-bold px-1 py-0.5 rounded border border-gray-200">2026</span><span className="bg-indigo-50 text-indigo-700 text-[8px] font-bold px-1 py-0.5 rounded border border-indigo-100">REVISÃO</span></div>
+                         <p className="font-bold text-slate-800 text-[11px] mt-1.5 leading-snug">Como funciona a repetição espaçada do MedMapa?</p>
+                         <div className="mt-2 space-y-1.5">
+                            <div className="w-full p-2 rounded-lg border-2 border-gray-100 flex items-center gap-2"><div className="w-4 h-4 rounded-full border-2 border-gray-300"/><span className="text-[10px] font-semibold text-slate-700"><span className="font-bold mr-1">A)</span>Mostra os cartões aleatórios</span></div>
+                            <div className="w-full p-2 rounded-lg border-2 border-gray-100 flex items-center gap-2"><div className="w-4 h-4 rounded-full border-2 border-gray-300"/><span className="text-[10px] font-semibold text-slate-700"><span className="font-bold mr-1">B)</span>Você agenda manualmente</span></div>
+                            <div className="w-full p-2 rounded-lg border-2 border-gray-100 flex items-center gap-2"><div className="w-4 h-4 rounded-full border-2 border-gray-300"/><span className="text-[10px] font-semibold text-slate-700"><span className="font-bold mr-1">C)</span>Mostra apenas o que já sabe</span></div>
+                            
+                            <motion.div className="w-full p-2 rounded-lg border-2 flex items-center gap-2" animate={{ backgroundColor: q3d.values.map(s=>bgMap[s]), borderColor: q3d.values.map(s=>boMap[s]) }} transition={getTrans(q3d.times)}>
+                                <motion.div className="w-4 h-4 rounded-full border-2 flex justify-center items-center shrink-0 bg-white" animate={{ borderColor: q3d.values.map(s=>iBMap[s]), borderWidth: q3d.values.map(s=>iWMap[s]) }} transition={getTrans(q3d.times)}>
+                                    <motion.div animate={{ opacity: q3d.values.map(s=>s===2?1:0) }} transition={getTrans(q3d.times)}><CheckCircle size={14} className="text-emerald-500 fill-emerald-100" /></motion.div>
+                                </motion.div>
+                                <span className="text-[10px] font-semibold text-slate-700"><span className="font-bold mr-1">D)</span>O Algoritmo calcula para você</span>
+                            </motion.div>
+                         </div>
+                     </motion.div>
+
+                     {/* PERGUNTA 4 (Tecnologia/App) */}
+                     <motion.div className="absolute inset-0 px-3 py-2 flex flex-col" animate={{ opacity: scr4.values }} transition={getTrans(scr4.times)} style={{ pointerEvents: 'none' }}>
+                         <div className="flex gap-1.5 border-b border-gray-100 pb-1.5"><span className="bg-blue-50 text-blue-700 text-[8px] font-bold px-1 py-0.5 rounded border border-blue-100">MEDMAPA</span><span className="bg-gray-100 text-gray-600 text-[8px] font-bold px-1 py-0.5 rounded border border-gray-200">2026</span><span className="bg-sky-50 text-sky-700 text-[8px] font-bold px-1 py-0.5 rounded border border-sky-100">TECNOLOGIA</span></div>
+                         <p className="font-bold text-slate-800 text-[11px] mt-1.5 leading-snug">Como funciona o acesso às questões pelo celular?</p>
+                         <div className="mt-2 space-y-1.5">
+                            <div className="w-full p-2 rounded-lg border-2 border-gray-100 flex items-center gap-2"><div className="w-4 h-4 rounded-full border-2 border-gray-300"/><span className="text-[10px] font-semibold text-slate-700"><span className="font-bold mr-1">A)</span>Apenas pelo navegador web</span></div>
+                            
+                            <motion.div className="w-full p-2 rounded-lg border-2 flex items-center gap-2" animate={{ backgroundColor: q4b.values.map(s=>bgMap[s]), borderColor: q4b.values.map(s=>boMap[s]) }} transition={getTrans(q4b.times)}>
+                                <motion.div className="w-4 h-4 rounded-full border-2 flex justify-center items-center shrink-0 bg-white" animate={{ borderColor: q4b.values.map(s=>iBMap[s]), borderWidth: q4b.values.map(s=>iWMap[s]) }} transition={getTrans(q4b.times)}>
+                                    <motion.div animate={{ opacity: q4b.values.map(s=>s===2?1:0) }} transition={getTrans(q4b.times)}><CheckCircle size={14} className="text-emerald-500 fill-emerald-100" /></motion.div>
+                                </motion.div>
+                                <span className="text-[10px] font-semibold text-slate-700"><span className="font-bold mr-1">B)</span>App Nativo com acesso Offline</span>
+                            </motion.div>
+
+                            <div className="w-full p-2 rounded-lg border-2 border-gray-100 flex items-center gap-2"><div className="w-4 h-4 rounded-full border-2 border-gray-300"/><span className="text-[10px] font-semibold text-slate-700"><span className="font-bold mr-1">C)</span>Baixando dezenas de PDFs</span></div>
+                            <div className="w-full p-2 rounded-lg border-2 border-gray-100 flex items-center gap-2"><div className="w-4 h-4 rounded-full border-2 border-gray-300"/><span className="text-[10px] font-semibold text-slate-700"><span className="font-bold mr-1">D)</span>Imprimindo provas em papel</span></div>
+                         </div>
+                     </motion.div>
+
+                 </div>
+
+                 {/* Navbar Inferior */}
+                 <div className="p-2.5 bg-white/95 backdrop-blur-md border-t border-gray-200 flex items-center justify-between shadow-[0_-8px_20px_-10px_rgba(0,0,0,0.1)] z-40 relative pointer-events-none shrink-0">
+                     <div className="p-2.5 text-slate-300 bg-gray-50 border border-gray-100 rounded-lg"><ArrowLeft size={18} /></div>
+                     
+                     <motion.div 
+                         className="flex-1 mx-2 py-2.5 rounded-lg font-bold flex items-center justify-center text-xs shadow-sm relative overflow-hidden border border-transparent"
+                         animate={{ backgroundColor: resp.values.map(s=>rBgMap[s]), color: resp.values.map(s=>rColMap[s]), borderColor: resp.values.map(s=>rBoMap[s]) }} transition={getTrans(resp.times)}
+                     >
+                         <motion.div className="absolute inset-0 z-0" animate={{ scale: rSclV }} transition={getTrans(rSclT, "easeInOut")} />
+                         
+                         <motion.span className="absolute z-10" animate={{ opacity: resp.values.map(s=>s===0?1:0) }} transition={getTrans(resp.times)}>Responder</motion.span>
+                         <motion.span className="absolute z-10" animate={{ opacity: resp.values.map(s=>s===1?1:0) }} transition={getTrans(resp.times)}>Responder</motion.span>
+                         <motion.span className="absolute z-10 flex items-center gap-1.5" animate={{ opacity: resp.values.map(s=>s===3?1:0) }} transition={getTrans(resp.times)}><RotateCcw size={14} strokeWidth={3} /> Refazer</motion.span>
+                         <motion.span className="absolute z-10 flex items-center gap-1" animate={{ opacity: resp.values.map(s=>s===2?1:0) }} transition={getTrans(resp.times)}><Check size={16} strokeWidth={3} /> Correto!</motion.span>
+                     </motion.div>
+                     
+                     <motion.div 
+                        className="p-2.5 text-white bg-slate-900 rounded-lg shadow-md flex items-center justify-center origin-center"
+                        animate={{ scale: nScl }} transition={getTrans(nT, "easeInOut")}
+                     >
+                         <ArrowRight size={18} />
+                     </motion.div>
+                 </div>
+
+              </div>
+              <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1/3 h-1 bg-gray-300 rounded-full z-50"></div>
+            </motion.div>
+          </motion.div>
+
         </div>
-        <NotificationToast notification={notification} onClose={closeNotification} positionClass="fixed bottom-4 right-4" />
+      </div>
+    </section>
+  );
+};
+
+/* =========================================
+   2. SEÇÃO BENTO GRID (LAYOUT PREMIUM APPLE-STYLE COM DASHBOARD INTERATIVO)
+   ========================================= */
+
+// Função para gerar as datas dinâmicas (Últimos 10 dias até hoje)
+const generateEvolutionData = () => {
+    const data = [];
+    const basePct = [55, 62, 58, 65, 70, 72, 80, 78, 85, 88];
+    for (let i = 9; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        data.push({
+            id: 10 - i,
+            pct: basePct[9 - i],
+            date: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
+        });
+    }
+    return data;
+};
+
+// Transformador de String em Número (Para gerar % pseudo-aleatórias mas fixas para cada tópico)
+const hashString = (str) => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return Math.abs(hash);
+};
+
+// Gerador dinâmico de Tópicos (Calcula as % baseado no nome para sempre mudar quando clica na área)
+const getDynamicTopics = (timeFilter, scope) => {
+    const pools = {
+        'Todas': ['Obstetrícia Fisiológica e Pré-Natal', 'Pneumologia', 'Trauma', 'Imunizações', 'Estudos Epidemiológicos', 'Cardiologia', 'Abdome Agudo', 'Neonatologia: Sala de Parto'],
+        'Clínica Médica': ['Pneumologia', 'Cardiologia', 'Infectologia', 'Nefrologia', 'Gastroenterologia', 'Neurologia', 'Reumatologia'],
+        'Cirurgia Geral': ['Hérnias e Parede Abdominal', 'Trauma', 'Abdome Agudo', 'Pré e Pós-Operatório', 'Coloproctologia', 'Urologia', 'Cirurgia Vascular'],
+        'Gineco e Obstetrícia': ['Sangramentos da Gestação', 'Assistência ao Pré-Natal', 'Parto e Puerpério', 'Mastologia', 'Oncologia Pélvica', 'Infecções Ginecológicas', 'Distopias'],
+        'Pediatria': ['Afecções Respiratórias', 'Imunizações', 'Infectopediatria', 'Sala de Parto', 'Nutrição Pediátrica', 'Crescimento', 'Nefrologia Pediátrica'],
+        'Preventiva': ['Políticas de Saúde', 'Estudos Epidemiológicos', 'Medicina Baseada em Evidências', 'Atenção Primária', 'Saúde do Trabalhador', 'Vigilância em Saúde', 'Ética Médica']
+    };
+    
+    const baseThemes = pools[scope] || pools['Todas'];
+    
+    // Multiplicadores baseados no tempo selecionado
+    const timeModifiers = {
+        '7days': { tMult: 1, pMod: -8 },
+        '1month': { tMult: 3.5, pMod: 2 },
+        'always': { tMult: 7.4, pMod: 10 }
+    };
+    
+    const { tMult, pMod } = timeModifiers[timeFilter];
+    
+    return baseThemes.map(name => {
+        const hash = hashString(name);
+        
+        // Gera uma % base entre 30% e 85%
+        let pct = (hash % 55) + 30 + pMod;
+        if (pct > 96) pct = 96;
+        if (pct < 25) pct = 25;
+        
+        // Gera um volume realista baseado no tamanho da string
+        const baseTotal = (hash % 15) + 8; 
+        const total = Math.floor(baseTotal * tMult);
+        const correct = Math.floor((pct / 100) * total);
+        
+        // Pct real calculada após os arredondamentos
+        const finalPct = total > 0 ? Math.round((correct / total) * 100) : 0;
+        
+        return { name, pct: finalPct, total, correct };
+    });
+};
+
+// Matemática fixada e exata para bater com a soma dos Dashboards Fakes
+const getDynamicAreas = (timeFilter) => {
+    const data = {
+        '7days': [
+            { id: 'clinica', title: 'Clínica Médica', icon: Stethoscope, color: 'text-blue-600', bg: 'bg-blue-50', total: 12, correct: 8, pct: 66 },
+            { id: 'cirurgia', title: 'Cirurgia Geral', icon: Scissors, color: 'text-emerald-600', bg: 'bg-emerald-50', total: 10, correct: 7, pct: 70 },
+            { id: 'go', title: 'Gineco e Obstetrícia', icon: HeartPulse, color: 'text-pink-600', bg: 'bg-pink-50', total: 9, correct: 6, pct: 66 },
+            { id: 'pediatria', title: 'Pediatria', icon: Baby, color: 'text-amber-600', bg: 'bg-amber-50', total: 8, correct: 7, pct: 87 },
+            { id: 'preventiva', title: 'Preventiva', icon: Shield, color: 'text-violet-600', bg: 'bg-violet-50', total: 6, correct: 3, pct: 50 },
+        ],
+        '1month': [
+            { id: 'clinica', title: 'Clínica Médica', icon: Stethoscope, color: 'text-blue-600', bg: 'bg-blue-50', total: 45, correct: 32, pct: 71 },
+            { id: 'cirurgia', title: 'Cirurgia Geral', icon: Scissors, color: 'text-emerald-600', bg: 'bg-emerald-50', total: 35, correct: 28, pct: 80 },
+            { id: 'go', title: 'Gineco e Obstetrícia', icon: HeartPulse, color: 'text-pink-600', bg: 'bg-pink-50', total: 30, correct: 22, pct: 73 },
+            { id: 'pediatria', title: 'Pediatria', icon: Baby, color: 'text-amber-600', bg: 'bg-amber-50', total: 28, correct: 25, pct: 89 },
+            { id: 'preventiva', title: 'Preventiva', icon: Shield, color: 'text-violet-600', bg: 'bg-violet-50', total: 20, correct: 11, pct: 55 },
+        ],
+        'always': [
+            { id: 'clinica', title: 'Clínica Médica', icon: Stethoscope, color: 'text-blue-600', bg: 'bg-blue-50', total: 90, correct: 69, pct: 76 },
+            { id: 'cirurgia', title: 'Cirurgia Geral', icon: Scissors, color: 'text-emerald-600', bg: 'bg-emerald-50', total: 70, correct: 58, pct: 82 },
+            { id: 'go', title: 'Gineco e Obstetrícia', icon: HeartPulse, color: 'text-pink-600', bg: 'bg-pink-50', total: 60, correct: 45, pct: 75 },
+            { id: 'pediatria', title: 'Pediatria', icon: Baby, color: 'text-amber-600', bg: 'bg-amber-50', total: 55, correct: 51, pct: 92 },
+            { id: 'preventiva', title: 'Preventiva', icon: Shield, color: 'text-violet-600', bg: 'bg-violet-50', total: 37, correct: 22, pct: 59 },
+        ]
+    };
+    return data[timeFilter];
+};
+
+// Componente Interativo do Mockup de Desempenho
+const InteractivePerformanceMockup = () => {
+  const [timeFilter, setTimeFilter] = useState('always'); 
+  const [topicSort, setTopicSort] = useState('worst'); 
+  const [scope, setScope] = useState('Todas');
+  const [activeModal, setActiveModal] = useState(null); 
+
+  // Exatamente as somas das áreas acima (Sempre = 312 totais e 245 acertos)
+  const mockData = {
+      '7days': { acc: '68.8', total: '45', correct: '31', errors: 14 },
+      '1month': { acc: '74.6', total: '158', correct: '118', errors: 40 },
+      'always': { acc: '78.5', total: '312', correct: '245', errors: 67 }
+  };
+
+  const evolutionData = generateEvolutionData();
+  const mockAreas = getDynamicAreas(timeFilter);
+  const currentData = mockData[timeFilter];
+  
+  // Lista dinâmica que atualiza com o Scope
+  const allTopics = getDynamicTopics(timeFilter, scope);
+  const sortedTopics = [...allTopics]
+      .sort((a, b) => topicSort === 'worst' ? a.pct - b.pct : b.pct - a.pct)
+      .slice(0, 3);
+
+  return (
+      <div className="w-full h-auto bg-gray-50 border border-slate-700/50 rounded-2xl shadow-[-30px_30px_80px_rgba(0,0,0,0.7)] flex flex-col pointer-events-auto ring-1 ring-white/10 overflow-hidden pb-4">
+          
+          {/* Header Apple-style */}
+          <div className="h-8 bg-slate-900 border-b border-slate-800 flex items-center px-4 gap-2 w-full shrink-0">
+              <div className="w-2.5 h-2.5 rounded-full bg-red-500/80"></div>
+              <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/80"></div>
+              <div className="w-2.5 h-2.5 rounded-full bg-green-500/80"></div>
+              <div className="ml-3 flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 rounded text-[9px] text-slate-400 font-mono">
+                  <Map size={10} className="text-blue-400" /> medmapa.com.br
+              </div>
+          </div>
+
+          <div className="flex flex-col p-4 lg:p-5 w-full gap-4 flex-1 bg-gray-50">
+              
+              {/* Top Header */}
+              <div className="flex justify-between items-center mb-1">
+                  <div>
+                      {/* Botão voltar removido para dar espaço ao badge flutuante */}
+                      <h1 className="text-xl xl:text-2xl font-bold text-slate-900 flex items-center gap-2">
+                          <BarChart3 className="text-blue-600" size={22} /> Seu Desempenho
+                      </h1>
+                  </div>
+                  
+                  <div className="flex bg-gray-100 p-1 rounded-xl shadow-inner border border-gray-200/50">
+                      {['7days', '1month', 'always'].map(t => (
+                          <button key={t} onClick={() => setTimeFilter(t)} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${timeFilter === t ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                              {t === '7days' ? '7 Dias' : t === '1month' ? '1 Mês' : 'Sempre'}
+                          </button>
+                      ))}
+                  </div>
+              </div>
+
+              {/* Stats */}
+              <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center">
+                      <span className="p-1.5 rounded-full bg-blue-50 text-blue-600 mb-1.5"><Activity size={16}/></span>
+                      <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Taxa de Acerto</h2>
+                      <div className="text-2xl xl:text-3xl font-extrabold text-slate-900 tracking-tight leading-none mb-1">{currentData.acc}%</div>
+                      <p className="text-[9px] font-bold text-slate-400 bg-gray-100 px-2 py-0.5 rounded-full">{currentData.correct} de {currentData.total} acertos</p>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-2 opacity-[0.03] text-purple-900 pointer-events-none"><Calendar size={50} /></div>
+                      <div className="flex items-center gap-1.5 mb-2 relative z-10">
+                          <span className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg"><Calendar size={14}/></span>
+                          <h2 className="text-[11px] font-bold text-slate-700">Resolvidas</h2>
+                      </div>
+                      <div className="flex items-center justify-between relative z-10 mt-auto px-1">
+                          <div className="text-center">
+                              <div className="text-xl xl:text-2xl font-bold text-slate-800">{currentData.total}</div>
+                              <div className="text-[9px] uppercase font-bold text-slate-400">Feitas</div>
+                          </div>
+                          <div className="w-px h-8 bg-gray-100"></div>
+                          <div className="text-center">
+                              <div className="text-xl xl:text-2xl font-bold text-emerald-500">{currentData.correct}</div>
+                              <div className="text-[9px] uppercase font-bold text-slate-400">Acertos</div>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+
+              {/* Erros */}
+              <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl p-5 text-white shadow-lg relative overflow-hidden flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+                  <div className="absolute -right-2 -bottom-2 text-yellow-500/10 pointer-events-none"><Zap size={90} /></div>
+                  <div className="relative z-10 flex flex-col gap-1 max-w-sm">
+                      <div className="inline-flex items-center gap-1 bg-slate-800/50 backdrop-blur w-max px-2 py-0.5 rounded-full border border-slate-700 mb-1">
+                          <Zap className="text-yellow-400" size={10} fill="currentColor" /> 
+                          <span className="text-[9px] font-bold text-yellow-100 uppercase tracking-wide">Caderno Automático</span>
+                      </div>
+                      <h2 className="text-lg font-bold leading-tight">Transforme erros em acertos</h2>
+                      <p className="text-slate-400 text-[11px] mt-0.5">O MedMapa guardou <strong>{currentData.errors} erros</strong> recentes. Não deixe eles caírem na prova.</p>
+                  </div>
+                  <button onClick={() => setActiveModal('erros')} className="relative z-10 bg-yellow-500 hover:bg-yellow-400 text-slate-900 font-bold py-2.5 px-4 rounded-lg flex items-center justify-center gap-1.5 text-xs transition-transform active:scale-95 shadow-md">
+                      <PlayCircle size={16} fill="currentColor" /> Matar Erros
+                  </button>
+              </div>
+
+              {/* Gráfico */}
+              <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm w-full">
+                  <div className="flex items-center gap-1.5 mb-4">
+                      <div className="p-1.5 bg-blue-50 text-blue-600 rounded-md"><TrendingUp size={14} /></div>
+                      <h2 className="font-bold text-slate-800 text-sm">Sua Evolução</h2>
+                  </div>
+                  <div className="h-28 w-full flex items-end gap-1.5 justify-between">
+                      {evolutionData.map((data) => {
+                          let colorClass = 'bg-blue-400';
+                          if(data.pct >= 80) colorClass = 'bg-emerald-400';
+                          else if(data.pct < 60) colorClass = 'bg-orange-400';
+
+                          return (
+                              <div key={data.id} className="relative flex-1 min-w-0 flex flex-col items-center justify-end h-full group/bar cursor-pointer">
+                                  <div className="opacity-0 group-hover/bar:opacity-100 transition-opacity bg-slate-800 text-white text-[9px] font-bold rounded px-1.5 py-0.5 absolute -top-6 z-20">
+                                      {data.pct}%
+                                  </div>
+                                  <div className="w-full max-w-[28px] h-full flex items-end relative bg-gray-100 rounded-t-sm">
+                                      <div className={`w-full rounded-t-sm transition-all duration-700 ${colorClass} opacity-90 group-hover/bar:opacity-100`} style={{ height: `${data.pct}%` }}></div>
+                                  </div>
+                                  <span className="text-[9px] text-gray-400 mt-1 font-bold">{data.date}</span>
+                              </div>
+                          );
+                      })}
+                  </div>
+              </div>
+
+              {/* Tópicos */}
+              <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm w-full flex flex-col">
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-1.5">
+                          <div className="p-1.5 bg-purple-50 text-purple-600 rounded-md"><BarChart3 size={14} /></div>
+                          <h2 className="font-bold text-slate-800 text-sm">Top Tópicos</h2>
+                      </div>
+                      <button onClick={() => setTopicSort(prev => prev === 'worst' ? 'best' : 'worst')} className={`p-1 rounded-md border transition-colors ${topicSort === 'worst' ? 'bg-red-50 text-red-500 border-red-100' : 'bg-emerald-50 text-emerald-500 border-emerald-100'}`}>
+                          {topicSort === 'worst' ? <TrendingDown size={14}/> : <TrendingUp size={14}/>}
+                      </button>
+                  </div>
+
+                  <div className="flex gap-1.5 overflow-x-hidden pb-1.5 mb-2 w-full">
+                       <button onClick={() => setScope('Todas')} className={`flex-shrink-0 px-2.5 py-1 rounded-full text-[10px] font-bold whitespace-nowrap border transition-colors ${scope === 'Todas' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-100'}`}>Geral</button>
+                       {mockAreas.map(a => (<button key={a.id} onClick={() => setScope(a.title)} className={`flex-shrink-0 px-2.5 py-1 rounded-full text-[10px] font-bold whitespace-nowrap border transition-colors ${scope === a.title ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-100'}`}>{a.title}</button>))}
+                  </div>
+
+                  <div className="flex flex-col gap-2 mb-4">
+                      {sortedTopics.map((topic, i) => (
+                          <div key={i} className="bg-gray-50 rounded-lg p-2.5 flex items-center justify-between gap-2 border border-gray-100/50 animate-in fade-in duration-300">
+                              <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1 mb-0.5">
+                                      <span className="text-[10px] font-bold text-slate-400 w-4">#{i+1}</span>
+                                      <span className="font-bold text-slate-800 text-xs truncate block">{topic.name}</span>
+                                  </div>
+                                  <div className="pl-5 text-[10px] text-slate-500">{topic.correct}/{topic.total} acertos</div>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                  <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                      <div className={`h-full rounded-full transition-all duration-700 ${topic.pct >= 80 ? 'bg-emerald-500' : topic.pct < 50 ? 'bg-red-500' : 'bg-blue-500'}`} style={{ width: `${topic.pct}%` }}></div>
+                                  </div>
+                                  <span className={`text-[11px] font-bold w-7 text-right ${topic.pct >= 80 ? 'text-emerald-600' : topic.pct < 50 ? 'text-red-600' : 'text-blue-600'}`}>{topic.pct}%</span>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+
+                  {/* Texto do botão revertido */}
+                  <button onClick={() => setActiveModal('treinar')} className="w-full bg-white border border-blue-600 text-blue-600 hover:bg-blue-50 font-bold py-2.5 rounded-lg flex items-center justify-center gap-1.5 text-xs transition-transform active:scale-95">
+                      <PlayCircle size={14} /> Treinar temas
+                  </button>
+              </div>
+
+              {/* Por Área */}
+              <div className="mb-1">
+                  <h2 className="text-xs font-bold text-slate-800 mb-2 px-1">Por Área ({timeFilter === '7days' ? '7 Dias' : timeFilter === '1month' ? '1 Mês' : 'Sempre'})</h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {mockAreas.map(area => (
+                          <div key={area.id} className="bg-white p-2.5 rounded-lg border border-gray-100 shadow-sm flex items-center justify-between gap-2 transition-all">
+                              <div className="flex items-center gap-2 min-w-0">
+                                  <div className={`p-1.5 rounded-md ${area.bg} ${area.color} flex-shrink-0`}><area.icon size={14} /></div>
+                                  <div className="min-w-0">
+                                      <h3 className="font-bold text-slate-700 text-[10px] truncate">{area.title}</h3>
+                                      <p className="text-[9px] text-slate-400">{area.correct}/{area.total} pts</p>
+                                  </div>
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                  <span className={`text-sm font-bold ${area.pct >= 80 ? 'text-emerald-600' : area.pct < 60 ? 'text-red-600' : 'text-blue-600'}`}>{area.pct}%</span>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+              
+              {/* MODAIS */}
+              {activeModal && (
+                  <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200 p-4 rounded-[1rem]">
+                      <div className="bg-white border border-gray-100 rounded-xl w-full max-w-sm shadow-2xl relative animate-in zoom-in-95 duration-200 flex flex-col overflow-hidden">
+                          <div className="p-3 border-b border-gray-100 flex justify-between items-center bg-white">
+                              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                                  {activeModal === 'erros' ? <><Zap className="text-yellow-500" fill="currentColor" size={16}/> Erros Recentes</> : <><Target className="text-blue-600" size={16}/> Treinar Tópicos</>}
+                              </h3>
+                              <button onClick={() => setActiveModal(null)} className="text-gray-400 hover:text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-full p-1.5 transition-colors"><X size={14}/></button>
+                          </div>
+                          <div className="p-4 bg-white">
+                              <div className={`p-3 rounded-lg border mb-4 flex gap-2 ${activeModal === 'erros' ? 'bg-yellow-50 border-yellow-100' : 'bg-blue-50 border-blue-100'}`}>
+                                  {activeModal === 'erros' ? <Zap className="text-yellow-600 shrink-0 mt-0.5" size={18} /> : <Target className="text-blue-600 shrink-0 mt-0.5" size={18} />}
+                                  <div className={`text-xs leading-relaxed font-medium ${activeModal === 'erros' ? 'text-yellow-900' : 'text-blue-900'}`}>
+                                      {activeModal === 'erros' 
+                                          ? "No MedMapa, seus erros nunca são esquecidos. O sistema compila tudo o que você errou e gera um simulado de revisão instantâneo para tapar buracos e não perder pontos." 
+                                          : "O algoritmo não te deixa perder tempo. Inicie um simulado direcionado exclusivamente nos temas que estão puxando sua nota para baixo. Estude o que falta e ignore o que já domina."
+                                      }
+                                  </div>
+                              </div>
+                              {/* Texto do botão revertido */}
+                              <button onClick={() => setActiveModal(null)} className={`w-full py-3 rounded-lg font-bold text-sm text-white shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-1.5 ${activeModal === 'erros' ? 'bg-yellow-500 hover:bg-yellow-600 shadow-yellow-500/20' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'}`}>
+                                  <Play size={14} fill="currentColor"/> Entendi a ferramenta
+                              </button>
+                          </div>
+                      </div>
+                  </div>
+              )}
+
+          </div>
       </div>
   );
+};
+
+const BentoFeatures = () => {
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: { opacity: 1, transition: { staggerChildren: 0.2 } },
+  };
+  const itemVariants = {
+    hidden: { opacity: 0, y: 40 },
+    show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } },
+  };
+
+  const flashcardsData = [
+    { front: "Qual banco te dá diversos flashcards para usar sem te cobrar a mais por isso?", back: "MedMapa" },
+    { front: "Qual o método de repetição mais eficaz para decorar matérias densas?", back: "Repetição Espaçada" },
+    { front: "O que foca nas suas maiores fraquezas baseando-se nos simulados?", back: "O Algoritmo de Revisão" }
+  ];
+
+  const areasBase = [
+      { id: 'clinica', title: 'Clínica Médica', icon: Stethoscope, colorClass: 'text-blue-400', bgClass: 'bg-blue-500/20', hoverBorder: 'hover:border-blue-500/50' },
+      { id: 'cirurgia', title: 'Cirurgia Geral', icon: Scissors, colorClass: 'text-emerald-400', bgClass: 'bg-emerald-500/20', hoverBorder: 'hover:border-emerald-500/50' },
+      { id: 'go', title: 'Gineco e Obstetrícia', icon: HeartPulse, colorClass: 'text-pink-400', bgClass: 'bg-pink-500/20', hoverBorder: 'hover:border-pink-500/50' },
+      { id: 'pediatria', title: 'Pediatria', icon: Baby, colorClass: 'text-amber-400', bgClass: 'bg-amber-500/20', hoverBorder: 'hover:border-amber-500/50' },
+      { id: 'preventiva', title: 'Preventiva', icon: Shield, colorClass: 'text-violet-400', bgClass: 'bg-violet-500/20', hoverBorder: 'hover:border-violet-500/50' }
+  ];
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans text-slate-800 pb-20">
-      
-      {/* HEADER */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <button onClick={() => window.location.href = '/'} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Voltar para o App Principal"><ArrowLeft size={24} /></button>
-            <div className="flex items-center gap-2"><Brain className="text-blue-600" size={28} /><h1 className="text-xl font-bold text-slate-800">MedImporter</h1></div>
-          </div>
+    <section className="py-24 bg-[#050508] relative overflow-hidden">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[600px] bg-cyan-900/10 rounded-full blur-[150px] pointer-events-none" />
+
+      <div className="max-w-7xl mx-auto px-6 lg:px-8 relative z-10">
+        
+        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-100px" }} transition={{ duration: 0.6 }} className="text-center mb-16">
+          <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 tracking-tight">Tudo que você precisa, <br /><span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">em um só ecossistema.</span></h2>
+        </motion.div>
+
+        {/* GRID BENTO: Container principal */}
+        <motion.div variants={containerVariants} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-100px" }} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto items-center">
+          {/* =======================================
+              CARD 1: BANCO DE QUESTÕES 
+              ======================================= */}
+          <motion.div variants={itemVariants} className="lg:col-span-2 relative rounded-3xl p-8 lg:p-10 overflow-hidden bg-gradient-to-br from-slate-800/40 to-slate-900/40 border border-slate-700/50 flex flex-col group transition-colors h-full z-20">
             
-            <div className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold ${searchQuota.count >= DAILY_SEARCH_LIMIT ? 'bg-red-50 text-red-700 border-red-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`} title="Contador Global de Pesquisas Google (Todos os Admins)">
-                <BarChart3 size={16}/>
-                <span>{searchQuota.count} / {DAILY_SEARCH_LIMIT}</span>
-            </div>
-
-            <div 
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer transition-all border ${isSearchLimitEnabled ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}
-                onClick={toggleSearchLimit}
-                title="Ativar/Desativar Limite Seguro de 1400 Pesquisas/Dia"
-            >
-                {isSearchLimitEnabled ? <ToggleRight size={24} className="text-emerald-600"/> : <ToggleLeft size={24}/>}
-                <span className="text-sm font-bold whitespace-nowrap flex items-center gap-1">
-                    {isSearchLimitEnabled ? <ShieldCheck size={16}/> : <AlertTriangle size={16}/>}
-                    Limite
-                </span>
-            </div>
-
-            <div 
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer transition-all border ${isWebSearchEnabled ? 'bg-teal-50 border-teal-200 text-teal-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}
-                onClick={() => setIsWebSearchEnabled(!isWebSearchEnabled)}
-                title="A IA vai pesquisar no Google a origem de cada questão"
-            >
-                {isWebSearchEnabled ? <ToggleRight size={24} className="text-teal-600"/> : <ToggleLeft size={24}/>}
-                <span className="text-sm font-bold whitespace-nowrap flex items-center gap-1">
-                    {isWebSearchEnabled ? <Globe size={16}/> : null}
-                    Busca Web
-                </span>
-            </div>
-
-            <div 
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer transition-all border ${isDoubleCheckEnabled ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}
-                onClick={() => setIsDoubleCheckEnabled(!isDoubleCheckEnabled)}
-                title="A IA vai auditar cada questão gerada (Double Check)"
-            >
-                {isDoubleCheckEnabled ? <ToggleRight size={24} className="text-indigo-600"/> : <ToggleLeft size={24}/>}
-                <span className="text-sm font-bold whitespace-nowrap flex items-center gap-1">
-                    {isDoubleCheckEnabled ? <ShieldCheck size={16}/> : null}
-                    Auditoria
-                </span>
-            </div>
-
-            <button onClick={() => { 
-                setTempApiKeysText(apiKeys.join('\n')); 
-                setShowApiKeyModal(true); 
-                setShowTutorial(false); 
-            }} className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2 text-sm font-medium"><Settings size={18} /><span className="hidden md:inline">API</span></button>
-            
-            <div className="relative group flex-1 md:flex-none w-full md:w-auto flex items-center gap-2">
-                <div className="relative">
-                    <Cpu size={16} className="absolute left-3 top-3 text-gray-500" />
-                    <select value={selectedModel} onChange={(e) => handleModelChange(e.target.value)} className="w-full md:w-56 pl-9 pr-3 py-2 text-sm bg-gray-100 border-none rounded-lg font-medium text-slate-700 focus:ring-2 focus:ring-blue-500 cursor-pointer appearance-none">
-                        {availableModels.map(model => (<option key={model.name} value={model.name}>{model.displayName || model.name}</option>))}
-                    </select>
-                </div>
-                <button onClick={validateKeyAndFetchModels} disabled={isValidatingKey || apiKeys.length === 0} className="p-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors disabled:opacity-50" title="Sincronizar Modelos">
-                    {isValidatingKey ? <Loader2 size={18} className="animate-spin"/> : <RefreshCw size={18} />}
-                </button>
-            </div>
-            <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Sair"><LogOut size={20} /></button>
-          </div>
-        </div>
-      </header>
-
-      {/* NOTIFICATION */}
-      <NotificationToast notification={notification} onClose={closeNotification} positionClass="fixed top-24 right-4" />
-
-      {/* API KEY MODAL */}
-      {showApiKeyModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-xl shadow-2xl relative flex flex-col max-h-[90vh] overflow-y-auto">
-                  <button onClick={() => setShowApiKeyModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={20}/></button>
-                  <h2 className="text-xl font-bold mb-4 text-slate-800 flex items-center gap-2"><Settings size={20} className="text-blue-600"/> Configurar API Gemini</h2>
-                  <div className="mb-4">
-                      <label className="block text-sm font-bold text-gray-600 mb-2">Chaves da API (Uma por linha)</label>
-                      <div className="flex flex-col gap-2">
-                        <textarea 
-                            value={tempApiKeysText} 
-                            onChange={e => setTempApiKeysText(e.target.value)} 
-                            className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-800 font-mono text-sm h-32 resize-y" 
-                            placeholder="AIza...&#10;AIza...&#10;AIza..."
-                        />
-                        <button onClick={handleGetKey} className="self-end px-4 py-2 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-xl hover:bg-indigo-100 font-bold whitespace-nowrap flex items-center gap-2 transition-colors text-sm"><Key size={16} /> Gerar Nova Chave</button>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-2 flex items-center gap-1"><Layers size={14}/> Dica: Adicione múltiplas chaves para evitar limites de uso (Erro 429). O sistema fará o rodízio automático.</p>
-                  </div>
-                  {showTutorial && (
-                      <div className="mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100 animate-in slide-in-from-top-2">
-                          <h3 className="font-bold text-blue-800 mb-2 flex items-center gap-2"><ExternalLink size={16}/> Como gerar chaves extras:</h3>
-                          <ol className="text-sm text-blue-800/80 space-y-1.5 list-decimal list-inside">
-                              <li>Clique em "Gerar Nova Chave" para abrir o Google AI Studio.</li>
-                              <li>Clique em "Create API key".</li>
-                              <li>Escolha <strong>"Create API key in new project"</strong>.</li>
-                              <li>Copie a chave e cole uma em cada linha acima.</li>
-                              <li>Repita para criar quantos projetos quiser (cada projeto tem sua cota).</li>
-                          </ol>
-                      </div>
-                  )}
-                  <div className="flex justify-end gap-3 mt-auto pt-2">
-                      <button onClick={() => setShowApiKeyModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg font-bold">Cancelar</button>
-                      <button onClick={saveApiKeyFromModal} disabled={isSavingKey} className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 shadow-lg flex items-center gap-2">{isSavingKey ? <Loader2 size={16} className="animate-spin" /> : null} Salvar Chaves</button>
-                  </div>
+            <div className="relative z-20 mb-8">
+              <div className="w-12 h-12 rounded-xl bg-cyan-500/20 flex items-center justify-center mb-6 border border-cyan-500/30">
+                <Target className="text-cyan-400" size={24} />
               </div>
-          </div>
-      )}
+              <h3 className="text-2xl lg:text-3xl font-bold text-white mb-4 leading-tight">Um banco de questões que pensa como a banca.</h3>
+              <p className="text-slate-400 text-sm md:text-base leading-relaxed max-w-xl mb-5">
+                Milhares de questões atualizadas separadas pelas Grandes Áreas da Medicina.
+              </p>
+              <ul className="space-y-3 text-sm font-medium text-slate-300">
+                  <li className="flex items-center gap-3"><CheckCircle size={18} className="text-cyan-400 shrink-0" /> Gabaritos detalhados e comentados</li>
+                  <li className="flex items-center gap-3"><CheckCircle size={18} className="text-cyan-400 shrink-0" /> Área para anotação na própria questão</li>
+                  <li className="flex items-center gap-3"><CheckCircle size={18} className="text-cyan-400 shrink-0" /> Principais bancas validadas de todo o país</li>
+              </ul>
+            </div>
 
-      {/* CONFIRMATION MODAL */}
-      {confirmationModal.isOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl relative animate-in zoom-in-95 duration-200">
-                  <div className="flex flex-col items-center text-center">
-                    <div className={`p-3 rounded-full mb-4 ${confirmationModal.confirmColor === 'red' ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}><AlertTriangle size={32} /></div>
-                    <h2 className="text-xl font-bold mb-2 text-slate-800">{confirmationModal.title}</h2>
-                    <p className="text-gray-600 mb-6 text-sm">{confirmationModal.message}</p>
-                    <div className="flex gap-3 w-full">
-                        <button onClick={() => setConfirmationModal({ ...confirmationModal, isOpen: false })} className="flex-1 py-3 border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50 transition-colors">Cancelar</button>
-                        <button onClick={executeConfirmationAction} className={`flex-1 py-3 rounded-xl font-bold text-white shadow-lg transition-colors ${confirmationModal.confirmColor === 'red' ? 'bg-red-600 hover:bg-red-700 shadow-red-200' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'}`}>{confirmationModal.confirmText}</button>
+            <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 w-full mt-auto">
+                {areasBase.map((area) => (
+                    <div key={area.id} className={`group/card bg-slate-800/80 p-4 rounded-2xl border border-slate-700 shadow-sm relative overflow-hidden ${area.hoverBorder} hover:bg-slate-800 flex flex-col justify-center transition-all cursor-default min-h-[100px]`}>
+                        <div className={`absolute top-0 right-0 p-2 opacity-5 group-hover/card:opacity-10 transition-opacity transform group-hover/card:scale-110 ${area.colorClass}`}>
+                            <area.icon size={80} />
+                        </div>
+                        <div className="flex items-center gap-3 relative z-10">
+                            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${area.bgClass} ${area.colorClass}`}>
+                                <area.icon size={22} />
+                            </div>
+                            <h4 className={`text-sm sm:text-base font-bold text-slate-200 group-hover/card:${area.colorClass} transition-colors leading-tight`}>
+                                {area.title}
+                            </h4>
+                        </div>
                     </div>
-                  </div>
-              </div>
-          </div>
-      )}
+                ))}
+            </div>
+          </motion.div>
 
-      {/* RE-PROCESS MODAL */}
-      {showReprocessModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl relative flex flex-col">
-                  <button onClick={() => setShowReprocessModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={20}/></button>
-                  <h2 className="text-xl font-bold mb-2 text-slate-800 flex items-center gap-2"><Settings2 size={24} className="text-purple-600"/> Re-processamento em Lote</h2>
-                  <p className="text-sm text-gray-500 mb-6">Você está prestes a re-avaliar <strong>{getFilteredQuestions().length}</strong> questões baseadas nos seus filtros atuais. Selecione as operações desejadas:</p>
+          {/* =======================================
+              CARD 2: FLASHCARDS
+              ======================================= */}
+          <motion.div variants={itemVariants} className="lg:col-span-1 relative rounded-3xl p-8 lg:p-10 bg-gradient-to-br from-slate-800/40 to-slate-900/40 border border-slate-700/50 flex flex-col h-full group hover:border-purple-500/30 transition-colors z-20">
+            
+            <div className="z-20 mb-8">
+                <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center mb-5 border border-purple-500/30">
+                    <BrainCircuit className="text-purple-400" size={24} />
+                </div>
+                <h3 className="text-xl lg:text-2xl font-bold text-white mb-2 leading-tight">Flashcards Inteligentes.</h3>
+                <p className="text-slate-400 text-sm">Passe o mouse para revelar a resposta.</p>
+            </div>
+
+            <div className="flex flex-col gap-3 items-center justify-end flex-1 z-10 w-full">
+                {flashcardsData.map((card, idx) => (
+                    <div key={idx} className="group/flashcard relative w-full flex-1 min-h-[90px] sm:min-h-[100px] cursor-pointer [perspective:1000px]">
+                        <div className="relative w-full h-full transition-all duration-500 [transform-style:preserve-3d] group-hover/flashcard:[transform:rotateY(180deg)]">
+                            <div className="absolute inset-0 bg-slate-800 border border-slate-700 rounded-2xl p-4 flex items-center justify-center text-center [backface-visibility:hidden] shadow-md hover:shadow-lg">
+                                <p className="text-[11px] sm:text-xs text-slate-300 font-medium leading-snug">{card.front}</p>
+                            </div>
+                            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500 to-emerald-600 border border-emerald-400 rounded-2xl p-4 flex flex-col items-center justify-center text-center [backface-visibility:hidden] [transform:rotateY(180deg)] shadow-[0_0_20px_rgba(16,185,129,0.3)]">
+                                <div className="text-emerald-100 mb-1"><CheckCircle2 size={20}/></div>
+                                <p className="text-sm sm:text-base text-white font-bold leading-tight">{card.back}</p>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+          </motion.div>
+
+          {/* =======================================
+              CARD 3: RAIO-X DO DESEMPENHO 
+              ======================================= */}
+          <motion.div variants={itemVariants} className="lg:col-span-3 grid grid-cols-1 lg:grid-cols-3 gap-6 relative">
+              
+              <div className="lg:col-span-2 bg-gradient-to-br from-slate-800/40 to-slate-900/40 border border-slate-700/50 rounded-3xl p-8 lg:p-12 flex flex-col lg:flex-row relative z-10 group transition-colors hover:border-blue-500/30 overflow-hidden lg:overflow-visible">
                   
-                  <div className="space-y-3 mb-6">
-                      <label className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-colors ${reprocessConfig.search ? 'bg-purple-50 border-purple-200' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
-                          <input type="checkbox" checked={reprocessConfig.search} onChange={(e) => setReprocessConfig({...reprocessConfig, search: e.target.checked})} className="mt-1 w-5 h-5 text-purple-600 rounded border-gray-300 focus:ring-purple-500"/>
-                          <div>
-                              <p className="font-bold text-slate-800 text-sm">Verificar Fontes (Google Search)</p>
-                              <p className="text-xs text-gray-500 mt-0.5">Busca a origem da questão (Instituição e Ano). Consome sua cota diária de 1400 pesquisas.</p>
-                          </div>
-                      </label>
+                  {/* Textos travados à esquerda */}
+                  <div className="w-full lg:w-[45%] xl:w-[45%] flex-shrink-0 relative z-20 pointer-events-auto mt-6">
+                      <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center mb-6 border border-blue-500/30">
+                          <BarChart3 className="text-blue-400" size={24} />
+                      </div>
+                      <h3 className="text-2xl lg:text-3xl font-bold text-white mb-4 leading-tight">Raio-X do seu Desempenho.</h3>
+                      <p className="text-slate-400 text-sm md:text-base leading-relaxed mb-6">
+                          Descubra suas fraquezas antes da prova. O sistema analisa seu comportamento, gera gráficos de evolução em tempo real e lista exatamente quais os temas que você precisa estudar mais.
+                      </p>
+                      <ul className="space-y-4 text-sm font-medium text-slate-300 mb-8">
+                          <li className="flex items-center gap-3"><CheckCircle size={18} className="text-blue-400 shrink-0" /> Dashboard Analytics Completo</li>
+                          <li className="flex items-center gap-3"><CheckCircle size={18} className="text-blue-400 shrink-0" /> Caderno de Erros Automático</li>
+                          <li className="flex items-center gap-3"><CheckCircle size={18} className="text-blue-400 shrink-0" /> Comparativo de Simulados</li>
+                      </ul>
 
-                      <label className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-colors ${reprocessConfig.audit ? 'bg-purple-50 border-purple-200' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
-                          <input type="checkbox" checked={reprocessConfig.audit} onChange={(e) => setReprocessConfig({...reprocessConfig, audit: e.target.checked})} className="mt-1 w-5 h-5 text-purple-600 rounded border-gray-300 focus:ring-purple-500"/>
-                          <div>
-                              <p className="font-bold text-slate-800 text-sm">Auditoria IA (Double Check)</p>
-                              <p className="text-xs text-gray-500 mt-0.5">Analisa erros médicos ou discordâncias lógicas. Pode demorar em lotes grandes.</p>
+                      {/* AS 5 JANELINHAS DE COPY (Espaçamento aumentado com space-y-4) */}
+                      <div className="space-y-4 hidden sm:block mb-8 pr-4">
+                          {/* Janelinha 1 */}
+                          <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 hover:bg-blue-500/15 transition-colors">
+                              <h4 className="text-blue-400 font-bold text-[13px] mb-1.5 flex items-center gap-2"><Eye size={14}/> Pare de estudar no escuro.</h4>
+                              <p className="text-slate-400 text-[13px] leading-relaxed">
+                                  Enquanto a concorrência perde tempo revisando PDFs inteiros e anotando erros, o MedMapa te diz <strong className="text-slate-200">com precisão</strong> onde focar hoje para sua nota subir amanhã.
+                              </p>
                           </div>
-                      </label>
+                          
+                          {/* Janelinha 2 */}
+                          <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 hover:bg-blue-500/15 transition-colors">
+                              <h4 className="text-blue-400 font-bold text-[13px] mb-1.5 flex items-center gap-2"><Target size={14}/> Simulados que se adaptam a você.</h4>
+                              <p className="text-slate-400 text-[13px] leading-relaxed">
+                                  Não refaça provas genéricas. O algoritmo cria listas focadas exatamente nas matérias que mais derrubam a sua nota. Estude menos, mas <strong className="text-slate-200">estude o que importa</strong>.
+                              </p>
+                          </div>
+
+                          {/* Janelinha 3 */}
+                          <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 hover:bg-blue-500/15 transition-colors">
+                              <h4 className="text-blue-400 font-bold text-[13px] mb-1.5 flex items-center gap-2"><TrendingUp size={14}/> Evolução que você enxerga.</h4>
+                              <p className="text-slate-400 text-[13px] leading-relaxed">
+                                  A ansiedade vem de não saber se está pronto. Com gráficos de desempenho, você vê sua nota subir semana a semana e chega no dia do exame com a <strong className="text-slate-200">confiança lá em cima</strong>.
+                              </p>
+                          </div>
+
+                          {/* Janelinha 4 */}
+                          <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 hover:bg-blue-500/15 transition-colors">
+                              <h4 className="text-blue-400 font-bold text-[13px] mb-1.5 flex items-center gap-2"><Clock size={14}/> Estude até no plantão.</h4>
+                              <p className="text-slate-400 text-[13px] leading-relaxed">
+                                  Tem 15 minutos livres? Gere um mini-simulado focado e garanta mais pontos na prova sem precisar sequer abrir um livro ou carregar <strong className="text-slate-200">apostilas pesadas</strong>.
+                              </p>
+                          </div>
+                      </div>
+
                   </div>
 
-                  <div className="bg-amber-50 p-3 rounded-lg border border-amber-100 flex gap-2 mb-6">
-                      <Info size={16} className="text-amber-600 flex-shrink-0 mt-0.5"/>
-                      <p className="text-xs text-amber-800">Este processo rodará em background com pequenos intervalos entre as questões para evitar bloqueio de IP/API (Erro 429). Não feche esta aba.</p>
+                  {/* A JANELA VIRTUAL E O BADGE FLUTUANTE */}
+                  <div className="hidden lg:flex flex-col flex-shrink-0 w-[650px] xl:w-[750px] z-30 transition-transform duration-700 group-hover:-translate-y-2 ml-8 xl:ml-12 -mt-4 relative group/mockup">
+                      
+                      {/* O BADGE ANIMADO */}
+                      <div className="absolute -left-6 top-8 bg-slate-900 border border-slate-700 text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-[0_0_30px_rgba(0,0,0,0.5)] z-50 flex items-center gap-2 opacity-100 group-hover/mockup:opacity-0 transition-opacity duration-500 pointer-events-none animate-bounce">
+                          <span className="relative flex h-2.5 w-2.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                          </span>
+                          ✨ Clique e teste o painel
+                      </div>
+
+                      <InteractivePerformanceMockup />
                   </div>
 
-                  <div className="flex justify-end gap-3">
-                      <button onClick={() => setShowReprocessModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg font-bold">Cancelar</button>
-                      <button onClick={startReprocessBatch} disabled={!reprocessConfig.search && !reprocessConfig.audit} className="px-6 py-2 bg-purple-600 text-white rounded-lg font-bold hover:bg-purple-700 shadow-lg flex items-center gap-2 disabled:opacity-50"><Play size={16}/> Iniciar Lote</button>
+                  {/* Mockup Mobile para telas menores */}
+                  <div className="lg:hidden relative w-[110%] -left-[5%] mt-10 z-30">
+                      <InteractivePerformanceMockup />
                   </div>
               </div>
-          </div>
-      )}
 
-      <main className="max-w-7xl mx-auto p-4 md:p-6">
-        <div className="flex justify-center mb-8">
-            <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-200 inline-flex overflow-x-auto max-w-full">
-                <button onClick={() => setActiveTab('input')} className={`whitespace-nowrap px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${activeTab === 'input' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:text-gray-700'}`}><FileText size={18} /> Texto</button>
-                <button onClick={() => setActiveTab('batch_images')} className={`whitespace-nowrap px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${activeTab === 'batch_images' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:text-gray-700'}`}><Files size={18} /> Imagens (Lote)</button>
-                <button onClick={() => setActiveTab('pdf')} className={`whitespace-nowrap px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${activeTab === 'pdf' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:text-gray-700'}`}><Database size={18} /> PDF Massivo</button>
-                <button onClick={() => setActiveTab('review')} className={`whitespace-nowrap px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${activeTab === 'review' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:text-gray-700'}`}>
-                    <CloudLightning size={18} /> Fila de Aprovação 
-                    {parsedQuestions.length > 0 && <span className="ml-2 bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full">{parsedQuestions.length}</span>}
-                </button>
+              {/* Coluna fantasma para segurar a grid e permitir o vazamento visual perfeito na direita */}
+              <div className="hidden lg:block lg:col-span-1 pointer-events-none"></div>
+
+          </motion.div>
+
+        </motion.div>
+      </div>
+    </section>
+  );
+};
+
+/* =========================================
+   3. SEÇÃO SCROLL STORYTELLING (Jornada do Estudo Cirúrgico)
+   ========================================= */
+
+// --- App Shell (Sidebar do Mockup do Tablet Idêntica ao Layout.jsx) ---
+const AppShell = ({ children, activeTab, dark = false }) => (
+    <div className={`flex w-full h-full overflow-hidden ${dark ? 'bg-slate-900' : 'bg-gray-50'}`}>
+        <div className={`w-14 ${dark ? 'bg-slate-950 border-slate-800' : 'bg-white border-gray-200'} border-r shrink-0 flex flex-col items-center py-4 gap-3 z-20 shadow-[2px_0_10px_rgba(0,0,0,0.02)]`}>
+            {/* Logo */}
+            <Map className="text-blue-600 mb-2" size={24} strokeWidth={2.5}/>
+            
+            {/* Menu Itens */}
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${activeTab === 'home' ? 'bg-blue-50 text-blue-700 font-semibold' : dark ? 'text-slate-600' : 'text-gray-400'}`}><BookOpen size={18}/></div>
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${activeTab === 'simulados' ? 'bg-blue-50 text-blue-700 font-semibold' : dark ? 'text-slate-600' : 'text-gray-400'}`}><CheckCircle size={18}/></div>
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${activeTab === 'performance' ? 'bg-blue-50 text-blue-700 font-semibold' : dark ? 'text-slate-600' : 'text-gray-400'}`}><BarChart2 size={18}/></div>
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${activeTab === 'flashcards' ? 'bg-blue-50 text-blue-700 font-semibold' : dark ? 'text-slate-600' : 'text-gray-400'}`}><Layers size={18}/></div>
+        </div>
+        <div className={`flex-1 flex flex-col relative overflow-hidden ${dark ? 'bg-slate-900' : 'bg-gray-50/50'}`}>
+            <style>{`
+                .hide-scrollbar::-webkit-scrollbar { display: none; }
+                .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+            `}</style>
+            {children}
+        </div>
+    </div>
+);
+
+// --- SLIDE 1: HomeView ---
+const MockupHome = () => {
+    const areas = [
+        { title: 'Clínica Médica', icon: Stethoscope, color: 'text-blue-600', bg: 'bg-blue-50' },
+        { title: 'Cirurgia Geral', icon: Scissors, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+        { title: 'Gineco e Obstetrícia', icon: HeartPulse, color: 'text-pink-600', bg: 'bg-pink-50' },
+        { title: 'Pediatria', icon: Baby, color: 'text-amber-600', bg: 'bg-amber-50' },
+        { title: 'Preventiva', icon: Shield, color: 'text-violet-600', bg: 'bg-violet-50' },
+    ];
+
+    return (
+        <AppShell activeTab="home">
+            <div className="p-4 flex flex-col h-full w-full overflow-hidden">
+                <div className="mb-3 shrink-0">
+                    <h2 className="text-lg font-bold text-slate-900 leading-tight">Olá, Aluno! 👋</h2>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Vamos praticar hoje? Escolha uma área para começar.</p>
+                </div>
+                
+                <div className="grid grid-cols-3 gap-2 mb-4 shrink-0">
+                    <div className="bg-white p-2.5 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p className="text-[8px] font-medium text-gray-500 mb-0.5">Questões Hoje</p>
+                            <div className="flex items-baseline gap-1">
+                                <h3 className="text-xs font-bold text-slate-900">32</h3>
+                                <span className="text-[8px] text-gray-400 font-medium">/ 50</span>
+                            </div>
+                        </div>
+                        <div className="p-1.5 rounded-lg bg-blue-50 text-blue-600 shrink-0"><CheckCircle size={12} /></div>
+                    </div>
+                    <div className="bg-white p-2.5 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p className="text-[8px] font-medium text-gray-500 mb-0.5">Taxa de Acerto</p>
+                            <h3 className="text-xs font-bold text-slate-900">78%</h3>
+                        </div>
+                        <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 shrink-0"><BarChart2 size={12} /></div>
+                    </div>
+                    <div className="bg-white p-2.5 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p className="text-[8px] font-medium text-gray-500 mb-0.5">Sequência</p>
+                            <h3 className="text-xs font-bold text-slate-900">12 Dias</h3>
+                        </div>
+                        <div className="p-1.5 rounded-lg bg-orange-50 text-orange-600 shrink-0"><Activity size={12} /></div>
+                    </div>
+                </div>
+
+                <div className="flex flex-col shrink-0">
+                    <h3 className="text-[11px] font-bold text-slate-800 mb-2">Grandes Áreas</h3>
+                    <div className="grid grid-cols-3 gap-1.5">
+                        {areas.map((area, idx) => (
+                            <div key={idx} className="group bg-white p-2.5 rounded-xl border border-gray-100 shadow-sm relative overflow-hidden flex flex-col justify-between h-[75px]">
+                                <div className={`absolute top-0 right-0 p-1 opacity-5 group-hover:opacity-10 transition-opacity transform group-hover:scale-110 ${area.color}`}>
+                                    <area.icon size={40} />
+                                </div>
+                                <div>
+                                    <div className={`w-6 h-6 rounded-lg flex items-center justify-center mb-1 shrink-0 ${area.bg} ${area.color}`}>
+                                        <area.icon size={12} />
+                                    </div>
+                                    <h4 className="text-[8px] font-bold text-slate-900 group-hover:text-blue-700 transition-colors">
+                                        {area.title}
+                                    </h4>
+                                </div>
+                                <div className="mt-1 flex items-center text-blue-600 font-bold text-[7px] group-hover:translate-x-1 transition-transform duration-300">
+                                    Acessar Área <ChevronRight size={8} className="ml-[1px]" />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </AppShell>
+    );
+};
+
+// --- SLIDE 2: ExamSetup ---
+const MockupSetup = () => {
+    const areas = [
+        { title: 'Clínica Médica', icon: Stethoscope, color: 'text-blue-600', bg: 'bg-blue-50' },
+        { title: 'Cirurgia Geral', icon: Scissors, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+        { title: 'Gineco e Obstetrícia', icon: HeartPulse, color: 'text-pink-600', bg: 'bg-pink-50' },
+        { title: 'Pediatria', icon: Baby, color: 'text-amber-600', bg: 'bg-amber-50' },
+        { title: 'Preventiva', icon: Shield, color: 'text-violet-600', bg: 'bg-violet-50' },
+    ];
+
+    return (
+        <AppShell activeTab="simulados">
+            <div className="flex flex-col h-full bg-gray-50/50 w-full relative overflow-hidden">
+                <div className="flex-1 p-3.5 flex flex-col">
+                    <div className="flex justify-between items-center mb-1 shrink-0">
+                        <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">Simulado Personalizado</span>
+                    </div>
+                    <h1 className="text-sm font-bold text-slate-900 mb-0.5 shrink-0">Monte seu Simulado</h1>
+                    <p className="text-[9px] text-slate-500 mb-1.5 shrink-0">Selecione temas de diferentes áreas.</p>
+                    
+                    <div className="flex justify-end mb-1.5 shrink-0">
+                        <div className="text-[8px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md flex items-center gap-1"><CheckSquare size={10} /> Selecionar Tudo</div>
+                    </div>
+
+                    <div className="space-y-1.5 shrink-0">
+                        {areas.map((area, i) => (
+                            <div key={i} className="bg-white rounded-lg border border-gray-200 shadow-sm p-1.5 px-2.5 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <div className={`p-1.5 rounded-md ${area.bg} ${area.color}`}><area.icon size={12} /></div>
+                                    <div>
+                                        <h3 className="font-bold text-slate-900 text-[9px]">{area.title}</h3>
+                                        <p className="text-[7px] text-gray-500">0 temas selecionados</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    <span className="px-1.5 py-0.5 rounded text-[7px] font-bold bg-gray-100 text-gray-600">Selecionar</span>
+                                    <ChevronDown size={10} className="text-gray-400" />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="bg-white p-2.5 border-t border-gray-200 shadow-[0_-4px_10px_rgba(0,0,0,0.02)] flex justify-between items-center z-10 shrink-0">
+                    <div>
+                        <label className="text-[7px] text-gray-500 block mb-0.5 font-bold uppercase tracking-wide">Quantidade</label>
+                        <div className="flex items-center gap-1">
+                            <div className="w-10 px-2 py-1 bg-gray-50 border border-gray-200 rounded-md font-bold text-slate-800 text-[9px] text-center">20</div>
+                            <div className="p-1 bg-gray-100 rounded-md text-slate-600"><PlusCircle size={10} /></div>
+                        </div>
+                    </div>
+                    <button className="bg-blue-600 text-white px-4 py-1.5 rounded-lg font-bold flex items-center gap-1 shadow-sm text-[9px]">
+                        Começar Agora <ArrowRight size={10} />
+                    </button>
+                </div>
+            </div>
+        </AppShell>
+    );
+};
+
+// --- SLIDE 3: QuestionView ---
+const MockupQuestao = () => (
+    <div className="flex flex-col h-full bg-gray-50 w-full relative rounded-[1.2rem] overflow-hidden">
+        <div className="bg-white border-b border-gray-200 px-4 py-2 shrink-0 flex justify-between items-center z-10">
+            <div className="flex gap-2">
+                <div className="text-slate-600 font-bold text-[9px] bg-white border border-gray-200 px-2 py-1.5 rounded-md flex items-center gap-1"><LayoutGrid size={12} /> Gabarito</div>
+                <div className="text-slate-600 font-bold text-[9px] bg-white border border-gray-200 px-2 py-1.5 rounded-md flex items-center gap-1"><Eye size={12} /> Modo Prova</div>
+            </div>
+            <div className="flex items-center gap-3">
+                <div className="text-[9px] font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded border border-gray-200">
+                    <span className="text-slate-900 font-bold">1</span> / 20
+                </div>
+                <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden"><div className="w-[5%] h-full bg-blue-600 rounded-full"></div></div>
             </div>
         </div>
 
-        {/* OVERRIDES SECTION */}
-        {(activeTab === 'input' || activeTab === 'pdf' || activeTab === 'batch_images') && (
-            <div className="max-w-4xl mx-auto mb-6 animate-in slide-in-from-top-4">
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center gap-2">
-                        <Filter size={16} className="text-gray-500"/>
-                        <span className="text-sm font-bold text-slate-700">Filtros de Pré-definição (Forçar Dados)</span>
-                        <span className="text-xs text-gray-400 font-normal ml-auto">Opcional • Se preenchido, a IA será obrigada a usar</span>
+        <div className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col gap-1 z-30">
+            <div className="bg-white border border-gray-200 border-r-0 rounded-l-lg p-2 shadow-sm"><Calculator size={14} className="text-slate-500"/></div>
+            <div className="bg-white border border-gray-200 border-r-0 rounded-l-lg p-2 shadow-sm mt-0.5"><PenTool size={14} className="text-slate-500"/></div>
+        </div>
+
+        <div className="flex-1 p-3 flex flex-col gap-2 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col shrink-0">
+                <div className="flex justify-between items-start p-2.5 border-b border-gray-100 bg-slate-50/50 rounded-t-xl shrink-0">
+                    <div className="flex flex-wrap gap-1.5 items-center">
+                        <span className="bg-blue-50 text-blue-700 text-[8px] font-bold px-1.5 py-0.5 rounded border border-blue-100 uppercase tracking-wide">Nacional - Enare</span>
+                        <span className="bg-gray-100 text-gray-600 text-[8px] font-bold px-1.5 py-0.5 rounded border border-gray-200">2026</span>
+                        <span className="bg-gray-100 text-gray-600 text-[8px] font-bold px-1.5 py-0.5 rounded border border-gray-200">Reumatologia</span>
                     </div>
-                    <div className="p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Instituição</label>
-                            <input value={overrideInst} onChange={e=>setOverrideInst(e.target.value)} placeholder="Ex: ENARE" className="w-full p-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Ano</label>
-                            <input type="number" value={overrideYear} onChange={e=>setOverrideYear(e.target.value)} placeholder="Ex: 2026" className="w-full p-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Área Forçada</label>
-                            <select value={overrideArea} onChange={e=>{setOverrideArea(e.target.value); setOverrideTopic('');}} className="w-full p-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
-                                <option value="">Automático (IA)</option>
-                                {areasBase.map(a => <option key={a} value={a}>{a}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Tópico Forçado</label>
-                            <select value={overrideTopic} onChange={e=>setOverrideTopic(e.target.value)} disabled={!overrideArea} className="w-full p-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white disabled:bg-gray-50 disabled:text-gray-400">
-                                <option value="">Automático (IA)</option>
-                                {(themesMap[overrideArea] || []).map(t => <option key={t} value={t}>{t}</option>)}
-                            </select>
-                        </div>
+                    <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1 text-[7px] text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100 font-bold uppercase"><span className="text-slate-500">ID</span>A38F9B <Copy size={8}/></div>
+                        <AlertTriangle size={12} className="text-red-400"/>
                     </div>
-                    {(overrideInst || overrideYear || overrideArea) && (
-                        <div className="bg-blue-50 px-4 py-2 border-t border-blue-100 flex justify-between items-center">
-                            <span className="text-xs text-blue-700 font-medium">As próximas questões serão geradas com esses dados fixos.</span>
-                            <button onClick={()=>{setOverrideInst('');setOverrideYear('');setOverrideArea('');setOverrideTopic('');}} className="text-xs text-red-500 hover:text-red-700 font-bold flex items-center gap-1"><Eraser size={12}/> Limpar Filtros</button>
-                        </div>
-                    )}
+                </div>
+                <div className="p-3">
+                    <p className="text-[9.5px] text-slate-800 leading-relaxed font-medium text-justify">
+                        Mulher de 20 anos procura atendimento médico no ambulatório de clínica médica de referência devido a quadro iniciado há 3 meses, com dor e edema articular acometendo articulações das mãos (interfalangeanas proximais, metacarpofalangeanas e punhos), assim como cotovelos, joelhos e tornozelos. Relata rigidez matinal que persiste por mais de 2 horas. O exame físico confirma dor e edema nas articulações descritas, além de mucosas hipocoradas (++/4+), sem outras alterações. A hipótese diagnóstica a ser considerada, o achado laboratorial esperado e a primeira linha de tratamento indicada são, respectivamente:
+                    </p>
                 </div>
             </div>
-        )}
+            
+            <div className="space-y-1.5 shrink-0 pr-8">
+                {[
+                    'esclerose sistêmica; níveis elevados de creatina quinase; prednisona.',
+                    'artrite reumatoide; pesquisa de fator reumatoide (FR) positivo; metotrexato.',
+                    'lúpus eritematoso sistêmico; FAN com padrão nuclear pontilhado fino denso; cloroquina.',
+                    'doença mista do tecido conjuntivo; FAN com padrão nuclear pontilhado fino; azatioprina.'
+                ].map((opt, i) => {
+                    const isSelected = i === 1; // Alternativa B Correta
+                    return (
+                    <div key={i} className={`flex items-start gap-2 p-1.5 px-2.5 rounded-lg border transition-colors ${isSelected ? 'border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500' : 'border-gray-200 bg-white opacity-90'}`}>
+                        <div className={`w-4 h-4 rounded-full border ${isSelected ? 'border-transparent' : 'border-gray-300'} flex items-center justify-center shrink-0 text-[7px] font-bold mt-[1.5px] ${isSelected ? 'text-emerald-600' : 'bg-gray-50 text-gray-500'}`}>
+                            {isSelected ? <CheckCircle size={12} className="fill-emerald-100" /> : ['A', 'B', 'C', 'D'][i]}
+                        </div>
+                        <span className={`text-[9px] font-medium leading-relaxed pt-[2px] ${isSelected ? 'text-emerald-800 font-semibold' : 'text-slate-600'}`}>{opt}</span>
+                    </div>
+                )})}
+            </div>
+        </div>
 
-        {/* INPUT TABS */}
-        {activeTab === 'input' && (
-            <div className="max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-4">
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                    <label className="block text-lg font-bold text-slate-800 mb-2">
-                        Cole suas questões (Texto)
-                    </label>
-                    <p className="text-sm text-gray-500 mb-4">A IA vai analisar e enviar para a fila de aprovação (Database).</p>
+        <div className="bg-white border-t border-gray-200 p-2 shrink-0 flex justify-between items-center z-10">
+            <div className="text-slate-400 text-[9px] font-bold flex items-center gap-1 ml-2"><ArrowLeft size={10} /> Anterior</div>
+            <div className="bg-blue-600 text-white px-6 py-1.5 rounded-md text-[9px] font-bold shadow-sm shadow-blue-500/20">Responder</div>
+            <div className="text-blue-600 text-[9px] font-bold flex items-center gap-1 mr-2">Próxima <ArrowRight size={10} /></div>
+        </div>
+    </div>
+);
+
+// --- Componente Automático de Slideshow para o Passo 0 ---
+const MockupFocoSlideshow = ({ isPaused }) => {
+    const [slide, setSlide] = useState(0);
+
+    useEffect(() => {
+        if (isPaused) return; 
+        const interval = setInterval(() => {
+            setSlide((prev) => (prev + 1) % 3);
+        }, 3500); 
+        return () => clearInterval(interval);
+    }, [isPaused]); 
+
+    return (
+        <div className="relative w-full h-full bg-slate-900 rounded-[1.2rem] overflow-hidden cursor-pointer">
+            <div className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${slide === 0 ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}>
+                <MockupHome />
+            </div>
+            <div className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${slide === 1 ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}>
+                <MockupSetup />
+            </div>
+            <div className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${slide === 2 ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}>
+                <MockupQuestao />
+            </div>
+        </div>
+    );
+};
+
+// --- Componentes Compartilhados para Performance/Erros ---
+const PerformanceHeader = () => (
+    <div className="flex justify-between items-center mb-3 shrink-0">
+        <h1 className="text-lg font-bold text-slate-900 flex items-center gap-1.5">
+            <BarChart2 className="text-blue-600" size={18} /> Seu Desempenho
+        </h1>
+        <div className="flex bg-gray-100 p-0.5 rounded-lg shadow-inner border border-gray-200/50">
+            <button className="px-2 py-1 rounded text-[7px] font-bold text-slate-500 hover:text-slate-700 transition-colors">7 Dias</button>
+            <button className="px-2 py-1 rounded text-[7px] font-bold text-slate-500 hover:text-slate-700 transition-colors">1 Mês</button>
+            <button className="px-2 py-1 rounded text-[7px] font-bold bg-white text-blue-600 shadow-sm transition-all">Sempre</button>
+        </div>
+    </div>
+);
+
+const PerformanceTopicFilters = () => (
+    <div className="flex gap-1 overflow-x-auto hide-scrollbar pb-1 mb-2 w-full shrink-0">
+        <div className="flex-shrink-0 px-2.5 py-0.5 rounded-full text-[7px] font-bold whitespace-nowrap border bg-slate-800 text-white border-slate-800">Geral</div>
+        <div className="flex-shrink-0 px-2.5 py-0.5 rounded-full text-[7px] font-bold whitespace-nowrap border bg-white text-gray-500 border-gray-200">Clínica Médica</div>
+        <div className="flex-shrink-0 px-2.5 py-0.5 rounded-full text-[7px] font-bold whitespace-nowrap border bg-white text-gray-500 border-gray-200">Cirurgia Geral</div>
+        <div className="flex-shrink-0 px-2.5 py-0.5 rounded-full text-[7px] font-bold whitespace-nowrap border bg-white text-gray-500 border-gray-200">Gineco e Obstetrícia</div>
+        <div className="flex-shrink-0 px-2.5 py-0.5 rounded-full text-[7px] font-bold whitespace-nowrap border bg-white text-gray-500 border-gray-200">Pediatria</div>
+        <div className="flex-shrink-0 px-2.5 py-0.5 rounded-full text-[7px] font-bold whitespace-nowrap border bg-white text-gray-500 border-gray-200">Preventiva</div>
+    </div>
+);
+
+const PerformanceTopicsList = () => (
+    <div className="flex flex-col gap-1.5 overflow-y-hidden w-full">
+        <div className="bg-gray-50 rounded-lg p-2 flex items-center justify-between border border-gray-100/50">
+            <div className="flex items-center gap-1">
+                <span className="text-[8px] font-bold text-slate-400">#1</span>
+                <span className="font-bold text-slate-800 text-[8px]">Trauma</span>
+            </div>
+            <span className="text-[8px] font-bold text-emerald-600">85%</span>
+        </div>
+        <div className="bg-gray-50 rounded-lg p-2 flex items-center justify-between border border-gray-100/50">
+            <div className="flex items-center gap-1">
+                <span className="text-[8px] font-bold text-slate-400">#2</span>
+                <span className="font-bold text-slate-800 text-[8px]">Pneumologia</span>
+            </div>
+            <span className="text-[8px] font-bold text-emerald-600">82%</span>
+        </div>
+    </div>
+);
+
+// --- SLIDE 4: PerformanceView (Diagnóstico Original) ---
+const MockupDiagnostico = () => (
+    <AppShell activeTab="performance">
+        <div className="flex flex-col w-full h-full bg-gray-50 p-4">
+            <PerformanceHeader />
+
+            <div className="grid grid-cols-2 gap-2 mb-3 shrink-0">
+                <div className="bg-white p-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center">
+                    <span className="p-1.5 rounded-full bg-blue-50 text-blue-600 mb-1.5"><Activity size={12}/></span>
+                    <h2 className="text-[7px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Taxa de Acerto</h2>
+                    <div className="text-xl font-extrabold text-slate-900 tracking-tight leading-none mb-1">78.5%</div>
+                    <p className="text-[6px] font-bold text-slate-400 bg-gray-100 px-1.5 py-0.5 rounded-full">245 de 312 acertos</p>
+                </div>
+                <div className="bg-white p-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-1 opacity-[0.03] text-purple-900 pointer-events-none"><Calendar size={40} /></div>
+                    <div className="flex items-center gap-1 mb-1 relative z-10">
+                        <span className="p-1 bg-emerald-50 text-emerald-600 rounded-md"><Calendar size={10}/></span>
+                        <h2 className="text-[9px] font-bold text-slate-700">Resolvidas</h2>
+                    </div>
+                    <div className="flex items-center justify-between relative z-10 mt-auto px-1">
+                        <div className="text-center">
+                            <div className="text-lg font-bold text-slate-800">312</div>
+                            <div className="text-[6px] uppercase font-bold text-slate-400">Feitas</div>
+                        </div>
+                        <div className="w-px h-5 bg-gray-100"></div>
+                        <div className="text-center">
+                            <div className="text-lg font-bold text-emerald-500">245</div>
+                            <div className="text-[6px] uppercase font-bold text-slate-400">Acertos</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl p-3 text-white shadow-lg relative overflow-hidden flex justify-between items-center mb-3 shrink-0">
+                <div className="absolute -right-2 -bottom-2 text-yellow-500/10 pointer-events-none"><Zap size={60} /></div>
+                <div className="relative z-10 flex flex-col gap-1 max-w-[150px]">
+                    <div className="inline-flex items-center gap-1 bg-slate-800/50 backdrop-blur w-max px-1.5 py-0.5 rounded-full border border-slate-700">
+                        <Zap className="text-yellow-400" size={8} fill="currentColor" /> 
+                        <span className="text-[6px] font-bold text-yellow-100 uppercase tracking-wide">Caderno Automático</span>
+                    </div>
+                    <h2 className="text-[10px] font-bold leading-tight">Transforme erros em acertos</h2>
+                </div>
+                <div className="relative z-10 bg-yellow-500 text-slate-900 font-bold py-1.5 px-3 rounded-md flex items-center justify-center gap-1 text-[8px] shadow-md">
+                    <PlayCircle size={10} fill="currentColor" /> Matar Erros
+                </div>
+            </div>
+            
+            <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm w-full flex flex-col flex-1 overflow-hidden">
+                <div className="flex items-center justify-between mb-2 shrink-0">
+                    <div className="flex items-center gap-1.5">
+                        <div className="p-1 bg-purple-50 text-purple-600 rounded-md"><BarChart3 size={10} /></div>
+                        <h2 className="font-bold text-slate-800 text-[10px]">Top Tópicos</h2>
+                    </div>
+                </div>
+                <PerformanceTopicFilters />
+                <PerformanceTopicsList />
+            </div>
+        </div>
+    </AppShell>
+);
+
+// --- SLIDE 3: O Fim do Erro Bobo ---
+const MockupErros = ({ isActive }) => {
+    const [showModal, setShowModal] = useState(false);
+    const [animState, setAnimState] = useState(0);
+
+    useEffect(() => {
+        if (isActive) {
+            const t1 = setTimeout(() => setAnimState(1), 800); 
+            const t2 = setTimeout(() => setAnimState(2), 1600); 
+            const t3 = setTimeout(() => setAnimState(3), 2400); 
+            const t4 = setTimeout(() => { setAnimState(4); setShowModal(true); }, 2600); 
+            return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); };
+        } else {
+            setAnimState(0);
+            setShowModal(false);
+        }
+    }, [isActive]);
+
+    return (
+        <div className="relative w-full h-full">
+            <AppShell activeTab="performance">
+                <div className="flex flex-col w-full h-full bg-gray-50 p-4">
                     
-                    <textarea value={rawText} onChange={(e) => setRawText(e.target.value)} placeholder="Cole aqui o texto..." className="w-full h-96 p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-800 font-mono text-sm resize-y mb-4"/>
+                    <PerformanceHeader />
 
-                    <div className="flex justify-end gap-3 mt-4">
-                        <button onClick={() => { setRawText(''); }} className="px-4 py-3 text-gray-500 hover:bg-gray-100 rounded-xl font-bold">Limpar</button>
-                        <button onClick={processWithAI} disabled={isProcessing || apiKeys.length === 0} className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200 flex items-center gap-2 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
-                            {isProcessing ? <><Loader2 className="animate-spin" size={20} /> Processando...</> : <><Wand2 size={20} /> Enviar para Fila</>}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
-
-        {/* BATCH IMAGES TAB */}
-        {activeTab === 'batch_images' && (
-            <div className="max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4">
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                    <div className="flex justify-between items-start mb-6">
-                        <div>
-                            <label className="block text-lg font-bold text-slate-800 mb-1">
-                                Importador de Imagens (Lote ou Única)
-                            </label>
-                            <p className="text-sm text-gray-500">Adicione ou cole (Ctrl+V) várias imagens. As processadas com sucesso serão removidas automaticamente.</p>
+                    <div className="grid grid-cols-2 gap-2 mb-3 shrink-0">
+                        <div className="bg-white p-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center">
+                            <span className="p-1.5 rounded-full bg-blue-50 text-blue-600 mb-1.5"><Activity size={12}/></span>
+                            <h2 className="text-[7px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Taxa de Acerto</h2>
+                            <div className="text-xl font-extrabold text-slate-900 tracking-tight leading-none mb-1">78.5%</div>
+                            <p className="text-[6px] font-bold text-slate-400 bg-gray-100 px-1.5 py-0.5 rounded-full">245 de 312 acertos</p>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <button onClick={clearBatchQueue} disabled={batchStatus === 'processing' || batchStatus === 'pausing'} title="Limpar Tudo" className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-30"><Trash2 size={20}/></button>
-                            
-                            {batchStatus === 'processing' ? (
-                                <button onClick={toggleBatchProcessing} className="px-4 py-2 bg-amber-100 text-amber-700 rounded-lg font-bold flex items-center gap-2 hover:bg-amber-200 transition-colors"><Pause size={18}/> Pausar</button>
-                            ) : batchStatus === 'pausing' ? (
-                                <button disabled className="px-4 py-2 bg-amber-50 text-amber-400 border border-amber-100 rounded-lg font-bold flex items-center gap-2 cursor-wait"><Loader2 size={18} className="animate-spin"/> Pausando...</button>
-                            ) : (
-                                <button onClick={toggleBatchProcessing} disabled={batchImages.length === 0} className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg font-bold flex items-center gap-2 hover:bg-emerald-200 transition-colors disabled:opacity-50"><Play size={18}/> {batchStatus === 'paused' ? 'Continuar' : 'Iniciar'}</button>
-                            )}
-                        </div>
-                    </div>
-
-                    <div 
-                        onPaste={handleBatchPaste}
-                        className="w-full h-32 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center bg-gray-50 relative overflow-hidden transition-all hover:border-blue-400 mb-6 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                        tabIndex="0"
-                    >
-                        <div className="text-center pointer-events-none p-4">
-                            <UploadCloud size={32} className="mx-auto text-gray-400 mb-2" />
-                            <p className="text-gray-600 font-bold text-sm">Arraste, Clique ou Cole (Ctrl+V)</p>
-                        </div>
-                        <input type="file" accept="image/*" multiple onChange={handleBatchImageUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                    </div>
-
-                    <div className="flex flex-col lg:flex-row gap-6">
-                        <div className="flex-1 bg-gray-50 rounded-xl p-4 border border-gray-200 h-[500px] overflow-y-auto">
-                            <h3 className="text-xs font-bold text-gray-500 uppercase mb-3 flex justify-between">
-                                <span>Fila ({batchImages.length})</span>
-                                {batchStatus === 'processing' && <span className="text-blue-600 flex items-center gap-1"><Loader2 size={10} className="animate-spin"/> Processando...</span>}
-                                {batchStatus === 'pausing' && <span className="text-amber-600 flex items-center gap-1"><Clock size={10} className="animate-spin"/> Pausando...</span>}
-                            </h3>
-                            
-                            {batchImages.length === 0 ? (
-                                <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-50">
-                                    <Files size={48} className="mb-2"/>
-                                    <p className="text-sm">Nenhuma imagem na fila</p>
+                        <div className="bg-white p-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between relative overflow-hidden">
+                            <div className="absolute top-0 right-0 p-1 opacity-[0.03] text-purple-900 pointer-events-none"><Calendar size={40} /></div>
+                            <div className="flex items-center gap-1 mb-1 relative z-10">
+                                <span className="p-1 bg-emerald-50 text-emerald-600 rounded-md"><Calendar size={10}/></span>
+                                <h2 className="text-[9px] font-bold text-slate-700">Resolvidas</h2>
+                            </div>
+                            <div className="flex items-center justify-between relative z-10 mt-auto px-1">
+                                <div className="text-center">
+                                    <div className="text-lg font-bold text-slate-800">312</div>
+                                    <div className="text-[6px] uppercase font-bold text-slate-400">Feitas</div>
                                 </div>
-                            ) : (
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                    {batchImages.map((img) => (
-                                        <div key={img.id} className={`relative group rounded-lg overflow-hidden border bg-white aspect-square shadow-sm ${img.status === 'error' ? 'border-red-300 ring-2 ring-red-100' : 'border-gray-200'}`}>
-                                            <img src={img.preview} alt="Preview" className="w-full h-full object-cover" />
-                                            <button onClick={() => removeBatchImage(img.id)} disabled={batchStatus === 'processing' || batchStatus === 'pausing'} className="absolute top-1 right-1 bg-white/80 p-1 rounded-full text-gray-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"><X size={14}/></button>
-                                            
-                                            {img.status === 'error' && (
-                                                <div className="absolute inset-0 bg-red-500/20 flex items-center justify-center p-2 text-center">
-                                                    <span className="text-xs font-bold text-white bg-red-600 px-2 py-1 rounded shadow-sm truncate max-w-full">{img.errorMsg || 'Erro'}</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="w-full lg:w-1/3 flex flex-col h-[500px]">
-                            <div className="bg-slate-900 rounded-xl overflow-hidden shadow-inner flex flex-col h-full">
-                                <div className="p-3 bg-slate-800 border-b border-slate-700 text-gray-400 text-xs font-bold flex items-center gap-2">
-                                    <Terminal size={14}/> Console de Imagens
-                                </div>
-                                <div className="flex-1 p-4 overflow-y-auto font-mono text-xs text-gray-300 space-y-1">
-                                    {batchLogs.length === 0 && <span className="opacity-50">Aguardando logs de imagem...</span>}
-                                    {batchLogs.map((log, i) => (
-                                        <div key={i} className={`mb-1 ${log.type === 'error' ? 'text-red-400' : log.type === 'success' ? 'text-emerald-400' : log.type === 'warning' ? 'text-amber-400' : 'text-blue-300'}`}>
-                                            <span className="opacity-50 mr-2">[{log.time}]</span>
-                                            {log.message}
-                                        </div>
-                                    ))}
+                                <div className="w-px h-5 bg-gray-100"></div>
+                                <div className="text-center">
+                                    <div className="text-lg font-bold text-emerald-500">245</div>
+                                    <div className="text-[6px] uppercase font-bold text-slate-400">Acertos</div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
-        )}
 
-        {/* PDF TAB */}
-        {activeTab === 'pdf' && (
-            <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4">
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                    <div className="flex justify-between items-start mb-6">
-                        <div>
-                            <label className="block text-lg font-bold text-slate-800 mb-1">
-                                Importador Massivo de PDF (Até 1000 pgs)
-                            </label>
-                            <p className="text-sm text-gray-500">Fatiamento automático: 10 páginas por ciclo. Detecção de erros e pausa inteligente.</p>
-                        </div>
-                        {pdfStatus !== 'idle' && (
-                            <div className="flex items-center gap-2">
-                                <button onClick={handleResetPdf} disabled={pdfStatus === 'processing' || pdfStatus === 'pausing'} title="Cancelar e Novo PDF" className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"><XCircle size={20}/></button>
-                                <button onClick={handleRestartPdf} disabled={pdfStatus === 'processing' || pdfStatus === 'pausing'} title="Reiniciar Processamento" className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors mr-2 disabled:opacity-30 disabled:cursor-not-allowed"><RotateCcw size={20}/></button>
-                                
-                                {pdfStatus === 'processing' ? (
-                                    <button onClick={togglePdfProcessing} className="px-4 py-2 bg-amber-100 text-amber-700 rounded-lg font-bold flex items-center gap-2 hover:bg-amber-200 transition-colors"><Pause size={18}/> Pausar</button>
-                                ) : pdfStatus === 'pausing' ? (
-                                    <button disabled className="px-4 py-2 bg-amber-50 text-amber-400 border border-amber-100 rounded-lg font-bold flex items-center gap-2 cursor-wait"><Loader2 size={18} className="animate-spin"/> Pausando...</button>
-                                ) : (
-                                    <button onClick={togglePdfProcessing} disabled={pdfStatus === 'reading' || pdfStatus === 'completed' || pdfStatus === 'error'} className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg font-bold flex items-center gap-2 hover:bg-emerald-200 transition-colors disabled:opacity-50"><Play size={18}/> {pdfStatus === 'paused' ? 'Continuar' : 'Iniciar'}</button>
-                                )}
+                    <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl p-3 text-white shadow-lg relative overflow-hidden flex justify-between items-center mb-3 shrink-0">
+                        <div className="absolute -right-2 -bottom-2 text-yellow-500/10 pointer-events-none"><Zap size={60} /></div>
+                        <div className="relative z-10 flex flex-col gap-1 max-w-[150px]">
+                            <div className="inline-flex items-center gap-1 bg-slate-800/50 backdrop-blur w-max px-1.5 py-0.5 rounded-full border border-slate-700">
+                                <Zap className="text-yellow-400" size={8} fill="currentColor" /> 
+                                <span className="text-[6px] font-bold text-yellow-100 uppercase tracking-wide">Caderno Automático</span>
                             </div>
-                        )}
-                    </div>
-                    
-                    {pdfStatus === 'idle' && (
-                        <div className="space-y-4">
-                             {lastSessionData && (
-                                 <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-center gap-4 animate-in slide-in-from-top-2">
-                                     <div className="bg-blue-200 text-blue-700 p-2 rounded-lg">
-                                         <History size={24} />
-                                     </div>
-                                     <div className="flex-1">
-                                         <p className="text-xs font-bold text-blue-500 uppercase">Última Sessão Detectada</p>
-                                         <p className="font-bold text-slate-700 text-sm">Arquivo: {lastSessionData.fileName}</p>
-                                         <p className="text-xs text-slate-500">Parou na fatia: <strong>{lastSessionData.lastChunkPages || 'Desconhecido'}</strong></p>
-                                     </div>
-                                     <div className="text-xs text-blue-400 bg-white/50 px-2 py-1 rounded">
-                                         Se enviar este arquivo novamente,<br/>o sistema continuará automaticamente.
-                                     </div>
-                                 </div>
-                             )}
-
-                             <div className="flex items-end gap-3 p-4 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-                                <div className="flex-1">
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1 flex items-center gap-1"><BookOpen size={12}/> De pg.</label>
-                                    <input type="number" min="1" value={pdfStartPage} onChange={e=>setPdfStartPage(e.target.value)} placeholder="Início" className="w-full p-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"/>
-                                </div>
-                                <div className="flex-1">
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1 flex items-center gap-1"><SkipForward size={12}/> Até pg.</label>
-                                    <input type="number" min="1" value={pdfEndPage} onChange={e=>setPdfEndPage(e.target.value)} placeholder="Fim" className="w-full p-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"/>
-                                </div>
-                                <div className="text-xs text-gray-400 pb-2 w-1/3 leading-tight">
-                                    Deixe em branco para processar o PDF inteiro.
-                                </div>
-                             </div>
-
-                             <div className="w-full h-56 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center bg-gray-50 relative overflow-hidden transition-all hover:border-blue-400">
-                                <div className="text-center pointer-events-none p-4">
-                                    <FileText size={48} className="mx-auto text-gray-400 mb-3" />
-                                    <p className="text-gray-600 font-bold mb-1">Arraste seu PDF aqui</p>
-                                    <p className="text-gray-400 text-sm">Suporta arquivos grandes (100MB+)</p>
-                                </div>
-                                <input type="file" accept="application/pdf" onChange={handlePdfUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                             </div>
-                        </div>
-                    )}
-
-                    {pdfStatus !== 'idle' && (
-                        <div className="space-y-6">
-                            <div className="bg-gray-100 rounded-xl p-4 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className={`p-2 rounded-lg 
-                                        ${pdfStatus === 'error' ? 'bg-red-100 text-red-600' : 
-                                          pdfStatus === 'processing' ? 'bg-blue-100 text-blue-600 animate-pulse' : 
-                                          pdfStatus === 'pausing' ? 'bg-amber-100 text-amber-600 animate-pulse' :
-                                          'bg-gray-200 text-gray-600'}`}>
-                                        {pdfStatus === 'reading' && <Loader2 className="animate-spin" size={24}/>}
-                                        {pdfStatus === 'ready' && <CheckCircle size={24}/>}
-                                        {pdfStatus === 'processing' && <Cpu size={24}/>}
-                                        {pdfStatus === 'pausing' && <Clock size={24}/>}
-                                        {pdfStatus === 'paused' && <Pause size={24}/>}
-                                        {pdfStatus === 'completed' && <CheckCircle size={24}/>}
-                                        {pdfStatus === 'error' && <AlertOctagon size={24}/>}
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-slate-800 text-sm uppercase">
-                                            {pdfStatus === 'reading' ? 'Lendo Arquivo...' : 
-                                             pdfStatus === 'pausing' ? 'Pausando...' : pdfStatus}
-                                        </p>
-                                        <p className="text-xs text-gray-500">{pdfFile?.name} • {pdfChunks.length} fatias</p>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-2xl font-bold text-slate-700">{Math.round((parsedQuestions.filter(q => q.sourceFile === pdfFile?.name).length))} <span className="text-sm font-normal text-gray-400">questões</span></p>
-                                </div>
-                            </div>
-
-                            <div className="border border-gray-200 rounded-xl p-4 max-h-60 overflow-y-auto">
-                                <p className="text-xs font-bold text-gray-400 uppercase mb-2 flex justify-between">
-                                    <span>Timeline (Navegação)</span>
-                                    {pdfStatus === 'paused' && <span className="text-blue-500 text-[10px]">Clique para Navegar (Seek)</span>}
-                                </p>
-                                <div className="grid grid-cols-5 md:grid-cols-8 lg:grid-cols-10 gap-2">
-                                    {pdfChunks.map((chunk, idx) => (
-                                        <button key={chunk.id} 
-                                            onClick={() => handleJumpToChunk(idx)}
-                                            disabled={pdfStatus === 'reading' || pdfStatus === 'processing' || pdfStatus === 'pausing'}
-                                            className={`h-8 rounded-md flex items-center justify-center text-xs font-bold transition-all border
-                                            ${chunk.status === 'pending' ? 'bg-gray-50 text-gray-400 border-gray-200' : ''}
-                                            ${chunk.status === 'success' ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm' : ''}
-                                            ${chunk.status === 'restored' ? 'bg-indigo-100 text-indigo-600 border-indigo-200 shadow-sm' : ''} 
-                                            ${chunk.status === 'error' ? 'bg-red-500 text-white border-red-600 shadow-sm' : ''}
-                                            ${idx === currentChunkIndex && (pdfStatus === 'processing' || pdfStatus === 'pausing') ? 'ring-2 ring-blue-500 ring-offset-1 bg-blue-50 text-blue-600 border-blue-200 animate-pulse' : ''}
-                                            ${(pdfStatus === 'paused' || pdfStatus === 'ready' || pdfStatus === 'completed') ? 'hover:bg-blue-100 hover:text-blue-600 cursor-pointer hover:border-blue-300' : ''}
-                                            ${(pdfStatus === 'processing' || pdfStatus === 'pausing') && idx !== currentChunkIndex ? 'opacity-50 cursor-not-allowed' : ''}
-                                            `}
-                                            title={`Páginas ${chunk.pages} | Erros: ${chunk.errorCount}`}
-                                        >
-                                            {idx + 1}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="bg-slate-900 rounded-xl p-4 font-mono text-xs text-gray-300 h-48 overflow-y-auto shadow-inner flex flex-col-reverse">
-                                {processingLogs.length === 0 && <span className="opacity-50">Aguardando logs...</span>}
-                                {processingLogs.map((log, i) => (
-                                    <div key={i} className={`mb-1 ${log.type === 'error' ? 'text-red-400' : log.type === 'success' ? 'text-emerald-400' : log.type === 'warning' ? 'text-amber-400' : 'text-blue-300'}`}>
-                                        <span className="opacity-50 mr-2">[{log.time}]</span>
-                                        {log.message}
-                                    </div>
-                                ))}
-                                <div className="text-gray-500 border-b border-gray-800 mb-2 pb-1 flex items-center gap-2 sticky top-0 bg-slate-900"><Terminal size={12}/> Console de PDF</div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-        )}
-
-        {/* REVIEW TAB */}
-        {activeTab === 'review' && (
-            <div className="max-w-4xl mx-auto space-y-4">
-                {parsedQuestions.length > 0 && (
-                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 flex flex-col gap-3 sticky top-20 z-10 animate-in slide-in-from-top-2">
-                        
-                        <div className="flex justify-between items-center px-1">
-                            <div className="flex items-center gap-3">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1"><Filter size={10}/> Filtros</span>
-                                
-                                <button 
-                                    onClick={() => setFilterLogic(prev => prev === 'OR' ? 'AND' : 'OR')}
-                                    className={`text-[10px] font-bold px-2 py-0.5 rounded border flex items-center gap-1 transition-all ${filterLogic === 'AND' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}
-                                    title={filterLogic === 'AND' ? "Mostra questões que têm TODAS as características" : "Mostra questões que têm QUALQUER uma das características"}
-                                >
-                                    {filterLogic === 'AND' ? <ToggleRight size={12}/> : <ToggleLeft size={12}/>}
-                                    {filterLogic === 'AND' ? 'E (Restritivo)' : 'OU (Soma)'}
-                                </button>
-                            </div>
-                            <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100">{currentFilteredList.length} questões</span>
+                            <h2 className="text-[10px] font-bold leading-tight">Transforme erros em acertos</h2>
                         </div>
                         
-                        <div className="flex flex-col gap-1.5">
-                            
-                            <div className="flex flex-wrap items-center gap-1.5">
-                                <button onClick={() => toggleFilter('all')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold transition-all border ${activeFilters.includes('all') ? 'bg-blue-600 text-white border-blue-700 shadow-sm' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'}`}>
-                                    Todas
-                                </button>
-                                <div className="w-px h-4 bg-gray-200 mx-1"></div>
-                                <button onClick={() => toggleFilter('verified')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border flex items-center gap-1.5 transition-all ${activeFilters.includes('verified') ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
-                                    <ShieldCheck size={12}/> Verificadas
-                                </button>
-                                <button onClick={() => toggleFilter('suspicious')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border flex items-center gap-1.5 transition-all ${activeFilters.includes('suspicious') ? 'bg-red-100 text-red-700 border-red-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
-                                    <AlertTriangle size={12}/> Suspeitas
-                                </button>
-                                <button onClick={() => toggleFilter('duplicates')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border flex items-center gap-1.5 transition-all ${activeFilters.includes('duplicates') ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
-                                    <Copy size={12}/> Duplicadas
-                                </button>
+                        {/* BOTÃO MÁGICO + CURSOR */}
+                        <div className="relative z-20">
+                            {animState === 2 && (
+                                <span className="absolute inset-0 flex h-full w-full z-0">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-md bg-yellow-400 opacity-60"></span>
+                                </span>
+                            )}
+
+                            <div className={`relative z-10 bg-yellow-500 text-slate-900 font-bold py-1.5 px-3 rounded-md flex items-center justify-center gap-1 text-[8px] shadow-md transition-all duration-300 ${animState === 2 ? 'scale-110 ring-4 ring-yellow-500/50 bg-yellow-400 shadow-xl shadow-yellow-500/40 -translate-y-0.5' : animState === 3 ? 'scale-95 bg-yellow-600 translate-y-0 ring-0' : ''}`}>
+                                <PlayCircle size={10} fill="currentColor" /> Matar Erros
                             </div>
 
-                            <div className="flex flex-wrap items-center gap-1.5">
-                                <span className="text-[9px] font-bold text-gray-300 uppercase mr-1 select-none">Tipo:</span>
-                                <button onClick={() => toggleFilter('source')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border flex items-center gap-1.5 transition-all ${activeFilters.includes('source') ? 'bg-teal-100 text-teal-700 border-teal-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
-                                    <Globe size={12}/> Com Fonte
-                                </button>
-                                <button onClick={() => toggleFilter('no_source')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border flex items-center gap-1.5 transition-all ${activeFilters.includes('no_source') ? 'bg-slate-100 text-slate-700 border-slate-300' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
-                                    <AlertOctagon size={12}/> Sem Fonte
-                                </button>
-                                <button onClick={() => toggleFilter('needs_image')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border flex items-center gap-1.5 transition-all ${activeFilters.includes('needs_image') ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
-                                    <ImageIcon size={12}/> Requer Imagem
-                                </button>
-                                <button onClick={() => toggleFilter('text_only')} className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border flex items-center gap-1.5 transition-all ${activeFilters.includes('text_only') ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
-                                    <FileType size={12}/> Texto Puro
-                                </button>
+                            <div className={`absolute top-full left-1/2 mt-1 transition-all pointer-events-none z-50 ${
+                                animState === 0 ? 'duration-0 opacity-0 translate-y-10 translate-x-10' : 
+                                animState === 1 ? 'duration-700 opacity-100 translate-y-6 translate-x-6 ease-out' :
+                                animState === 2 ? 'duration-500 opacity-100 -translate-y-3 -translate-x-1 ease-out' :
+                                animState === 3 ? 'duration-150 opacity-100 -translate-y-3 -translate-x-1 scale-75 ease-in' :
+                                'duration-300 opacity-0 -translate-y-3 -translate-x-1 scale-75'
+                            }`}>
+                                <MousePointer2 className="text-slate-900 fill-white drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]" size={20} />
                             </div>
                         </div>
 
-                        <div className="h-px bg-gray-100 w-full"></div>
+                    </div>
 
-                        <div className="flex justify-between items-center gap-2">
+                    <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm w-full flex flex-col flex-1 overflow-hidden">
+                        <div className="flex items-center justify-between mb-2 shrink-0">
                             <div className="flex items-center gap-1.5">
-                                <button onClick={() => clearAllField('institution')} className="text-[10px] bg-gray-50 border border-gray-200 text-slate-500 px-2 py-1.5 rounded hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all font-bold flex items-center gap-1 whitespace-nowrap"><Eraser size={10}/> Inst.</button>
-                                <button onClick={() => clearAllField('year')} className="text-[10px] bg-gray-50 border border-gray-200 text-slate-500 px-2 py-1.5 rounded hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all font-bold flex items-center gap-1 whitespace-nowrap"><Eraser size={10}/> Ano</button>
-                                
-                                <div className="w-px h-4 bg-gray-200 mx-1"></div>
-                                
-                                {reprocessState.status === 'processing' ? (
-                                    <button onClick={pauseReprocessBatch} className="text-[10px] bg-amber-100 border border-amber-200 text-amber-700 px-3 py-1.5 rounded hover:bg-amber-200 transition-all font-bold flex items-center gap-1 whitespace-nowrap animate-pulse">
-                                        <Pause size={12}/> Pausar Lote ({reprocessState.current}/{reprocessState.total})
-                                    </button>
-                                ) : reprocessState.status === 'pausing' ? (
-                                    <button disabled className="text-[10px] bg-amber-50 border border-amber-100 text-amber-400 px-3 py-1.5 rounded font-bold flex items-center gap-1 whitespace-nowrap cursor-wait">
-                                        <Loader2 size={12} className="animate-spin"/> Pausando...
-                                    </button>
-                                ) : (
-                                    <button onClick={() => setShowReprocessModal(true)} disabled={isBatchAction || currentFilteredList.length === 0} className="text-[10px] bg-purple-50 border border-purple-200 text-purple-700 px-3 py-1.5 rounded hover:bg-purple-100 hover:border-purple-300 transition-all font-bold flex items-center gap-1 whitespace-nowrap disabled:opacity-50">
-                                        <RefreshCw size={12}/> Re-processar Filtro
-                                    </button>
-                                )}
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                                <button onClick={handleDiscardFilteredClick} disabled={isBatchAction || currentFilteredList.length === 0 || reprocessState.status === 'processing'} className="bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold text-xs px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 whitespace-nowrap">
-                                    <Trash2 size={14} /> Descartar
-                                </button>
-                                
-                                <button onClick={handleApproveFilteredClick} disabled={isBatchAction || currentFilteredList.length === 0 || reprocessState.status === 'processing'} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-1.5 rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 whitespace-nowrap">
-                                    {isBatchAction ? <Loader2 className="animate-spin" size={14}/> : <CheckCircle size={14} />} 
-                                    Aprovar {currentFilteredList.length}
-                                </button>
+                                <div className="p-1 bg-purple-50 text-purple-600 rounded-md"><BarChart3 size={10} /></div>
+                                <h2 className="font-bold text-slate-800 text-[10px]">Top Tópicos</h2>
                             </div>
                         </div>
+                        <PerformanceTopicFilters />
+                        <PerformanceTopicsList />
                     </div>
-                )}
+                </div>
+            </AppShell>
 
-                {currentFilteredList.length === 0 ? (
-                    <div className="text-center py-20 opacity-50">
-                        <Database size={64} className="mx-auto mb-4 text-gray-300" />
-                        <p className="text-xl font-medium text-gray-500">Nenhuma questão encontrada neste filtro.</p>
-                        {parsedQuestions.length === 0 && <button onClick={() => setActiveTab('input')} className="mt-4 text-blue-600 font-bold hover:underline">Adicionar novas</button>}
-                    </div>
-                ) : (
-                    currentFilteredList.map((q, idx) => (
-                        <div key={q.id} className={`bg-white rounded-2xl shadow-sm border overflow-hidden relative group transition-colors ${q.isDuplicate ? 'border-amber-400 ring-2 ring-amber-100' : 'border-gray-200'} ${reprocessState.status === 'processing' && getFilteredQuestions()[reprocessState.current - 1]?.id === q.id ? 'ring-2 ring-purple-400 border-purple-400' : ''}`}>
-                            
-                            <div className="h-1.5 w-full bg-gray-100"><div className="h-full bg-orange-400 w-full animate-pulse"></div></div>
-                            
-                            <div className="bg-gray-50 px-4 py-2 border-b border-gray-100 flex justify-end items-center gap-2 flex-wrap min-h-[40px]">
-                                {reprocessState.status === 'processing' && getFilteredQuestions()[reprocessState.current - 1]?.id === q.id && (
-                                    <div className="mr-auto bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 animate-pulse">
-                                        <Loader2 size={12} className="animate-spin"/> PROCESSANDO...
-                                    </div>
-                                )}
-                                <div className={`px-3 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 max-w-[250px] ${q.verificationStatus === 'verified' ? 'bg-emerald-100 text-emerald-700' : q.verificationStatus === 'suspicious' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}`} title={q.verificationReason || "Status da verificação"}>
-                                    {q.verificationStatus === 'verified' && <><ShieldCheck size={12} className="flex-shrink-0"/> Double-Checked</>}
-                                    {q.verificationStatus === 'suspicious' && <><ShieldAlert size={12} className="flex-shrink-0"/> <span className="truncate">Suspeita: {q.verificationReason}</span></>}
-                                    {(!q.verificationStatus || q.verificationStatus === 'unchecked') && 'Não Verificada'}
+            {/* O MODAL FICA AQUI FORA COBRINDO TUDO */}
+            {showModal && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="bg-white rounded-2xl w-[85%] shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col overflow-hidden">
+                        <div className="p-3 border-b border-gray-100 flex justify-between items-center bg-white">
+                            <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                                <Zap className="text-yellow-500" fill="currentColor" size={12}/> Erros
+                            </h3>
+                            <div className="text-gray-400 rounded-full p-1"><X size={12}/></div>
+                        </div>
+                        
+                        <div className="p-4">
+                            <div className="bg-yellow-50 p-2.5 rounded-xl border border-yellow-100 mb-4 flex gap-2">
+                                <Zap className="text-yellow-600 shrink-0 mt-0.5" size={14} />
+                                <div className="text-yellow-900 text-[9px] leading-relaxed">
+                                    <strong>14 questões</strong> com erro nos treinos recentes. Bora revisar?
                                 </div>
-                                {q.sourceFound && <div className="bg-teal-100 text-teal-800 px-3 py-1 rounded-full text-[11px] font-bold flex items-center gap-1"><Globe size={12}/> FONTE OK</div>}
-                                {q.isDuplicate && <div className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 animate-pulse"><Copy size={12}/> DUPLICADA</div>}
-                                {q.needsImage && <div className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 animate-pulse border border-purple-200"><ImageIcon size={12}/> REQUER IMAGEM</div>}
                             </div>
-
-                            <div className="p-6">
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Inst</label><input value={q.institution} onChange={e=>updateQuestionField(q.id,'institution',e.target.value)} className="w-full p-2 bg-gray-50 border rounded-lg text-sm font-bold"/></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Ano</label><input type="number" value={q.year} onChange={e=>updateQuestionField(q.id,'year',e.target.value)} className="w-full p-2 bg-gray-50 border rounded-lg text-sm font-bold"/></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Área</label><select value={q.area} onChange={e=>updateQuestionField(q.id,'area',e.target.value)} className="w-full p-2 bg-blue-50 border border-blue-100 rounded-lg text-sm font-bold text-blue-800"><option value="">Selecione...</option>{areasBase.map(a=><option key={a} value={a}>{a}</option>)}</select></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Tópico</label><select value={q.topic} onChange={e=>updateQuestionField(q.id,'topic',e.target.value)} className="w-full p-2 bg-gray-50 border rounded-lg text-sm font-bold"><option value="">Selecione...</option>{(themesMap[q.area]||[]).map(t=><option key={t} value={t}>{t}</option>)}</select></div>
-                                </div>
-
-                                <div className="mb-6"><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Enunciado</label><textarea value={q.text} onChange={e=>updateQuestionField(q.id,'text',e.target.value)} rows={4} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-slate-800 text-sm focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"/></div>
-
-                                <div className="mb-6 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl">
-                                    <div className="flex justify-between items-center mb-3">
-                                        <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1"><ImageIcon size={12}/> Galeria de Imagens ({q.images?.length || 0})</label>
-                                        {uploadingImageId === q.id && <span className="text-xs text-blue-600 animate-pulse font-bold flex items-center gap-1"><Loader2 size={10} className="animate-spin"/> Enviando...</span>}
-                                    </div>
-                                    <div className="flex flex-wrap gap-3 items-start">
-                                        {q.images?.map((imgUrl, i) => (
-                                            <div key={i} className="relative group w-24 h-24 sm:w-32 sm:h-32 bg-white rounded-lg border border-gray-200 shadow-sm flex-shrink-0">
-                                                <img src={imgUrl} alt={`Img ${i}`} className="w-full h-full object-cover rounded-lg" />
-                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 rounded-lg">
-                                                    <a href={imgUrl} target="_blank" rel="noreferrer" className="text-white hover:text-blue-300"><ExternalLink size={16}/></a>
-                                                    <button onClick={() => deleteImageFromQuestion(idx, q, imgUrl)} className="text-white hover:text-red-400"><Trash2 size={16}/></button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                        <label className={`cursor-pointer w-24 h-24 sm:w-32 sm:h-32 bg-white hover:bg-blue-50 border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-lg flex flex-col items-center justify-center gap-2 text-gray-400 hover:text-blue-500 transition-all ${uploadingImageId === q.id ? 'opacity-50 pointer-events-none' : ''}`}>
-                                            <UploadCloud size={24}/> <span className="text-[10px] font-bold uppercase">Adicionar</span>
-                                            <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUploadToQuestion(e, idx, q)} disabled={uploadingImageId === q.id}/>
-                                        </label>
-                                    </div>
-                                    {q.needsImage && (!q.images || q.images.length === 0) && <p className="mt-2 text-xs text-purple-600 flex items-center gap-1 animate-pulse font-bold"><AlertCircle size={12}/> Esta questão pede imagem!</p>}
-                                </div>
-                              
-                                <div className="space-y-2 mb-6">
-                                    {q.options?.map((opt, optIdx) => (
-                                        <div key={opt.id} className="flex items-center gap-3">
-                                            <div onClick={()=>updateQuestionField(q.id,'correctOptionId',opt.id)} className={`w-8 h-8 rounded-full flex items-center justify-center cursor-pointer font-bold text-sm flex-shrink-0 ${q.correctOptionId===opt.id?'bg-emerald-500 text-white':'bg-gray-100 text-gray-400'}`}>{opt.id ? opt.id.toUpperCase() : '?'}</div>
-                                            <input value={opt.text} onChange={e=>updateOptionText(q.id,optIdx,e.target.value)} className={`w-full p-2 border rounded-lg text-sm ${q.correctOptionId===opt.id?'border-emerald-200 bg-emerald-50':'bg-white'}`}/>
+                            
+                            <div className="mb-4">
+                                <label className="block text-[9px] font-bold text-slate-700 mb-2">Quantidade</label>
+                                <div className="grid grid-cols-5 gap-1.5">
+                                    {[10, 20, 30, 40, 50].map(qtd => (
+                                        <div key={qtd} className={`py-1.5 rounded-md font-bold text-[9px] text-center ${qtd === 10 ? 'bg-yellow-500 text-white shadow-sm ring-1 ring-yellow-500 ring-offset-1' : 'bg-gray-100 text-gray-500'}`}>
+                                            {qtd}
                                         </div>
                                     ))}
                                 </div>
-                                
-                                <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
-                                    <label className="text-xs font-bold text-amber-700 uppercase flex items-center gap-1 mb-2"><Brain size={12}/> Comentário IA</label>
-                                    <textarea value={q.explanation} onChange={e=>updateQuestionField(q.id,'explanation',e.target.value)} rows={3} className="w-full p-3 bg-white/50 border border-amber-200/50 rounded-lg text-slate-700 text-sm focus:bg-white focus:ring-2 focus:ring-amber-400 outline-none"/>
-                                </div>
                             </div>
-
-                            <div className="bg-gray-50 px-6 py-4 flex justify-between items-center border-t border-gray-100">
-                                <button onClick={()=>handleDiscardOneClick(q)} disabled={reprocessState.status === 'processing'} className="text-red-500 hover:text-red-700 font-bold text-sm flex items-center gap-1 disabled:opacity-50"><Trash2 size={16}/> Descartar</button>
-                                <button onClick={()=>approveQuestion(q)} disabled={reprocessState.status === 'processing'} className={`font-bold text-sm px-6 py-2.5 rounded-lg shadow-lg flex items-center gap-2 transition-all disabled:opacity-50 ${q.isDuplicate ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}`}>
-                                    {q.isDuplicate ? <Copy size={18}/> : <CheckCircle size={18}/>} 
-                                    {q.isDuplicate ? 'Atualizar Duplicata' : 'Aprovar e Publicar'}
-                                </button>
+                            
+                            <div className="w-full py-2.5 rounded-xl bg-yellow-500 text-white font-bold text-[10px] shadow-lg shadow-yellow-200 flex items-center justify-center gap-1.5">
+                                <Play size={12} fill="currentColor" /> Revisar
                             </div>
                         </div>
-                    ))
-                )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const MockupFlashcards = () => {
+    const [isFlipped, setIsFlipped] = useState(false);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setIsFlipped(prev => !prev);
+        }, 2500); 
+        return () => clearInterval(interval);
+    }, []);
+
+    return (
+        <AppShell activeTab="flashcards">
+            <div className="flex flex-col h-full w-full bg-gray-50/50 p-4 relative box-border">
+                <div className="absolute top-0 right-0 w-60 h-60 bg-blue-500/10 blur-[80px] rounded-full pointer-events-none"></div>
+                <div className="absolute bottom-0 left-0 w-60 h-60 bg-emerald-500/10 blur-[80px] rounded-full pointer-events-none"></div>
+                
+                <div className="flex items-center justify-between mb-3 flex-shrink-0 w-full min-w-0 gap-2 relative z-10">
+                    <button className="text-gray-400 bg-white border border-gray-200 shadow-sm p-1.5 rounded-lg shrink-0"><X size={14} /></button>
+                    <div className="text-center min-w-0 flex-1">
+                        <h3 className="font-bold text-slate-700 truncate text-[9px]">Sangramentos da Gestação</h3>
+                        <p className="text-[7px] text-gray-400">12 / 45</p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                        <button className="text-gray-400 bg-white border border-gray-200 shadow-sm p-1.5 rounded-lg">
+                            <Heart size={12} fill="none" />
+                        </button>
+                        <button className="text-gray-400 bg-white border border-gray-200 shadow-sm p-1.5 rounded-lg"><Flag size={12} /></button>
+                    </div>
+                </div>
+
+                <div className="w-full h-1.5 bg-gray-200 rounded-full mb-3 flex-shrink-0 overflow-hidden min-w-0 relative z-10">
+                    <div className="h-full bg-blue-500 rounded-full transition-all duration-300 w-[26%]"></div>
+                </div>
+
+                <div className="flex-1 relative min-h-0 mb-3 group w-full perspective-1000 z-10">
+                    <div className={`w-full h-full rounded-2xl border-2 shadow-sm flex flex-col items-center justify-center p-4 text-center transition-all duration-300 overflow-hidden min-w-0 box-border ${isFlipped ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-500/20' : 'bg-white border-gray-100 ring-1 ring-black/5'}`}>
+                        <span className={`absolute top-3 left-4 text-[7px] font-bold uppercase tracking-widest shrink-0 ${isFlipped ? 'text-blue-500' : 'text-gray-400'}`}>
+                            {isFlipped ? 'Resposta' : 'Pergunta'}
+                        </span>
+                        
+                        <h2 className={`text-[11px] font-bold leading-relaxed px-2 w-full break-words ${isFlipped ? 'text-blue-900' : 'text-slate-800'}`}>
+                            {isFlipped ? 'Placenta Prévia e Descolamento Prematuro da Placenta (DPP).' : 'Qual a principal causa de sangramento na segunda metade da gestação?'}
+                        </h2>
+                        
+                        <p className={`absolute bottom-3 text-[7px] font-medium shrink-0 animate-pulse ${isFlipped ? 'text-blue-400' : 'text-gray-400'}`}>
+                            {isFlipped ? 'Toque para voltar' : 'Toque para ver a resposta'}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex justify-between items-center gap-2 flex-shrink-0 min-w-0 w-full relative z-10">
+                    <button className="flex-1 py-2 px-2 rounded-xl bg-white border border-gray-200 shadow-sm text-gray-500 font-bold flex items-center justify-center gap-1 min-w-0">
+                        <ChevronLeft size={12} className="shrink-0" /> 
+                        <span className="truncate text-[8px]">Anterior</span>
+                    </button>
+                    <button className="flex-[2] py-2 px-2 rounded-xl font-bold text-white shadow-md transition-all flex items-center justify-center gap-1 min-w-0 bg-blue-600 shadow-blue-500/20">
+                        <span className="truncate text-[8px]">Próximo</span> 
+                        <ChevronRight size={12} className="shrink-0" />
+                    </button>
+                </div>
+
             </div>
-        )}
-      </main>
+        </AppShell>
+    );
+};
+
+// --- Componente Principal da Jornada (COM AJUSTE DE MARGENS E ESPAÇO FINAL) ---
+export const ScrollStorytelling = () => {
+  const [activeStep, setActiveStep] = useState(0);
+  const [isSlideshowPaused, setIsSlideshowPaused] = useState(false);
+  
+  // Motor para detectar a rolagem e jogar para a Seção de Preços
+  const isAutoScrolling = useRef(false);
+  const lastScrollY = useRef(typeof window !== 'undefined' ? window.scrollY : 0);
+  const scrollDir = useRef("down");
+
+  useEffect(() => {
+      const handleScroll = () => {
+          const currentY = window.scrollY;
+          scrollDir.current = currentY > lastScrollY.current ? "down" : "up";
+          lastScrollY.current = currentY;
+      };
+      window.addEventListener("scroll", handleScroll, { passive: true });
+      return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const handleStepEnter = (index) => {
+      setActiveStep(index);
+      
+      if (scrollDir.current === "down" && !isAutoScrolling.current && typeof window !== 'undefined' && window.innerWidth >= 1024) {
+          isAutoScrolling.current = true;
+          const el = document.getElementById(`story-step-${index}`);
+          if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+          setTimeout(() => { isAutoScrolling.current = false; }, 800);
+      }
+  };
+
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const rotateX = useTransform(y, [-500, 500], [10, -10]);
+  const rotateY = useTransform(x, [-800, 800], [-10, 10]);
+
+  const handleMouseMove = (event) => {
+    if (typeof window !== 'undefined') {
+        const centerX = window.innerWidth / 2;
+        const centerY = window.innerHeight / 2;
+        x.set(event.clientX - centerX);
+        y.set(event.clientY - centerY);
+    }
+  };
+  const handleMouseLeave = () => { x.set(0); y.set(0); };
+
+  const steps = [
+    {
+      id: 0,
+      title: "Aposente as apostilas. Vá direto ao alvo.",
+      copy: "Estudar a medicina inteira é impossível (e inútil). Crie listas de questões filtradas exatamente para o seu nível, separadas por Grande Área ou focadas nas bancas das residências que você mais sonha em passar. O estudo ativo começa aqui.",
+      icon: Target,
+      color: "text-blue-400",
+      bg: "bg-blue-500/20",
+      border: "border-blue-500/30"
+    },
+    {
+      id: 1,
+      title: "O raio-x do seu cérebro.",
+      copy: "Conforme você resolve as questões, o algoritmo do MedMaps trabalha em silêncio. Ele mapeia cada acerto e cada tropeço, revelando os seus pontos cegos com uma precisão que nenhum cursinho tradicional consegue entregar.",
+      icon: Activity,
+      color: "text-emerald-400",
+      bg: "bg-emerald-500/20",
+      border: "border-emerald-500/30"
+    },
+    {
+      id: 2,
+      title: "O fim do 'erro bobo'.",
+      copy: "Chega de errar a mesma pegadinha duas vezes. O sistema compila automaticamente tudo o que você errou nos últimos dias e cria um 'Simulado de Resgate'. Transforme suas maiores fraquezas em pontos garantidos na prova.",
+      icon: Zap,
+      color: "text-yellow-400",
+      bg: "bg-yellow-500/20",
+      border: "border-yellow-500/30"
+    },
+    {
+      id: 3,
+      title: "Hackeando a curva do esquecimento.",
+      copy: "Matérias densas evaporam da mente. Com os Flashcards integrados e o sistema de Repetição Espaçada, o MedMaps te obriga a revisar o conteúdo exato no momento em que seu cérebro estava prestes a esquecer. Memória blindada.",
+      icon: BrainCircuit,
+      color: "text-purple-400",
+      bg: "bg-purple-500/20",
+      border: "border-purple-500/30"
+    }
+  ];
+
+  return (
+    <section 
+        className="bg-[#050508] relative pt-10 pb-20 lg:pt-12 lg:pb-32 overflow-clip border-t border-slate-800/50"
+        onMouseMove={handleMouseMove} 
+        onMouseLeave={handleMouseLeave}
+    >
+      <div className="absolute top-0 right-1/4 w-[600px] h-[600px] bg-blue-900/10 rounded-full blur-[120px] pointer-events-none" />
+      
+      <div className="max-w-7xl mx-auto px-6 lg:px-8 relative z-10 flex flex-col lg:flex-row gap-12 lg:gap-20">
+        
+        {/* Coluna da Esquerda */}
+        <div className="w-full lg:w-1/2 relative pb-[10vh] lg:pb-0">
+            {/* O Título desceu pra colar com o primeiro bloco */}
+            <div className="mb-12 lg:mb-16 pt-10 lg:pt-[15vh]">
+                <h2 className="text-3xl md:text-5xl font-bold text-white mb-6 tracking-tight">
+                    A jornada do <br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">Estudo Cirúrgico.</span>
+                </h2>
+                <p className="text-slate-400 text-lg">O passo a passo que transforma esforço em aprovação.</p>
+            </div>
+
+            <div className="space-y-[15vh] lg:space-y-[60vh] relative">
+                {steps.map((step, index) => (
+                    <motion.div 
+                        key={step.id}
+                        id={`story-step-${index}`} 
+                        onViewportEnter={() => handleStepEnter(index)}
+                        viewport={{ amount: 0.6, margin: "-10% 0px -20% 0px" }}
+                        className={`transition-all duration-700 flex flex-col justify-center ${activeStep === index ? 'opacity-100 scale-100' : 'opacity-30 scale-95'}`}
+                    >
+                        <div className="lg:hidden w-[340px] h-[220px] mx-auto mb-10 relative bg-slate-900 rounded-3xl border-[8px] border-slate-800 shadow-2xl overflow-hidden ring-4 ring-[#050508]">
+                            <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-1.5 h-1.5 bg-slate-950 rounded-full z-50"></div>
+                            <div className="absolute inset-0 z-[100] cursor-default" onMouseEnter={() => setIsSlideshowPaused(true)} onMouseLeave={() => setIsSlideshowPaused(false)} />
+                            {index === 0 && <MockupFocoSlideshow isPaused={isSlideshowPaused} />}
+                            {index === 1 && <MockupDiagnostico />}
+                            {index === 2 && <MockupErros isActive={activeStep === 2} />}
+                            {index === 3 && <MockupFlashcards />}
+                        </div>
+
+                        <div className={`w-14 h-14 rounded-2xl ${step.bg} ${step.border} border flex items-center justify-center mb-6`}>
+                            <step.icon className={step.color} size={28} />
+                        </div>
+                        <h3 className="text-2xl md:text-3xl font-bold text-white mb-4 leading-tight">{step.title}</h3>
+                        <p className="text-slate-400 text-base md:text-lg leading-relaxed">{step.copy}</p>
+                    </motion.div>
+                ))}
+
+                {/* FIO DE TROPEÇO BLINDADO: 
+                    Posicionado como um bloco físico invisível logo após o Flashcard. 
+                    Sem buraco branco, e PUXA para o id="#planos" suavemente! */}
+                <motion.div 
+                    className="w-full h-[5vh] mt-[5vh] lg:mt-[35vh] pointer-events-none"
+                    onViewportEnter={() => {
+                        if (scrollDir.current === "down" && !isAutoScrolling.current) {
+                            isAutoScrolling.current = true;
+                            const pricingEl = document.getElementById('planos');
+                            if (pricingEl) pricingEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            setTimeout(() => { isAutoScrolling.current = false; }, 1000);
+                        }
+                    }}
+                />
+            </div>
+        </div>
+
+        <div className="hidden lg:flex w-1/2 sticky top-0 h-screen items-center justify-center pointer-events-none" style={{ perspective: 1500 }}>
+            <motion.div 
+                style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
+                className="w-[550px] xl:w-[640px] h-[380px] xl:h-[440px] bg-slate-900 rounded-[2rem] border-[12px] border-slate-800 shadow-2xl relative ring-1 ring-white/10 pointer-events-auto"
+            >
+                <div className="absolute top-1/2 -left-1.5 -translate-y-1/2 w-2 h-2 bg-slate-950 rounded-full z-50"></div>
+                <div className="relative w-full h-full bg-slate-900 overflow-hidden rounded-[1.2rem]">
+                    
+                    <div className="absolute inset-0 z-[100] cursor-default" onMouseEnter={() => setIsSlideshowPaused(true)} onMouseLeave={() => setIsSlideshowPaused(false)} />
+
+                    <div className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${activeStep === 0 ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}>
+                        <MockupFocoSlideshow isPaused={isSlideshowPaused} />
+                    </div>
+                    <div className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${activeStep === 1 ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}>
+                        <MockupDiagnostico />
+                    </div>
+                    <div className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${activeStep === 2 ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}>
+                        <MockupErros isActive={activeStep === 2} />
+                    </div>
+                    <div className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${activeStep === 3 ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}>
+                        <MockupFlashcards />
+                    </div>
+                </div>
+            </motion.div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+/* =========================================
+   4. SEÇÃO DE PLANOS (PRICING)
+   ========================================= */
+export const PricingSection = () => {
+  return (
+    <section id="planos" className="py-24 px-6 bg-[#030305] border-t border-white/5 relative overflow-hidden">
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-5xl h-[300px] bg-cyan-900/20 rounded-full blur-[120px] pointer-events-none" />
+
+      <div className="max-w-7xl mx-auto relative z-10">
+        <div className="text-center mb-16">
+          <span className="bg-cyan-950/50 text-cyan-400 border border-cyan-500/30 text-xs font-black uppercase tracking-widest py-1.5 px-4 rounded-full shadow-sm mb-4 inline-flex items-center gap-2">
+            <Trophy size={14} /> O Melhor Custo-Benefício do Mercado
+          </span>
+          <h2 className="text-4xl md:text-5xl font-extrabold text-white mb-6 mt-4 tracking-tight">
+            A sua aprovação custa menos <br className="hidden md:block"/> que um lanche por dia.
+          </h2>
+          <p className="text-lg text-slate-400 font-medium max-w-2xl mx-auto">
+            Cancele as mensalidades abusivas dos cursinhos. Escolha o plano de alta performance que cabe no seu bolso.
+          </p>
+        </div>
+
+        {/* Foi adicionado mt-8 pt-4 no grid para dar espaço seguro para a etiqueta flutuar no mobile */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl mx-auto items-stretch mt-8 pt-4">
+          
+          {/* PLANO MENSAL */}
+          <div className="bg-slate-900/40 rounded-[2rem] p-8 md:p-10 border border-slate-700/50 backdrop-blur-sm transition-all flex flex-col mt-4 lg:mt-8 hover:border-slate-600/50 relative">
+            <h3 className="text-2xl font-bold text-white mb-2">Mensal</h3>
+            <p className="text-sm text-slate-400 mb-6 font-medium">Liberdade total para testar os recursos premium.</p>
+            <div className="mb-8">
+               <span className="text-5xl font-black text-white">R$ 19</span>
+               <span className="text-2xl font-bold text-slate-500">,90</span>
+               <span className="text-sm text-slate-500 font-bold ml-1">/mês</span>
+            </div>
+            <button className="w-full py-4 px-4 rounded-xl font-bold text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 transition-colors mb-8 text-lg">
+                Assinar Mensal
+            </button>
+            <div className="space-y-4 mt-auto">
+              {['Acesso ilimitado ao banco', 'Simulados customizáveis', 'Flashcards (SRS)', 'Raio-X de Desempenho'].map((feat, idx) => (
+                <div key={idx} className="flex items-start gap-3">
+                  <Check size={20} strokeWidth={3} className="text-slate-500 flex-shrink-0 mt-0.5" />
+                  <span className="text-slate-300">{feat}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* PLANO TRIMESTRAL (DESTAQUE) */}
+          <div className="bg-gradient-to-b from-cyan-950/80 to-slate-900/80 rounded-[2rem] p-8 md:p-10 border border-cyan-500/50 shadow-[0_0_40px_rgba(6,182,212,0.15)] transform lg:-translate-y-4 flex flex-col relative z-20 backdrop-blur-md">
+            
+            {/* O Fundo Gradiente ganhou rounded-t-[2rem] para não vazar pelas bordas lisas do cartão */}
+            <div className="absolute top-0 inset-x-0 h-1/2 bg-gradient-to-b from-cyan-500/10 to-transparent pointer-events-none rounded-t-[2rem]" />
+            
+            {/* BADGE FLUTUANTE (AGORA LIVRE PARA VAZAR) */}
+            <div className="absolute -top-5 left-1/2 transform -translate-x-1/2 flex justify-center w-full z-30">
+              <span className="bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 text-[11px] sm:text-xs font-black uppercase tracking-widest py-2 px-6 rounded-full shadow-[0_10px_20px_-5px_rgba(6,182,212,0.4)] border border-cyan-300/30 whitespace-nowrap">
+                🔥 ESCOLHA INTELIGENTE
+              </span>
+            </div>
+            
+            {/* Textos com relative z-10 para passarem por cima do gradiente de fundo */}
+            <h3 className="text-2xl font-bold text-white mt-2 mb-2 relative z-10">Trimestral</h3>
+            <p className="text-sm text-cyan-100/70 mb-6 font-medium relative z-10">Foco total na reta final. Intensidade e estratégia.</p>
+            
+            <div className="mb-2 flex items-center gap-2 relative z-10">
+              <span className="text-sm text-slate-500 line-through font-bold">R$ 59,70</span>
+              <span className="bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] font-black px-2 py-0.5 rounded-md tracking-wider">ECONOMIZE 16%</span>
+            </div>
+            
+            <div className="mb-2 relative z-10">
+               <span className="text-6xl font-black text-white">R$ 16</span>
+               <span className="text-2xl font-bold text-cyan-500">,63</span>
+               <span className="text-sm text-cyan-100/50 font-bold ml-1">/mês</span>
+            </div>
+            <p className="text-sm text-cyan-400/80 font-bold mb-8 relative z-10">Cobrado R$ 49,90 a cada 3 meses.</p>
+            
+            <button className="relative w-full py-4 px-4 rounded-xl font-black text-slate-950 bg-cyan-400 hover:bg-cyan-300 transition-all transform hover:-translate-y-1 mb-8 text-lg shadow-[0_0_20px_rgba(6,182,212,0.3)] overflow-hidden group z-10">
+              <span className="relative z-10">Garantir Acesso Trimestral</span>
+              <div className="absolute inset-0 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/40 to-transparent z-0" />
+            </button>
+            
+            <div className="space-y-4 mt-auto bg-slate-950/50 p-6 rounded-xl border border-white/5 relative z-10">
+              <p className="text-xs font-bold text-cyan-400 uppercase tracking-widest mb-4">Tudo do mensal, mais:</p>
+              {['Análise Cirúrgica Avançada', 'Filtros exclusivos de bancas', 'Prioridade em Suporte'].map((feat, idx) => (
+                <div key={idx} className="flex items-start gap-3">
+                  <Check size={20} strokeWidth={3} className="text-cyan-400 flex-shrink-0 mt-0.5" />
+                  <span className="text-white font-medium">{feat}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* PLANO ANUAL */}
+          <div className="bg-slate-900/40 rounded-[2rem] p-8 md:p-10 border border-slate-700/50 backdrop-blur-sm transition-all flex flex-col mt-4 lg:mt-8 relative overflow-hidden hover:border-slate-600/50">
+            <div className="absolute top-0 right-0 bg-purple-500/20 text-purple-300 border-b border-l border-purple-500/30 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-bl-2xl">
+              MAIOR DESCONTO
+            </div>
+            <h3 className="text-2xl font-bold text-white mb-2">Anual</h3>
+            <p className="text-sm text-slate-400 mb-6 font-medium">A jornada completa com o menor valor possível.</p>
+            
+            <div className="mb-2 flex items-center gap-2">
+              <span className="text-sm text-slate-500 line-through font-bold">R$ 238,80</span>
+              <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px] font-black px-2 py-0.5 rounded-md tracking-wider">-37% OFF</span>
+            </div>
+            <div className="mb-2">
+               <span className="text-5xl font-black text-white">R$ 12</span>
+               <span className="text-2xl font-bold text-slate-500">,49</span>
+               <span className="text-sm text-slate-500 font-bold ml-1">/mês</span>
+            </div>
+            <p className="text-sm text-purple-400 font-bold mb-8">Apenas R$ 0,41 por dia! (R$ 149,90/ano)</p>
+            
+            <button className="w-full py-4 px-4 rounded-xl font-bold text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 transition-colors mb-8 text-lg">
+              Assinar Anual
+            </button>
+            
+            <div className="space-y-4 mt-auto">
+              {['O menor preço garantido', 'Proteção contra reajustes', 'Status de Aluno Fundador', 'Acesso VIP a Novidades'].map((feat, idx) => (
+                <div key={idx} className="flex items-start gap-3">
+                  <Check size={20} strokeWidth={3} className="text-purple-400 flex-shrink-0 mt-0.5" />
+                  <span className="text-slate-300">{feat}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </div>
+
+        {/* GARANTIA */}
+        <div className="mt-20 flex justify-center">
+          <div className="bg-slate-900/60 border border-slate-700/50 backdrop-blur-md px-8 py-6 rounded-3xl flex flex-col md:flex-row items-center gap-6 max-w-3xl">
+            <div className="bg-cyan-500/20 p-4 rounded-2xl text-cyan-400 shrink-0 border border-cyan-500/30">
+              <ShieldCheck size={40} strokeWidth={2.5} />
+            </div>
+            <div className="text-center md:text-left">
+              <h4 className="text-xl font-bold text-white mb-2">Garantia Blindada de 7 Dias</h4>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                Entre, resolva simulados, utilize os flashcards e veja a Análise de Erros em ação. Se você achar que a plataforma não vale o investimento, cancele com 1 clique e devolveremos 100% do seu dinheiro.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+/* =========================================
+   5. SEÇÃO PROVA SOCIAL & CTA FINAL
+   ========================================= */
+const SocialProofAndCTA = () => {
+  const testimonials = [
+    "A didática de G.O. me salvou na USP!",
+    "Os flashcards do MedMaps são viciantes.",
+    "Fui de 60% para 85% nos simulados em 2 meses.",
+    "Melhor investimento para a reta final do R1.",
+    "As métricas mostram exatamente onde eu erro."
+  ];
+
+  const marqueeItems = [...testimonials, ...testimonials, ...testimonials];
+
+  return (
+    <section className="bg-[#050508] relative pt-12 pb-32 overflow-hidden border-t border-white/5">
+      <div className="mb-24">
+        <div className="text-center mb-10">
+          <h2 className="text-3xl font-bold text-white tracking-tight">Quem usa, aprova. <span className="text-slate-500">(E passa).</span></h2>
+        </div>
+        
+        <div className="relative w-full overflow-hidden flex bg-slate-900/30 py-6 border-y border-white/5">
+          <div className="absolute top-0 bottom-0 left-0 w-32 bg-gradient-to-r from-[#050508] to-transparent z-10" />
+          <div className="absolute top-0 bottom-0 right-0 w-32 bg-gradient-to-l from-[#050508] to-transparent z-10" />
+          
+          <motion.div 
+            className="flex gap-8 whitespace-nowrap px-4"
+            animate={{ x: [0, -1035] }}
+            transition={{ repeat: Infinity, ease: "linear", duration: 25 }}
+          >
+            {marqueeItems.map((text, idx) => (
+              <div key={idx} className="flex items-center gap-3 px-6 py-3 rounded-full bg-slate-800/40 border border-slate-700/50 backdrop-blur-sm">
+                <div className="flex text-yellow-500">
+                  <Star size={14} className="fill-yellow-500" />
+                  <Star size={14} className="fill-yellow-500" />
+                  <Star size={14} className="fill-yellow-500" />
+                  <Star size={14} className="fill-yellow-500" />
+                  <Star size={14} className="fill-yellow-500" />
+                </div>
+                <span className="text-slate-300 font-medium text-sm md:text-base">"{text}"</span>
+              </div>
+            ))}
+          </motion.div>
+        </div>
+      </div>
+
+      <div className="max-w-5xl mx-auto px-6 relative z-10">
+        <div className="group relative rounded-[2.5rem] p-1 bg-gradient-to-b from-cyan-500/40 to-blue-600/10 overflow-hidden transition-all duration-500 hover:shadow-[0_0_80px_rgba(6,182,212,0.3)]">
+          <div className="absolute inset-0 bg-cyan-500/20 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+          <div className="relative bg-[#0a0a0f]/90 backdrop-blur-2xl rounded-[2.4rem] px-8 py-20 text-center border border-white/5 overflow-hidden">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-lg h-[200px] bg-cyan-500/20 rounded-full blur-[80px] pointer-events-none" />
+            
+            <h2 className="text-4xl md:text-6xl font-extrabold text-white mb-6 tracking-tight relative z-10">
+              Sua aprovação está a um <br/> 
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">clique de distância.</span>
+            </h2>
+            <p className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto mb-10 relative z-10">
+              Pare de estudar o que não cai. Junte-se aos futuros residentes que já descobriram o caminho mais inteligente.
+            </p>
+
+            <div className="relative z-10 flex justify-center">
+              <button onClick={() => document.getElementById('planos').scrollIntoView({ behavior: 'smooth' })} className="relative px-10 py-5 bg-white text-slate-950 font-extrabold text-lg rounded-2xl transition-all duration-300 flex items-center gap-3 hover:scale-105 hover:bg-slate-100 shadow-[0_0_40px_rgba(255,255,255,0.3)] group-hover:shadow-[0_0_60px_rgba(6,182,212,0.4)] overflow-hidden">
+                <span className="relative z-10 flex items-center gap-2">Garantir meu acesso agora <ArrowRight size={22} /></span>
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-200/40 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
+              </button>
+            </div>
+            <p className="mt-6 text-sm text-slate-500 font-medium">✨ Teste grátis. Cancele a qualquer momento.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+/* =========================================
+   PÁGINA PRINCIPAL (EXPORT)
+   ========================================= */
+export default function LandingPage() {
+  return (
+    <div className="bg-[#050508] min-h-screen font-sans selection:bg-cyan-500/30 selection:text-cyan-200">
+      <HeroMedMaps />
+      <BentoFeatures />
+      <ScrollStorytelling />
+      <PricingSection />
+      <SocialProofAndCTA />
     </div>
   );
 }
